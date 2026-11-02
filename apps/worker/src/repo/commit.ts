@@ -153,6 +153,10 @@ export async function commitChanges(repo: RepoService, store: IndexStore, req: C
     const op = req.changes.length === 1 ? (req.changes[0]!.op === 'put' ? (tree.has(req.changes[0]!.path) ? 'update' : 'create') : req.changes[0]!.op) : 'update';
     const message = commitMessage(req.message?.trim() || defaultSubject(op, paths, req.meta), req.meta);
     const newTree = await repo.gh.createTree(treeSha, entries);
+    if (newTree === treeSha) {
+      // Nothing changed (e.g. a save of already-committed content): no empty commits.
+      return { ok: true, commitSha: head, head, results: plan.results.map((r) => ({ ...r, sha: tree.get(r.path)?.sha ?? null })), rewritten: [] };
+    }
     const author = req.meta.user ? { name: req.meta.user.login, email: `${req.meta.user.id}+${req.meta.user.login}@users.noreply.github.com` } : undefined;
     const commit = await repo.gh.createCommit(message, newTree, [head], author);
     try {

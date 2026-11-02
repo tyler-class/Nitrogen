@@ -1,9 +1,9 @@
 :root {
   --paper: #ffffff; --sidebar: #f8f8f6; --ink: #17191c;
-  --muted: #5f6672; --faint: #8b919b; --hairline: #e6e7e4;
+  --muted: #5f6672; --faint: #6b717b; --hairline: #e6e7e4;
   --accent: #2b6e55; --accent-soft: #e8f2ed; --accent-ink: #1d4d3c;
   --claude: #6a4fd1; --claude-soft: #efeafc;
-  --warn: #9a6a12; --warn-soft: #fbf3df; --danger: #a33a32; --danger-soft: #fbeceb;
+  --warn: #845a0e; --warn-soft: #fbf3df; --danger: #a33a32; --danger-soft: #fbeceb;
   --info: #2a62a8; --info-soft: #e9f1fb; --ok: #2b6e55; --ok-soft: #e8f2ed;
   --radius: 8px; --radius-sm: 5px;
   --font-ui: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;

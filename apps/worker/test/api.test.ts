@@ -209,3 +209,14 @@ describe('freshness', () => {
     expect(out.outgoing.map((g: J) => g.path)).toEqual(['decisions/adr-1.md']);
   });
 });
+
+describe('no-op commits', () => {
+  it('does not create an empty commit when content is unchanged', async () => {
+    const { call, fake } = await setup();
+    const sha = fake.files().get('index.md')!;
+    const before = fake.head();
+    const r = await call('POST', '/api/commit', { changes: [{ path: 'index.md', op: 'put', content: fake.read('index.md'), baseSha: sha }] });
+    expect(r.status).toBe(200);
+    expect(fake.head()).toBe(before);
+  });
+});

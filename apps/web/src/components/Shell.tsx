@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
-import { useChangesPoll, useMe, useTree } from '../api/hooks.ts';
+import { useChangesPoll, useMe, useTree, useVaultContext } from '../api/hooks.ts';
+import { setContextProvider } from '../lib/sync.ts';
 import { buildTree, type TreeNode } from '../lib/tree.ts';
 import { Tree } from './Tree.tsx';
 import { Palette } from './Palette.tsx';
@@ -38,6 +39,8 @@ export function Shell() {
   const tree = useTree();
   const me = useMe();
   useChangesPoll();
+  const vaultCtx = useVaultContext();
+  useEffect(() => setContextProvider(() => vaultCtx), [vaultCtx]);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const active = currentPagePath(pathname);
@@ -113,7 +116,7 @@ export function Shell() {
         </div>
       </nav>
       {sideOpen && <div className="scrim" style={{ zIndex: 44 }} onClick={() => setSideOpen(false)} />}
-      <div className="main" id="main" tabIndex={-1}>
+      <main className="main" id="main" tabIndex={-1}>
         <header className="topbar">
           <button className="icon-btn" aria-label="Open navigation" onClick={() => setSideOpen(true)}><Icon name="menu" size={20} /></button>
           <span className="title">{title || 'Nitrogen'}</span>
@@ -123,7 +126,7 @@ export function Shell() {
           )}
         </header>
         <Outlet />
-      </div>
+      </main>
       {rail && <aside className="rail" aria-label="Page context">{rail}</aside>}
       {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} currentPath={active} />}
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}

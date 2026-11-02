@@ -8,7 +8,7 @@ test('mobile layout: top bar, slide-over tree, bottom-sheet drawer', async ({ pa
   await page.getByLabel('Open navigation').click();
   await expect(page.locator('.sidebar[data-open="true"]')).toBeVisible();
   await page.getByRole('treeitem', { name: 'Architecture' }).click();
-  await page.getByRole('button', { name: 'Field reference' }).click().catch(() => {});
+  await expect(page).toHaveURL(/architecture\/index\.md/);
   await page.goto('/p/welcome/format-tour.md');
   await page.getByRole('button', { name: 'Field reference' }).click();
   const panel = page.getByRole('dialog', { name: 'Field reference' });

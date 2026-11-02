@@ -77,6 +77,8 @@ input, select, textarea { font: inherit; color: inherit; }
 .prose blockquote { border-left: 3px solid var(--hairline); padding: 0 0 0 14px; color: var(--muted); }
 .prose kbd { font: 12px var(--font-mono); padding: 1px 6px; border: 1px solid var(--hairline); border-bottom-width: 2px; border-radius: 4px; background: var(--paper); }
 .prose hr { border: 0; border-top: 1px solid var(--hairline); margin: 2em 0; }
+/* Links in prose are underlined: color alone is not enough (WCAG 1.4.1). */
+.prose a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, var(--accent-ink) 45%, transparent); }
 .prose a[data-external]::after { content: '↗'; font-size: 0.8em; margin-left: 1px; color: var(--faint); }
 .prose a[data-broken], .prose .wikilink-missing { color: var(--danger); border-bottom: 1px dashed currentColor; text-decoration: none; }
 .prose a[data-rel]:not([data-rel="related"]) { border-bottom: 1px dotted var(--accent); }

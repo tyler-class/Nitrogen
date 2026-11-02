@@ -13,6 +13,7 @@ export async function revertCommit(repo: RepoService, store: IndexStore, sha: st
   const commit = await repo.gh.getCommitWithFiles(sha);
   const parent = commit.parents[0]?.sha;
   if (!parent) return { ok: false, status: 422, error: 'Cannot revert the initial commit.' };
+  if (!commit.files?.length) return { ok: false, status: 422, error: 'That commit changed nothing, so there is nothing to revert.' };
   const before = await repo.tree(await repo.treeShaOf(parent));
   const changes: ChangeInput[] = [];
   for (const f of commit.files) {

@@ -8,6 +8,13 @@ import { db, type Draft } from './db.ts';
 import { api, ApiError } from '../api/client.ts';
 import { threeWay } from './merge.ts';
 import { toast } from './toast.ts';
+import { autofix, type VaultContext } from '@nitrogen/core';
+
+let ctxProvider: () => VaultContext | null = () => null;
+/** Commits run the CFM autofixer (wikilinks -> canonical links, image option order), like Save. */
+export function setContextProvider(fn: () => VaultContext | null): void {
+  ctxProvider = fn;
+}
 
 export interface SyncState {
   queued: number;
@@ -92,7 +99,7 @@ async function doFlush(attempt = 0): Promise<void> {
         ? { path: d.path, op: 'delete', baseSha: d.baseSha }
         : d.op === 'move'
           ? { path: d.path, op: 'move', to: d.to }
-          : { path: d.path, op: 'put', baseSha: d.baseSha, ...(d.contentB64 ? { contentB64: d.contentB64 } : { content: d.content }) },
+          : { path: d.path, op: 'put', baseSha: d.baseSha, ...(d.contentB64 ? { contentB64: d.contentB64 } : { content: d.path.endsWith('.md') ? autofix(d.content, ctxProvider(), { path: d.path }).src : d.content }) },
     );
     const r = await api<{ commitSha: string; results: { path: string; sha: string | null }[] }>('/commit', { method: 'POST', json: { changes } });
     const sent = drafts.slice(0, 30);
