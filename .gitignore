@@ -10,3 +10,6 @@ test-results/
 /export/
 action/dist/
 apps/worker/wrangler.generated.jsonc
+test-results/
+playwright-report/
+apps/worker/.wrangler/

@@ -1,18 +1,8 @@
 import { parse as parseYaml } from 'yaml';
 import type { NitrogenConfig } from './types.ts';
+import { DEFAULT_CONFIG } from './config-defaults.ts';
 
-export const DEFAULT_CONFIG: NitrogenConfig = {
-  version: 1,
-  default_branch: 'main',
-  assets_dir: 'images',
-  ignore: ['.github', '.nitrogen', 'images', 'node_modules'],
-  link_relations: ['related', 'supersedes', 'depends-on', 'contradicts', 'implements', 'cites'],
-  default_profile: 'gfm',
-  page_size_warn_kb: 200,
-  image_max_px: 2000,
-  image_formats: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'],
-  actors: { human_label: 'You', claude_label: 'Claude' },
-};
+export { DEFAULT_CONFIG };
 
 const KNOWN = new Set(Object.keys(DEFAULT_CONFIG));
 

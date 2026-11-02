@@ -4,8 +4,17 @@
   "type": "module",
   "license": "MIT",
   "description": "The CFM format guide served to Claude and written to FORMAT.md",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc -p ." },
-  "dependencies": { "@nitrogen/core": "workspace:*" },
-  "devDependencies": { "@nitrogen/spec": "workspace:*" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@nitrogen/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@nitrogen/spec": "workspace:*"
+  },
+  "sideEffects": false
 }

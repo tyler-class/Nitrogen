@@ -1,8 +1,10 @@
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkGfm from 'remark-gfm';
-import remarkFrontmatter from 'remark-frontmatter';
-import remarkDirective from 'remark-directive';
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import { gfm } from 'micromark-extension-gfm';
+import { gfmFromMarkdown } from 'mdast-util-gfm';
+import { frontmatter } from 'micromark-extension-frontmatter';
+import { frontmatterFromMarkdown } from 'mdast-util-frontmatter';
+import { directive } from 'micromark-extension-directive';
+import { directiveFromMarkdown } from 'mdast-util-directive';
 import type { Root, Nodes, Parents, RootContent, Html, Blockquote, Paragraph, Text } from 'mdast';
 import { visitParents } from 'unist-util-visit-parents';
 import { parseFrontmatter } from '../frontmatter.ts';
@@ -24,11 +26,15 @@ export interface PageAst {
   scan: PageScan;
 }
 
-const processor = unified().use(remarkParse).use(remarkGfm).use(remarkFrontmatter, ['yaml']).use(remarkDirective);
+/** Same parse as unified + remark-parse + remark-gfm + remark-frontmatter + remark-directive, without the serializers. */
+const parseOptions = {
+  extensions: [gfm(), frontmatter(['yaml']), directive()],
+  mdastExtensions: [gfmFromMarkdown(), frontmatterFromMarkdown(['yaml']), directiveFromMarkdown()],
+};
 
 /** Parse markdown to mdast with Nitrogen post-processing (no CFM node rewriting). */
 export function parseMdast(src: string): Root {
-  const tree = processor.parse(src) as Root;
+  const tree = fromMarkdown(src, parseOptions) as Root;
   restoreDirectiveText(tree, src);
   return tree;
 }

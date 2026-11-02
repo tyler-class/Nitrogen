@@ -3,6 +3,7 @@ export * from './types.ts';
 export * from './paths.ts';
 export * from './frontmatter.ts';
 export * from './config.ts';
+export { DEFAULT_CONFIG } from './config-defaults.ts';
 export * from './slug.ts';
 export * from './syntax.ts';
 export * from './resolve.ts';

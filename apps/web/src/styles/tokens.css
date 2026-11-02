@@ -1,0 +1,40 @@
+:root {
+  --paper: #ffffff; --sidebar: #f8f8f6; --ink: #17191c;
+  --muted: #5f6672; --faint: #8b919b; --hairline: #e6e7e4;
+  --accent: #2b6e55; --accent-soft: #e8f2ed; --accent-ink: #1d4d3c;
+  --claude: #6a4fd1; --claude-soft: #efeafc;
+  --warn: #9a6a12; --warn-soft: #fbf3df; --danger: #a33a32; --danger-soft: #fbeceb;
+  --info: #2a62a8; --info-soft: #e9f1fb; --ok: #2b6e55; --ok-soft: #e8f2ed;
+  --radius: 8px; --radius-sm: 5px;
+  --font-ui: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --shadow: 0 12px 40px rgb(23 25 28 / 0.14), 0 2px 6px rgb(23 25 28 / 0.06);
+  --code-bg: #f5f5f2;
+  --focus: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
+  color-scheme: light;
+}
+/* Dark theme: every token redefined. Contrast checked for AA on --paper and --sidebar. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15171a; --sidebar: #1b1e22; --ink: #e8e9e6;
+    --muted: #a7adb6; --faint: #8a909a; --hairline: #2c3036;
+    --accent: #6cc3a0; --accent-soft: #1d3329; --accent-ink: #a6e3cb;
+    --claude: #a995ff; --claude-soft: #2a2441;
+    --warn: #e2b55a; --warn-soft: #33290f; --danger: #f08a80; --danger-soft: #3a1c1a;
+    --info: #86b6f2; --info-soft: #172a42; --ok: #6cc3a0; --ok-soft: #1d3329;
+    --shadow: 0 12px 40px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
+    --code-bg: #1f2227;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15171a; --sidebar: #1b1e22; --ink: #e8e9e6;
+  --muted: #a7adb6; --faint: #8a909a; --hairline: #2c3036;
+  --accent: #6cc3a0; --accent-soft: #1d3329; --accent-ink: #a6e3cb;
+  --claude: #a995ff; --claude-soft: #2a2441;
+  --warn: #e2b55a; --warn-soft: #33290f; --danger: #f08a80; --danger-soft: #3a1c1a;
+  --info: #86b6f2; --info-soft: #172a42; --ok: #6cc3a0; --ok-soft: #1d3329;
+  --shadow: 0 12px 40px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
+  --code-bg: #1f2227;
+  color-scheme: dark;
+}

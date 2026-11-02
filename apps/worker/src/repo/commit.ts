@@ -62,6 +62,8 @@ function validate(changes: ChangeInput[], config: NitrogenConfig): void {
   if (changes.length > LIMITS.maxFiles) throw new CommitError(413, `A commit may change at most ${LIMITS.maxFiles} files.`);
   const seen = new Set<string>();
   const check = (path: string, binary: boolean) => {
+    // Export copies (brief 7.3) live under /_exports/<profile>/ and are never indexed.
+    if (/^_exports\/(gfm|commonmark)\/[^]+\.md$/.test(path) && !path.includes('..') && !path.includes('//')) return;
     const r = binary ? checkAssetPath(path, config.assets_dir, config.image_formats) : checkPagePath(path, config.ignore);
     if (!r.ok) throw new CommitError(422, `E009 ${path}: ${r.reason}`, 'E009');
   };

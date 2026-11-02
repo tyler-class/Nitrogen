@@ -87,6 +87,7 @@ export class FakeGitHub {
   manifestConversions = new Map<string, Record<string, unknown>>();
   installations: { id: number; account: { login: string }; repositories: string[] }[] = [];
   clock = Date.parse('2026-11-02T12:00:00Z');
+  autoLoginUser: number | null = null;
 
   constructor(opts: FakeGitHubOptions = {}) {
     this.owner = opts.owner ?? 'octo';
@@ -253,7 +254,16 @@ export class FakeGitHub {
   private route(req: Request, url: URL, body: unknown): Response {
     const p = url.pathname;
     const m = req.method;
-    if (url.hostname === 'github.com' && p === '/login/oauth/access_token' && m === 'POST') {
+    if (p === '/login/oauth/authorize' && m === 'GET') {
+      // Auto-approve as the first user (e2e only).
+      const code = `code_${Math.random().toString(36).slice(2)}`;
+      this.oauthCodes.set(code, this.autoLoginUser ?? this.users[0]!.id);
+      const to = new URL(url.searchParams.get('redirect_uri') ?? '/');
+      to.searchParams.set('code', code);
+      to.searchParams.set('state', url.searchParams.get('state') ?? '');
+      return new Response(null, { status: 302, headers: { location: to.toString() } });
+    }
+    if (p === '/login/oauth/access_token' && m === 'POST') {
       const b = body as Record<string, string>;
       const uid = this.oauthCodes.get(b.code ?? '');
       if (!uid) return json({ error: 'bad_verification_code' });
