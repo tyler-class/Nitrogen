@@ -1,0 +1,9 @@
+{
+  "name": "@nitrogen/spec",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Nitrogen Flavored Markdown (CFM) spec, JSON schemas and conformance fixtures",
+  "exports": { ".": "./src/index.ts", "./schemas/*": "./schemas/*", "./fixtures/*": "./fixtures/*" },
+  "scripts": { "typecheck": "tsc -p ." }
+}

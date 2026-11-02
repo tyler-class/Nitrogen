@@ -1,0 +1,13 @@
+{
+  "name": "@nitrogen/core",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Nitrogen format engine: parse, lint, autofix, index, normalize CFM markdown",
+  "exports": { ".": "./src/index.ts", "./light": "./src/light/index.ts" },
+  "publishConfig": { "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }, "./light": { "types": "./dist/light/index.d.ts", "import": "./dist/light/index.js" } } },
+  "files": ["dist"],
+  "scripts": { "typecheck": "tsc -p ." },
+  "dependencies": {},
+  "devDependencies": { "@nitrogen/spec": "workspace:*" }
+}

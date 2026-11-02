@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitrogen.dev/schemas/config.schema.json",
+  "title": "Nitrogen notes repo config (.nitrogen/config.yml)",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": true,
+  "properties": {
+    "version": { "const": 1 },
+    "default_branch": { "type": "string", "default": "main" },
+    "assets_dir": { "type": "string", "default": "images" },
+    "ignore": { "type": "array", "items": { "type": "string" } },
+    "link_relations": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
+    "default_profile": { "enum": ["gfm", "commonmark"] },
+    "page_size_warn_kb": { "type": "integer", "minimum": 1 },
+    "image_max_px": { "type": "integer", "minimum": 64 },
+    "image_formats": { "type": "array", "items": { "type": "string" } },
+    "actors": {
+      "type": "object",
+      "properties": { "human_label": { "type": "string" }, "claude_label": { "type": "string" } }
+    }
+  }
+}
