@@ -3,6 +3,7 @@ import { runLint } from './commands/lint.ts';
 import { runExport, runNormalize } from './commands/export.ts';
 import { runIndex } from './commands/index-cmd.ts';
 import { runFixLinks } from './commands/fix-links.ts';
+import { doctorCommand, rotateKeysCommand, setupCommand, teardownCommand, upgradeCommand } from './setup/commands.ts';
 
 export const VERSION = '0.1.0';
 
@@ -76,6 +77,54 @@ export function buildProgram(): Command {
         return;
       }
       process.exitCode = runFixLinks({ root: o.root, move: [o.move[0], o.move[1]], dryRun: o.dryRun });
+    });
+
+  program
+    .command('setup')
+    .description('Deploy Nitrogen: Cloudflare Worker, D1, KV, GitHub App, notes repo (idempotent)')
+    .option('--app-dir <dir>', 'Nitrogen checkout (default: current directory)')
+    .option('--repo <name>', 'notes repo (name or owner/name)', process.env.NITROGEN_REPO)
+    .option('--worker-name <name>', 'Worker name', process.env.NITROGEN_WORKER_NAME)
+    .option('--allow-github-id <id>', 'extra GitHub user id allowed to sign in', (v) => Number(v))
+    .option('--branch <branch>', 'notes repo branch', 'main')
+    .option('--no-demo', 'do not add demo pages')
+    .option('-y, --yes', 'accept defaults')
+    .action(async (o) => {
+      process.exitCode = await setupCommand(o);
+    });
+
+  program
+    .command('doctor')
+    .description('Check a deployment and print fixes')
+    .option('--url <url>', 'Worker URL (default: from setup state)')
+    .action(async (o) => {
+      process.exitCode = await doctorCommand(o);
+    });
+
+  program
+    .command('teardown')
+    .description('Delete the Worker, D1 and KV (keeps the notes repo unless --delete-repo)')
+    .option('--app-dir <dir>')
+    .option('--delete-repo', 'also delete the notes repo (asks you to type its name)')
+    .option('-y, --yes')
+    .action(async (o) => {
+      process.exitCode = await teardownCommand(o);
+    });
+
+  program
+    .command('rotate-keys')
+    .description('Regenerate session, cookie and ingest secrets')
+    .option('--app-dir <dir>')
+    .action(async (o) => {
+      process.exitCode = await rotateKeysCommand(o);
+    });
+
+  program
+    .command('upgrade')
+    .description('Apply migrations, rebuild and redeploy')
+    .option('--app-dir <dir>')
+    .action(async (o) => {
+      process.exitCode = await upgradeCommand(o);
     });
 
   return program;

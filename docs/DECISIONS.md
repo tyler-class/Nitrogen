@@ -127,3 +127,16 @@ Cloudflare docs hosts were not reachable from the build sandbox; numbers were re
 - **Decision:** stateless streamable HTTP via `createMcpHandler` (`agents/mcp/server`) behind
   `@cloudflare/workers-oauth-provider` (single-Worker `OAuthProvider`), no Durable Objects.
 - **Why:** `McpAgent` is deprecated; stateless keeps the free plan simple.
+
+## ADR-017 (2026-11-02) Setup runs from a Nitrogen checkout
+- **Decision:** `nitrogen setup` deploys the Worker from a local clone of this repo
+  (`npm create nitrogen` clones it, installs, builds the web app, then runs setup). The deployment
+  config is generated as `apps/worker/wrangler.generated.jsonc` (gitignored).
+- **Why:** the Worker and PWA are built from source; shipping prebuilt bundles in the CLI package
+  would duplicate the build. Notes-repo initialization uses `gh repo clone` + `git push` with the
+  user's gh credentials (needs the `workflow` scope for `.github/workflows`).
+- **Deviation:** `nitrogen setup --adopt <url>` (Deploy-to-Cloudflare button) is not implemented
+  in v0.1; the button provisions D1/KV but the GitHub App still needs the manifest flow, so adopt
+  would only skip two steps. Tracked for later.
+- **Deviation:** if setup is interrupted after the GitHub App is created but before installation,
+  the private key is gone (memory only, by design); setup then asks for the installation id.
