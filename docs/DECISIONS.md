@@ -82,3 +82,48 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
 ## ADR-011 (2026-11-02) github-slugger is a runtime dependency of the light scanner
 - **Decision:** depend on `github-slugger` (one 8 KB file, no dependencies) instead of
   re-implementing it. Anchors must match github.com exactly; a copy would drift.
+
+## ADR-012 (2026-11-02) Verified free-tier limits (sources: Cloudflare and GitHub docs sources on GitHub, npm)
+Cloudflare docs hosts were not reachable from the build sandbox; numbers were read from the
+`cloudflare/cloudflare-docs` and `github/docs` source repos on 2026-11-02.
+- **Workers Free:** 10 ms CPU/request (I/O wait excluded); 50 external subrequests + 1,000 to
+  Cloudflare services per invocation; 100k requests/day; 128 MB memory; 64 MiB uncompressed bundle,
+  no compressed limit. Static asset requests are free and unlimited, except paths routed through
+  the Worker with `run_worker_first`.
+- **D1 Free:** 5M rows read/day, 100k rows written/day, 500 MB/DB, 50 queries per invocation (a
+  `batch()` counts as one and is one transaction), 100 bound params/query, 100 KB statements. FTS5
+  is supported; D1 export fails with virtual tables (drop, export, recreate).
+- **KV Free:** 100k reads, 1,000 writes/deletes/lists per day; 1 write/s/key; min TTL 60 s.
+- **GitHub:** installation tokens last 1 h (format may be `ghs_APPID_JWT`, do not assume length);
+  App JWT RS256, iat -60 s, exp <= 10 min; PEM is PKCS#1, wrapped to PKCS#8 for WebCrypto. Tree
+  entries with `sha: null` delete; recursive trees truncate at 100k entries / 7 MB. GitHub Apps
+  cannot be deleted via API. App user tokens expire after 8 h (we only use them once at login).
+- **Consequences:** the light scanner in the Worker; GitHub calls budgeted per request (commit ~6
+  calls + binaries + inbound pages); D1 writes always batched; blob cache uses the Cache API (free),
+  not KV; rate limits counted in D1, not KV; KV is used only by the OAuth provider.
+
+## ADR-013 (2026-11-02) No commit lock
+- **Decision:** no KV or Durable Object lock around commits. The ref update is fast-forward only
+  (compare-and-swap); on 422 the pipeline rebuilds on the new head, re-verifies base shas, and
+  retries up to 3 times.
+- **Why:** KV is eventually consistent and cannot implement a lock; a DO is unnecessary for one
+  user. CAS on the ref is the real serialization point.
+
+## ADR-014 (2026-11-02) FTS table stores its own text; pages has no body column
+- **Decision:** `pages_fts` is a normal FTS5 table (with a `path UNINDEXED` column) instead of
+  `content=''`; `pages` keeps the excerpt but not the full body.
+- **Why:** contentless FTS5 cannot produce `snippet()` highlights, which search requires. Storing
+  the body once (in FTS) instead of twice keeps the DB small.
+
+## ADR-015 (2026-11-02) Stateless signed-cookie sessions
+- **Decision:** PWA sessions are HMAC-signed cookies (`n2_session`, HttpOnly, Secure, SameSite=Lax,
+  30-day sliding expiry, re-issued when older than a day). CSRF uses a double-submit token
+  (`n2_csrf` cookie + `X-CSRF-Token` header) plus an Origin check. Login `state` is a signed cookie.
+- **Alternatives:** opaque ids in KV.
+- **Why:** zero KV writes per request on the free tier. Revocation = rotate `SESSION_SECRET`
+  (`nitrogen rotate-keys`).
+
+## ADR-016 (2026-11-02) MCP transport
+- **Decision:** stateless streamable HTTP via `createMcpHandler` (`agents/mcp/server`) behind
+  `@cloudflare/workers-oauth-provider` (single-Worker `OAuthProvider`), no Durable Objects.
+- **Why:** `McpAgent` is deprecated; stateless keeps the free plan simple.

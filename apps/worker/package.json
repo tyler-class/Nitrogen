@@ -1,0 +1,24 @@
+{
+  "name": "@nitrogen/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p .",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "eval:mcp": "vitest run --project worker test/eval"
+  },
+  "dependencies": {
+    "@nitrogen/core": "workspace:*",
+    "hono": "^4.13.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@cloudflare/workers-types": "^4.20251101.0",
+    "@nitrogen/testing": "workspace:*",
+    "wrangler": "^4.124.0"
+  }
+}

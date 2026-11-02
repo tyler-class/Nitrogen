@@ -8,3 +8,8 @@ export * from '../lint.ts';
 export * from '../indexer.ts';
 export * from '../resolve.ts';
 export * from '../context.ts';
+export { parseConfig, formatConfig, DEFAULT_CONFIG } from '../config.ts';
+export { autofix, applyEdits, type Edit } from '../autofix.ts';
+export { rewriteLinks, findInbound, linkMention } from '../links.ts';
+export { bodyText, excerpt, contextAt, truncate } from '../text.ts';
+export { locateInlineLink, lineStarts, offsetOf } from './scan.ts';

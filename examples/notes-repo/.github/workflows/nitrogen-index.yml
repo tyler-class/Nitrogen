@@ -1,0 +1,14 @@
+name: nitrogen-index
+on:
+  push: { branches: [main] }
+  workflow_dispatch: {}
+concurrency: { group: nitrogen-index, cancel-in-progress: true }
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tyler-class/nitrogen/action@v0
+        with:
+          worker-url: ${{ vars.NITROGEN_URL }}
+          ingest-secret: ${{ secrets.NITROGEN_INGEST_SECRET }}
