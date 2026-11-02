@@ -1,0 +1,73 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Title",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "Intro text.",
+    "size": 136,
+    "updated": null
+  },
+  "links": [
+    {
+      "src": "notes/fixture.md",
+      "dst": "index.md",
+      "frag": null,
+      "rel": "related",
+      "text": "link",
+      "ctx": "code and link heading",
+      "line": 16
+    }
+  ],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "starts-at-h2",
+      "text": "Starts at H2",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "title",
+      "text": "Title",
+      "level": 1
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "second-h1",
+      "text": "Second H1",
+      "level": 1
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "repeat",
+      "text": "Repeat",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "repeat-1",
+      "text": "Repeat",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "setext-h2",
+      "text": "Setext H2",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "code-and-link-heading",
+      "text": "code and link heading",
+      "level": 3
+    }
+  ]
+}

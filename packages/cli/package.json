@@ -1,0 +1,23 @@
+{
+  "name": "@nitrogen/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Nitrogen CLI: lint, normalize, export, index, fix-links, setup, doctor",
+  "bin": { "nitrogen": "./dist/bin.js", "n2": "./dist/bin.js" },
+  "exports": { ".": "./src/index.ts" },
+  "publishConfig": { "exports": { ".": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "node scripts/build.mjs",
+    "dev": "tsx src/bin.ts"
+  },
+  "dependencies": {
+    "@nitrogen/core": "workspace:*",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

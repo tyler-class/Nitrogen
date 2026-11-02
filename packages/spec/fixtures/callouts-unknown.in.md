@@ -1,0 +1,4 @@
+# Bad
+
+> [!warnign] Typo
+> Body.

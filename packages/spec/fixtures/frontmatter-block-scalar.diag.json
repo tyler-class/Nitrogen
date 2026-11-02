@@ -1,0 +1,12 @@
+{
+  "diagnostics": [
+    {
+      "code": "E001",
+      "line": 2
+    },
+    {
+      "code": "E001",
+      "line": 3
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Tasks",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "Open Done with a link Nested",
+    "size": 204,
+    "updated": null
+  },
+  "links": [
+    {
+      "src": "notes/fixture.md",
+      "dst": "index.md",
+      "frag": null,
+      "rel": "related",
+      "text": "a link",
+      "ctx": "Done with a link",
+      "line": 4
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "index.md",
+      "frag": null,
+      "rel": "related",
+      "text": "link",
+      "ctx": "The note with link.",
+      "line": 12
+    }
+  ],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "tasks",
+      "text": "Tasks",
+      "level": 1
+    }
+  ]
+}

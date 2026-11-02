@@ -1,0 +1,27 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Nested",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "Outer.",
+    "size": 85,
+    "updated": null
+  },
+  "links": [],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "nested",
+      "text": "Nested",
+      "level": 1
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "W109",
+      "line": 3
+    },
+    {
+      "code": "W109",
+      "line": 7
+    },
+    {
+      "code": "W106",
+      "line": 11
+    }
+  ]
+}

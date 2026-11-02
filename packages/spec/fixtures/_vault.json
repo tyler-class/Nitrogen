@@ -1,0 +1,70 @@
+{
+  "path": "notes/fixture.md",
+  "pages": [
+    {
+      "path": "index.md",
+      "title": "Home",
+      "aliases": [],
+      "slugs": [
+        "home"
+      ]
+    },
+    {
+      "path": "architecture/index.md",
+      "title": "Architecture",
+      "aliases": [],
+      "slugs": [
+        "architecture"
+      ]
+    },
+    {
+      "path": "architecture/sync-design.md",
+      "title": "Sync design",
+      "aliases": [
+        "Commit pipeline"
+      ],
+      "slugs": [
+        "sync-design",
+        "commit-flow",
+        "polling"
+      ]
+    },
+    {
+      "path": "decisions/adr-002.md",
+      "title": "ADR-002",
+      "aliases": [],
+      "slugs": []
+    },
+    {
+      "path": "notes/other.md",
+      "title": "Other",
+      "aliases": [],
+      "slugs": []
+    },
+    {
+      "path": "a/dup.md",
+      "title": "Dup",
+      "aliases": [],
+      "slugs": []
+    },
+    {
+      "path": "b/dup.md",
+      "title": "Dup",
+      "aliases": [],
+      "slugs": []
+    },
+    {
+      "path": "decisions/adr-004-direct-commits.md",
+      "title": "ADR-004: Direct commits",
+      "aliases": [],
+      "slugs": [
+        "adr-004-direct-commits",
+        "alternatives"
+      ]
+    }
+  ],
+  "images": [
+    "images/2026/11/atom.svg",
+    "images/2026/11/n2.svg"
+  ]
+}

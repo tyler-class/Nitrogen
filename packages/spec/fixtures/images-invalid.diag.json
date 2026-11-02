@@ -1,0 +1,32 @@
+{
+  "diagnostics": [
+    {
+      "code": "E005",
+      "line": 3
+    },
+    {
+      "code": "E006",
+      "line": 5
+    },
+    {
+      "code": "E006",
+      "line": 5
+    },
+    {
+      "code": "E006",
+      "line": 5
+    },
+    {
+      "code": "W103",
+      "line": 7
+    },
+    {
+      "code": "W103",
+      "line": 9
+    },
+    {
+      "code": "W103",
+      "line": 11
+    }
+  ]
+}

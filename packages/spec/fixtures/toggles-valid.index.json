@@ -1,0 +1,27 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Toggles",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "Markdown works.",
+    "size": 153,
+    "updated": null
+  },
+  "links": [],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "toggles",
+      "text": "Toggles",
+      "level": 1
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "diagnostics": [
+    {
+      "code": "E007",
+      "line": 3
+    },
+    {
+      "code": "E007",
+      "line": 7
+    },
+    {
+      "code": "E007",
+      "line": 7
+    },
+    {
+      "code": "E007",
+      "line": 12
+    },
+    {
+      "code": "E007",
+      "line": 12
+    }
+  ]
+}

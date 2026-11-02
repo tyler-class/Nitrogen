@@ -1,0 +1,51 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Brackets",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "[a [nested] label](/architecture/sync-design.md) and badge.",
+    "size": 103,
+    "updated": null
+  },
+  "links": [
+    {
+      "src": "notes/fixture.md",
+      "dst": "architecture/sync-design.md",
+      "frag": null,
+      "rel": "related",
+      "text": "a [nested] label",
+      "ctx": "[a [nested] label](/architecture/sync-design.md) and badge.",
+      "line": 3
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "index.md",
+      "frag": null,
+      "rel": "related",
+      "text": "badge",
+      "ctx": "[a [nested] label](/architecture/sync-design.md) and badge.",
+      "line": 3
+    }
+  ],
+  "images": [
+    {
+      "src": "notes/fixture.md",
+      "path": "images/a.png"
+    }
+  ],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "brackets",
+      "text": "Brackets",
+      "level": 1
+    }
+  ]
+}

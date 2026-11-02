@@ -22,3 +22,63 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
   page-relative links accepted as input, canonical image fragment key order, E009/E010 being
   write-time checks, and E008 covering any raw HTML outside the allowlist.
 - **Why:** the light scanner and the full parser must agree; that requires a grammar, not prose.
+
+## ADR-004 (2026-11-02) One PageScan, two producers
+- **Decision:** both parser modes produce the same `PageScan` structure (frontmatter, headings,
+  links, images, wikilinks, callouts, drawers, table directives, HTML tags, toggles). Lint and index
+  extraction are pure functions of `PageScan` + source, so they are shared code. Parity tests compare
+  the full `PageScan` (deep equality) on every fixture and on 1,500 property-generated documents.
+- **Alternatives:** separate lint implementations per mode; running remark inside the Worker.
+- **Why:** parity becomes a single, testable contract instead of two rule engines drifting apart.
+  Plain-text helpers (body, excerpt, link context) are line-based and identical in both modes by
+  construction; they are documented as lexical, not structural.
+- **Known light-scanner limits:** headings inside list items, HTML block types 3-5, and exotic
+  CommonMark edge cases (e.g. link destinations split by a blockquote prefix) are not modeled. They
+  only affect index freshness until the full reindex (Action) runs.
+
+## ADR-005 (2026-11-02) Text and leaf directives are not CFM
+- **Decision:** after parsing, `textDirective` and `leafDirective` nodes are turned back into the
+  exact source text. Only `:::drawer` container directives are CFM; other container names are kept
+  as generic containers (rendered as their children, normalized untouched).
+- **Why:** remark-directive otherwise eats ordinary prose (`10:30` became a directive named `30`).
+
+## ADR-006 (2026-11-02) Normalizer works by source edits, in three stages
+- **Decision:** normalization applies offset-based edits to the original text in three reparsed
+  stages (leaves: links, images, table directives, HTML; then callouts and toggles; then drawers).
+  It never re-serializes the AST.
+- **Alternatives:** mdast -> remark-stringify.
+- **Why:** stringify reformats everything (list markers, emphasis style, escapes, table padding),
+  which destroys diffs and makes idempotency hard to prove. Source edits keep untouched markdown
+  byte-identical; idempotency and fingerprint equality are property-tested.
+
+## ADR-007 (2026-11-02) The GFM "lead title" convention for callouts
+- **Decision:** GFM alerts cannot carry a title, so normalized output writes
+  `> [!WARNING]\n> **Title**` and extended types as `> [!NOTE]\n> **Decision: Title**`. An
+  uppercase native marker alone on its line, followed in the same paragraph by a bold-only line,
+  is read back as a titled callout by the fingerprint, the commonmark normalizer, and the renderer.
+  When a title-less callout's body starts with a bold-only line, the normalizer inserts a blank `>`
+  line so the body is not misread as a title.
+- **Why:** makes gfm output re-importable without loss and keeps normalize(gfm) -> normalize(cm)
+  consistent.
+
+## ADR-008 (2026-11-02) Canonical wikilink text
+- **Decision:** `[[Target]]` becomes `[Target](/path.md)` (the text as written; the page title when
+  the target was a path); `[[Target#Heading]]` becomes `[Target > Heading](/path.md#heading)`;
+  a `|label` always wins.
+- **Why:** mirrors Obsidian's display, keeps the author's wording.
+
+## ADR-009 (2026-11-02) Commonmark profile details
+- **Decision:** `<kbd>X</kbd>` -> `` `X` ``; `<br>` -> a space; `<sub>/<sup>` tags removed (text kept);
+  HTML comments removed; toggles -> bold title paragraph + body; drawers -> titled blockquote. Task
+  lists, footnotes, strikethrough and pipe tables are kept (documented exceptions; strict viewers
+  show them as text).
+
+## ADR-010 (2026-11-02) Ingest signature
+- **Decision:** `/admin/ingest` requires `X-Nitrogen-Timestamp` (unix seconds) and
+  `X-Nitrogen-Signature: sha256=<hex HMAC-SHA256(secret, "<timestamp>.<body>")>`; the Worker rejects
+  timestamps older than 5 minutes. Batches carry `allPaths` so the final batch can prune deleted pages.
+- **Why:** timestamped HMAC blocks replay; constant-time compare on the Worker.
+
+## ADR-011 (2026-11-02) github-slugger is a runtime dependency of the light scanner
+- **Decision:** depend on `github-slugger` (one 8 KB file, no dependencies) instead of
+  re-implementing it. Anchors must match github.com exactly; a copy would drift.

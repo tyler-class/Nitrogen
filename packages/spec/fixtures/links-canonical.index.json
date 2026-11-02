@@ -1,0 +1,79 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Links",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "See Sync design, the flow and old plan.",
+    "size": 344,
+    "updated": null
+  },
+  "links": [
+    {
+      "src": "notes/fixture.md",
+      "dst": "architecture/sync-design.md",
+      "frag": null,
+      "rel": "related",
+      "text": "Sync design",
+      "ctx": "See Sync design, the flow and old plan.",
+      "line": 3
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "architecture/sync-design.md",
+      "frag": "commit-flow",
+      "rel": "cites",
+      "text": "the flow",
+      "ctx": "See Sync design, the flow and old plan.",
+      "line": 3
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "decisions/adr-002.md",
+      "frag": null,
+      "rel": "supersedes",
+      "text": "old plan",
+      "ctx": "See Sync design, the flow and old plan.",
+      "line": 4
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "notes/other.md",
+      "frag": null,
+      "rel": "related",
+      "text": "sibling",
+      "ctx": "Relative: sibling and up.",
+      "line": 6
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "index.md",
+      "frag": null,
+      "rel": "related",
+      "text": "up",
+      "ctx": "Relative: sibling and up.",
+      "line": 6
+    }
+  ],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "links",
+      "text": "Links",
+      "level": 1
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "local-anchor",
+      "text": "Local anchor",
+      "level": 2
+    }
+  ]
+}

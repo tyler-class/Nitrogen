@@ -1,1 +1,20 @@
-export {};
+/** @nitrogen/core: the Nitrogen format engine (full mode). Import `@nitrogen/core/light` in Workers. */
+export * from './types.ts';
+export * from './paths.ts';
+export * from './frontmatter.ts';
+export * from './config.ts';
+export * from './slug.ts';
+export * from './syntax.ts';
+export * from './resolve.ts';
+export * from './context.ts';
+export * from './text.ts';
+export * from './indexer.ts';
+export * from './autofix.ts';
+export * from './links.ts';
+export { lintScan, hasErrors, checkWrite, formatDiagnostic, type LintOptions } from './lint.ts';
+export { scanPage, plainInline, stripQuote, locateInlineLink, lineStarts, offsetOf } from './light/scan.ts';
+export { parsePage, parseMdast, scanTree, nodeText, type PageAst } from './full/parse.ts';
+export { normalize, inlineFrontmatter, summarizeLedger, type Profile, type NormalizeOptions, type NormalizeResult } from './full/normalize.ts';
+export { semanticFingerprint, type Fingerprint } from './full/fingerprint.ts';
+export { extractIndexRows, lintPage } from './full/api.ts';
+export { exportPages, type ExportOptions, type ExportResult } from './full/export.ts';

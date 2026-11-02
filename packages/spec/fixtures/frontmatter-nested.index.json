@@ -1,0 +1,27 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Bad",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "",
+    "size": 48,
+    "updated": null
+  },
+  "links": [],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "bad",
+      "text": "Bad",
+      "level": 1
+    }
+  ]
+}

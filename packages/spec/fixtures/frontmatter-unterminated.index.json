@@ -1,0 +1,20 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Fixture",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "title: Not frontmatter",
+    "size": 39,
+    "updated": null
+  },
+  "links": [],
+  "images": [],
+  "headings": []
+}

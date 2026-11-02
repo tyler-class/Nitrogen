@@ -5,9 +5,28 @@
   "license": "MIT",
   "description": "Nitrogen format engine: parse, lint, autofix, index, normalize CFM markdown",
   "exports": { ".": "./src/index.ts", "./light": "./src/light/index.ts" },
-  "publishConfig": { "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }, "./light": { "types": "./dist/light/index.d.ts", "import": "./dist/light/index.js" } } },
+  "publishConfig": {
+    "exports": {
+      ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+      "./light": { "types": "./dist/light/index.d.ts", "import": "./dist/light/index.js" }
+    }
+  },
   "files": ["dist"],
   "scripts": { "typecheck": "tsc -p ." },
-  "dependencies": {},
-  "devDependencies": { "@nitrogen/spec": "workspace:*" }
+  "dependencies": {
+    "github-slugger": "^2.0.0",
+    "remark-directive": "^4.0.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0",
+    "unist-util-visit-parents": "^6.0.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@nitrogen/spec": "workspace:*",
+    "@types/mdast": "^4.0.4",
+    "@types/unist": "^3.0.3"
+  }
 }

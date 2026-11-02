@@ -1,0 +1,27 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Wiki",
+    "icon": null,
+    "ord": null,
+    "status": null,
+    "tags": [],
+    "aliases": [],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "[[Sync design]], [[architecture/sync-design]], [[Sync design#Commit flow the flow]], [[Commit pipeline]], [[sync-design]].",
+    "size": 131,
+    "updated": null
+  },
+  "links": [],
+  "images": [],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "wiki",
+      "text": "Wiki",
+      "level": 1
+    }
+  ]
+}

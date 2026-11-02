@@ -1,0 +1,114 @@
+{
+  "page": {
+    "path": "notes/fixture.md",
+    "sha": "sha",
+    "title": "Format tour",
+    "icon": "book-open",
+    "ord": 10,
+    "status": "active",
+    "tags": [
+      "format",
+      "demo"
+    ],
+    "aliases": [
+      "CFM tour",
+      "Format reference"
+    ],
+    "pinned": false,
+    "locked": false,
+    "excerpt": "Every Nitrogen construct on one page. See Sync design for a real example.",
+    "size": 1530,
+    "updated": null
+  },
+  "links": [
+    {
+      "src": "notes/fixture.md",
+      "dst": "architecture/sync-design.md",
+      "frag": "commit-flow",
+      "rel": "cites",
+      "text": "Sync design",
+      "ctx": "Every Nitrogen construct on one page. See Sync design for a real example.",
+      "line": 12
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "index.md",
+      "frag": null,
+      "rel": "related",
+      "text": "Home",
+      "ctx": "A canonical link: Home. A typed link: the decision. An external link: CommonMark.",
+      "line": 17
+    },
+    {
+      "src": "notes/fixture.md",
+      "dst": "decisions/adr-004-direct-commits.md",
+      "frag": null,
+      "rel": "implements",
+      "text": "the decision",
+      "ctx": "A canonical link: Home. A typed link: the decision. An external link: CommonMark.",
+      "line": 17
+    }
+  ],
+  "images": [
+    {
+      "src": "notes/fixture.md",
+      "path": "images/2026/11/n2.svg"
+    }
+  ],
+  "headings": [
+    {
+      "path": "notes/fixture.md",
+      "slug": "format-tour",
+      "text": "Format tour",
+      "level": 1
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "links",
+      "text": "Links",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "callouts",
+      "text": "Callouts",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "toggle",
+      "text": "Toggle",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "drawer",
+      "text": "Drawer",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "image",
+      "text": "Image",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "table",
+      "text": "Table",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "mermaid",
+      "text": "Mermaid",
+      "level": 2
+    },
+    {
+      "path": "notes/fixture.md",
+      "slug": "tasks-and-footnotes",
+      "text": "Tasks and footnotes",
+      "level": 2
+    }
+  ]
+}
