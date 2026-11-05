@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { ORIGIN, PASSWORD } from './helpers';
 
 const REDIRECT = 'https://client.example/callback';
+const PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const PNG = Uint8Array.from(atob(PNG_B64), (c) => c.charCodeAt(0));
 
 async function pkce() {
   const verifier = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replace(
@@ -145,6 +148,8 @@ describe('MCP', () => {
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
         'add_image',
+        'image_upload_status',
+        'request_image_upload',
         'create_page',
         'create_pages',
         'delete_page',
@@ -251,6 +256,51 @@ describe('MCP', () => {
     expect(dup.text).toContain('already exists');
     const missing = await tool(token, 'read_page', { page: 'Tomatos' });
     expect(missing.isError).toBe(true);
+
+    // Images from bytes, placed at a placeholder.
+    await tool(token, 'edit_page', {
+      page: 'Tomatoes',
+      edits: [{ type: 'append_to_section', heading: 'Varieties', text: '[photo of roma]' }],
+    });
+    const added = await tool(token, 'add_image', {
+      data_base64: `data:image/png;base64,${PNG_B64}`,
+      alt: 'Roma tomatoes',
+      page: 'Tomatoes',
+      placement: { replace_text: '[photo of roma]' },
+    });
+    expect(added.isError).toBe(false);
+    const withImg = (await tool(token, 'read_page', { page: 'Tomatoes' })).text;
+    expect(withImg).toMatch(/!\[Roma tomatoes\]\(\/files\/img\/[a-z0-9]+\.png\)/);
+    expect(withImg).not.toContain('[photo of roma]');
+    const both = await tool(token, 'add_image', { page: 'Tomatoes' });
+    expect(both.isError).toBe(true);
+
+    // Images the person has: a one-time upload link, placed under a heading.
+    const req = await tool(token, 'request_image_upload', {
+      page: 'Tomatoes',
+      placement: { under_heading: 'Care' },
+      alt: 'Harvest basket',
+    });
+    const link = /(https:\/\/\S+\/u\/[A-Za-z0-9_-]+)/.exec(req.text)![1]!;
+    const uploadId = link.split('/u/')[1]!;
+    expect((await tool(token, 'image_upload_status', { upload_id: uploadId })).text).toContain(
+      'Not uploaded yet',
+    );
+    const form = await SELF.fetch(link);
+    expect(form.status).toBe(200);
+    expect(await form.text()).toContain('under the heading “Care”');
+    const post = () =>
+      SELF.fetch(link, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
+    const up = await post();
+    expect(up.status).toBe(201);
+    expect((await post()).status).toBe(410);
+    expect((await tool(token, 'image_upload_status', { upload_id: uploadId })).text).toContain(
+      'Uploaded and placed',
+    );
+    expect((await tool(token, 'read_page', { page: 'Tomatoes' })).text).toMatch(
+      /## Care\n\n!\[Harvest basket\]\(\/files\/img\/[a-z0-9]+\.png\)\n\nWater daily\./,
+    );
+    expect((await SELF.fetch(`${ORIGIN}/u/not-a-real-token-at-all-xx`)).status).toBe(404);
 
     // Moving and guarded deletion.
     const moved = await tool(token, 'move_page', { page: 'Compost', new_parent: 'top' });

@@ -13,6 +13,7 @@
     "run_worker_first": [
       "/api/*",
       "/files/*",
+      "/u/*",
       "/mcp",
       "/mcp/*",
       "/authorize",

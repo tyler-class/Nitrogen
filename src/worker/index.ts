@@ -4,10 +4,12 @@
 //   /oauth/*, /.well-known/* → handled by the provider
 //   /api/*          → the app's REST API (cookie session)
 //   /files/*        → images from R2 (cookie session)
+//   /u/<token>      → one-time image upload link an assistant hands out (the token is the credential)
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
 import { app } from './app';
 import { handleAuthorize } from './consent';
 import { mcpApiHandler } from './mcp';
+import { handleUploadLink } from './images';
 import { serveFile } from './routes/files';
 import { drainIndex } from './search';
 
@@ -20,6 +22,7 @@ const defaultHandler = {
     const path = new URL(request.url).pathname;
     if (path === '/authorize') return handleAuthorize(request, env);
     if (path.startsWith('/files/')) return serveFile(request, env);
+    if (path.startsWith('/u/')) return handleUploadLink(request, env, ctx);
     return app.fetch(request, env, ctx);
   },
 };

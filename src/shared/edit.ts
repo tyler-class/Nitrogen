@@ -10,6 +10,8 @@ export type EditOp =
   | { type: 'insert_before'; find: string; text: string }
   /** Adds text at the end of a heading's section (before the next heading of the same or higher level). */
   | { type: 'append_to_section'; heading: string; text: string }
+  /** Adds text directly below a heading line, before the rest of its section. */
+  | { type: 'insert_under_heading'; heading: string; text: string }
   /** Replaces everything under a heading, keeping the heading line. */
   | { type: 'replace_section'; heading: string; text: string }
   /** Adds a new section at the end of the page (or of a parent section). */
@@ -111,6 +113,18 @@ function applyOne(md: string, op: EditOp): string {
       return joinBlocks(md, op.text) + '\n';
     case 'prepend':
       return joinBlocks(op.text, md) + '\n';
+    case 'insert_under_heading': {
+      const lines = md.split('\n');
+      const h = findHeading(md, op.heading);
+      const out = [
+        ...lines.slice(0, h.line + 1),
+        '',
+        ...op.text.replace(/^\n+|\n+$/g, '').split('\n'),
+        '',
+        ...lines.slice(h.line + 1),
+      ];
+      return out.join('\n').replace(/\n{3,}/g, '\n\n');
+    }
     case 'append_to_section':
     case 'replace_section': {
       const lines = md.split('\n');

@@ -5,8 +5,10 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { applyEdits, EditError, headings, type EditOp } from '@shared/edit';
 import { pageHref } from '@shared/markdown';
+import { describePlacement, placementSchema } from '@shared/placement';
 import { type PageTreeInput, pageTreeNode } from '@shared/schemas';
 import { ancestorsOf, buildTree, outline, type TreeNode } from '@shared/tree';
+import { VERSION } from '@shared/version';
 import type {
   Page,
   PageDetail,
@@ -19,7 +21,9 @@ import type {
 } from '@shared/types';
 import { app } from './app';
 import { INTERNAL } from './auth';
+import { createUploadLink, placeImage, UPLOAD_LINK_MINUTES, uploadStatus, withAlt } from './images';
 import { MAX_IMAGE_BYTES, storeImage } from './routes/files';
+import { indexSoon } from './search';
 
 type Call = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
@@ -85,7 +89,7 @@ How to work with it:
 Markdown conventions:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
 - Callouts: "> [!NOTE]", "> [!TIP]", "> [!WARNING]" as the first line of a blockquote.
-- Images are stored in Nitrogen. Use add_image to import one from a URL; it returns markdown like ![alt](/files/img/…) and can insert it into a page for you. Don't hotlink external images.
+- Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
 - Don't repeat the page title as a "# Title" heading at the top of the body; the title is shown separately. Start sections at "##".`;
 
 interface TreeCtx {
@@ -95,9 +99,9 @@ interface TreeCtx {
   home: string | null;
 }
 
-function buildServer(call: Call, origin: string, env: Cloudflare.Env) {
+function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: ExecutionContext) {
   const server = new McpServer(
-    { name: 'nitrogen', version: '0.2.0' },
+    { name: 'nitrogen', version: VERSION },
     { instructions: INSTRUCTIONS },
   );
 
@@ -640,73 +644,128 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env) {
 
   // ---------------------------------------------------------------- images
 
+  const placementArg = placementSchema
+    .optional()
+    .describe('Where in the page the image goes. Default: the end of the page. Choose one key.');
+
   server.registerTool(
     'add_image',
     {
-      title: 'Import an image',
+      title: 'Add an image',
       description:
-        'Download an image from a public https URL into the wiki’s storage and return markdown that shows it. Optionally insert it into a page: at the end, at the start, at the end of a heading’s section, or right after some exact text.',
+        'Store an image in the wiki (R2) and optionally place it in a page at a precise spot. Give either url (a public https image) or data_base64 (the file’s bytes, for clients that can read files, like Claude Code). An image someone attached in this chat cannot be passed here: use request_image_upload instead.',
       inputSchema: z.object({
-        url: z.string().url(),
-        alt: z.string().max(200).optional().describe('Alt text describing the image.'),
-        page: z
+        url: z.string().url().optional(),
+        data_base64: z
           .string()
           .optional()
-          .describe('Page to attach the image to (and insert it into, with insert).'),
-        insert: z
-          .object({
-            at: z.enum(['end', 'start']).optional(),
-            after_heading: z.string().optional(),
-            after_text: z.string().optional(),
-          })
-          .optional(),
+          .describe('Base64 image bytes (a "data:image/…;base64," prefix is fine). Max 15 MB.'),
+        filename: z.string().max(200).optional(),
+        alt: z.string().max(200).optional().describe('Alt text describing the image.'),
+        page: z.string().optional().describe('Page to put the image in. Omit to only store it.'),
+        placement: placementArg,
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    safe(async ({ url, alt, page, insert }) => {
-      const u = new URL(url);
-      if (u.protocol !== 'https:') throw new ToolError('Use an https:// URL.');
+    safe(async ({ url, data_base64, filename, alt, page, placement }) => {
+      if (!url === !data_base64) throw new ToolError('Give exactly one of url or data_base64.');
       const t = await loadTree();
       const target = page ? resolve(page, t) : null;
-      if (insert && !target) throw new ToolError('Give page to insert the image into.');
+      if (placement && !target) throw new ToolError('Give page to place the image in.');
 
-      const res = await fetch(u, { headers: { Accept: 'image/*' }, redirect: 'follow' });
-      if (!res.ok) throw new ToolError(`Could not download the image (HTTP ${res.status}).`);
-      const len = Number(res.headers.get('Content-Length') ?? 0);
-      if (len > MAX_IMAGE_BYTES) throw new ToolError('Images can be 15 MB at most.');
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      const name = alt?.trim() || decodeURIComponent(u.pathname.split('/').pop() || 'image');
+      let bytes: Uint8Array;
+      let name = filename?.trim() || alt?.trim() || 'image';
+      if (url) {
+        const u = new URL(url);
+        if (u.protocol !== 'https:') throw new ToolError('Use an https:// URL.');
+        const res = await fetch(u, { headers: { Accept: 'image/*' }, redirect: 'follow' });
+        if (!res.ok) throw new ToolError(`Could not download the image (HTTP ${res.status}).`);
+        if (Number(res.headers.get('Content-Length') ?? 0) > MAX_IMAGE_BYTES)
+          throw new ToolError('Images can be 15 MB at most.');
+        bytes = new Uint8Array(await res.arrayBuffer());
+        if (!filename && !alt) name = decodeURIComponent(u.pathname.split('/').pop() || 'image');
+      } else {
+        const b64 = data_base64!.replace(/^data:[^,]*,/, '').replace(/\s+/g, '');
+        if (b64.length > Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4)
+          throw new ToolError('Images can be 15 MB at most.');
+        try {
+          bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+        } catch {
+          throw new ToolError('data_base64 is not valid base64.');
+        }
+      }
       const file: UploadedFile = await storeImage(env, bytes, name, target?.id ?? null).catch(
         (e: unknown) => {
           throw new ToolError(e instanceof Error ? e.message : 'Could not store the image.');
         },
       );
-      const markdown = alt ? `![${alt.replace(/[[\]\n]/g, ' ')}](${file.url})` : file.markdown;
-      if (!insert || !target) return text(`Stored. Markdown:\n${markdown}`);
-
-      const op: EditOp = insert.after_text
-        ? { type: 'insert_after', find: insert.after_text, text: `\n\n${markdown}\n\n` }
-        : insert.after_heading
-          ? { type: 'append_to_section', heading: insert.after_heading, text: markdown }
-          : insert.at === 'start'
-            ? { type: 'prepend', text: markdown }
-            : { type: 'append', text: markdown };
-      const { page: cur } = await call<PageDetail>('GET', `/pages/${target.id}`);
-      let body: string;
-      try {
-        body = applyEdits(cur.body, [op]).replace(/\n{3,}/g, '\n\n');
-      } catch (e) {
-        throw new ToolError(
-          `Stored the image but did not insert it: ${(e as Error).message}\nMarkdown: ${markdown}`,
-        );
-      }
-      const next = await call<Page>('PATCH', `/pages/${target.id}`, {
-        body,
-        base_version: cur.version,
-      });
+      const markdown = withAlt(file.markdown, file.url, alt);
+      if (!target) return text(`Stored. Markdown:\n${markdown}`);
+      const placed = await placeImage(env.DB, target.id, markdown, placement);
+      indexSoon(env, ctx);
       return text(
-        `Stored and inserted into ${describe(next)} (version ${next.version}).\nMarkdown: ${markdown}`,
+        `${placed.fallback ? `Couldn’t find the requested spot (${placed.fallback}), so the image went at the end of the page. ` : ''}Added to ${describe(placed.page)} ${placed.fallback ? '' : describePlacement(placement)} (version ${placed.page.version}).\nMarkdown: ${markdown}`,
       );
+    }),
+  );
+
+  server.registerTool(
+    'request_image_upload',
+    {
+      title: 'Ask for an image upload',
+      description: `Get a one-time upload link for a page. Use this when the person wants to add an image they have (for example one they attached in this chat, which tools can't receive). Give them the link: they open it on any device, pick or drop the image, and it is stored and placed in the page at the chosen spot. The link works once and expires after ${UPLOAD_LINK_MINUTES} minutes. Then check image_upload_status (or read_page). Agents with a shell can also POST the file to the link themselves.`,
+      inputSchema: z.object({
+        page: z.string().describe('Page id, title or path.'),
+        placement: placementArg,
+        alt: z.string().max(200).optional().describe('Alt text describing the expected image.'),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    safe(async ({ page, placement, alt }) => {
+      const t = await loadTree();
+      const target = resolve(page, t);
+      const link = await createUploadLink(env.DB, target.id, placement, alt);
+      const url = `${origin}/u/${link.token}`;
+      return text(
+        [
+          `Upload link for ${describe(target, t)}; the image will go ${describePlacement(placement)}:`,
+          url,
+          '',
+          `Share it with the person. It works once and expires at ${link.expires_at}.`,
+          `From a shell: curl -X POST --data-binary @photo.jpg -H 'Content-Type: image/jpeg' ${url}`,
+          `Upload id for image_upload_status: ${link.token}`,
+        ].join('\n'),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'image_upload_status',
+    {
+      title: 'Check an image upload',
+      description:
+        'Whether an upload link from request_image_upload has been used yet, and the resulting markdown.',
+      inputSchema: z.object({ upload_id: z.string().min(10) }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async ({ upload_id }) => {
+      const s = await uploadStatus(env.DB, upload_id.trim().replace(/^.*\/u\//, ''));
+      switch (s.state) {
+        case 'done':
+          return text(
+            `Uploaded and placed${s.note ? ` (${s.note})` : ''}.\nMarkdown: ${s.markdown}`,
+          );
+        case 'waiting':
+          return text(`Not uploaded yet. The link expires at ${s.expires_at}.`);
+        case 'uploading':
+          return text('Uploading right now; check again in a moment.');
+        case 'expired':
+          return text(
+            'The link expired without an upload. Ask for a new one with request_image_upload.',
+          );
+        default:
+          return text('No upload has that id.');
+      }
     }),
   );
 
@@ -732,7 +791,7 @@ export const mcpApiHandler = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const origin = new URL(request.url).origin;
     const call = apiCaller(origin, env, ctx);
-    const handler = createMcpHandler(() => buildServer(call, origin, env));
+    const handler = createMcpHandler(() => buildServer(call, origin, env, ctx));
     return handler.fetch(request);
   },
 };

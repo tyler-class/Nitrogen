@@ -48,6 +48,7 @@ export default defineConfig(({ command }) => ({
         navigateFallbackDenylist: [
           /^\/api\//,
           /^\/files\//,
+          /^\/u\//,
           /^\/mcp/,
           /^\/authorize/,
           /^\/oauth\//,

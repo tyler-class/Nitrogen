@@ -53,8 +53,16 @@ In Nitrogen, open **Settings → Connect an AI assistant** and copy your MCP URL
 
 Tools: `get_tree`, `read_page`, `search`, `create_page`, `create_pages` (a whole subtree at once),
 `edit_page` (find/replace, section edits, append), `update_page`, `move_page`, `delete_page`
-(confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, `add_image` (import
-from a URL and place it in a page).
+(confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, and for images:
+
+- `add_image`: from a public URL or base64 bytes.
+- `request_image_upload`: for an image you have, such as one attached in chat (chat attachments
+  can't be passed to tools). Claude gives you a one-time link; open it on any device and drop the
+  image. Valid for an hour.
+- `image_upload_status`: checks whether an upload link has been used yet.
+
+Images go exactly where the assistant asks: under a heading, at the end of a section, before or
+after some text, in place of a placeholder like `[photo]`, or at the top or bottom of the page.
 
 ## Search
 
