@@ -6,14 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 const remote = process.env.N2_REMOTE === '1';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     // AI Search only runs on Cloudflare. Local dev uses keyword search unless N2_REMOTE=1
     // (which needs `wrangler login` and talks to your real AI Search instance).
     cloudflare({
       remoteBindings: remote,
-      config: remote ? {} : { vars: { SEMANTIC_SEARCH: 'off' } },
+      // Only for `vite dev`: production builds keep wrangler.jsonc's SEMANTIC_SEARCH="on".
+      config: command === 'serve' && !remote ? { vars: { SEMANTIC_SEARCH: 'off' } } : {},
     }),
     VitePWA({
       registerType: 'autoUpdate',
@@ -83,4 +84,4 @@ export default defineConfig({
   resolve: {
     alias: { '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)) },
   },
-});
+}));

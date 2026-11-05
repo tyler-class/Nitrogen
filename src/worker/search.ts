@@ -32,46 +32,41 @@ export async function keywordSearch(db: D1Database, q: string, limit = 20) {
 // ---------------------------------------------------------------------------------------------
 // Semantic index (AI Search)
 
-let ready: Promise<AiSearchInstance> | null = null;
+/** Set once the instance is known to exist. Only this flag is cached: binding handles are tied to
+ * the request that created them and must not be reused across requests. */
+let instanceExists = false;
 
 function instanceName(env: Cloudflare.Env): string {
   return env.SEARCH_INSTANCE || 'nitrogen';
 }
 
 /** The instance, created with hybrid (vector + BM25) indexing if it does not exist yet. */
-export function semanticInstance(env: Cloudflare.Env): Promise<AiSearchInstance> {
+export async function semanticInstance(env: Cloudflare.Env): Promise<AiSearchInstance> {
   // Typed from wrangler.jsonc as "on"; dev and tests override it.
   if ((env.SEMANTIC_SEARCH as string) === 'off')
-    return Promise.reject(
-      new Error('Semantic search is turned off (local dev or SEMANTIC_SEARCH=off).'),
-    );
-  if (!env.AI_SEARCH) return Promise.reject(new Error('AI Search is not bound to this Worker.'));
-  ready ??= (async () => {
-    const name = instanceName(env);
-    const inst = env.AI_SEARCH.get(name);
+    throw new Error('Semantic search is turned off (local dev or SEMANTIC_SEARCH=off).');
+  if (!env.AI_SEARCH) throw new Error('AI Search is not bound to this Worker.');
+  const name = instanceName(env);
+  const inst = env.AI_SEARCH.get(name);
+  if (instanceExists) return inst;
+  try {
+    await inst.info();
+  } catch {
     try {
-      await inst.info();
-      return inst;
-    } catch {
-      try {
-        return await env.AI_SEARCH.create({
-          id: name,
-          index_method: { vector: true, keyword: true },
-          fusion_method: 'rrf',
-        });
-      } catch (e) {
-        // Another request may have created it in the meantime.
-        await inst.info().catch(() => {
-          throw e;
-        });
-        return inst;
-      }
+      await env.AI_SEARCH.create({
+        id: name,
+        index_method: { vector: true, keyword: true },
+        fusion_method: 'rrf',
+      });
+    } catch (e) {
+      // Another request may have created it in the meantime.
+      await inst.info().catch(() => {
+        throw e;
+      });
     }
-  })().catch((e) => {
-    ready = null;
-    throw e;
-  });
-  return ready;
+  }
+  instanceExists = true;
+  return env.AI_SEARCH.get(name);
 }
 
 /** Text sent to the index: title, place in the tree, then readable body text. */
