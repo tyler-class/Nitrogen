@@ -3,13 +3,8 @@ import { Hono } from 'hono';
 import { encodeActor } from '@shared/actor';
 import { ancestorsOf } from '@shared/tree';
 import { extractLinks, extractTags, normalizeTag, wordCount } from '@shared/markdown';
-import {
-  DEFAULT_SECTIONS,
-  dashboardSectionsInput,
-  restoreInput,
-  settingsInput,
-} from '@shared/schemas';
-import type { Backup, DashboardSection, SearchHit, SearchResponse } from '@shared/types';
+import { panelLayoutInput, restoreInput, settingsInput } from '@shared/schemas';
+import type { Backup, PanelLayout, SearchHit, SearchResponse } from '@shared/types';
 import { actorOf, isInternal } from '../auth';
 import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
 import { hydrate, listSummaries } from '../pages';
@@ -18,26 +13,24 @@ import { ApiError, body, type AppEnv } from './util';
 
 export const admin = new Hono<AppEnv>();
 
-/** The dashboard's sections in order; sections added in later versions are appended. */
-export async function dashboardSections(db: D1Database): Promise<DashboardSection[]> {
-  const raw = await getSetting(db, 'dashboard');
-  let saved: DashboardSection[] = [];
+/** A saved panel layout; anything malformed is dropped so the app falls back to defaults. */
+export async function panelLayout(db: D1Database, key: string): Promise<PanelLayout[]> {
   try {
-    const r = dashboardSectionsInput.safeParse(JSON.parse(raw ?? '[]'));
-    if (r.success) saved = r.data;
+    const r = panelLayoutInput.safeParse(JSON.parse((await getSetting(db, key)) ?? '[]'));
+    return r.success ? r.data : [];
   } catch {
-    /* default */
+    return [];
   }
-  return [...saved, ...DEFAULT_SECTIONS.filter((d) => !saved.some((s) => s.id === d.id))];
 }
 
 admin.get('/settings', async (c) => {
-  const [home, guide, dashboard] = await Promise.all([
+  const [home, guide, dashboard_layout, insights_layout] = await Promise.all([
     getSetting(c.env.DB, 'home_id'),
     getSetting(c.env.DB, 'guide_id'),
-    dashboardSections(c.env.DB),
+    panelLayout(c.env.DB, 'dashboard_layout'),
+    panelLayout(c.env.DB, 'insights_layout'),
   ]);
-  return c.json({ home_id: home, guide_id: guide, dashboard });
+  return c.json({ home_id: home, guide_id: guide, dashboard_layout, insights_layout });
 });
 
 admin.patch('/settings', async (c) => {
@@ -46,8 +39,9 @@ admin.patch('/settings', async (c) => {
   if (input.home_id !== undefined) stmts.push(setSettingStmt(c.env.DB, 'home_id', input.home_id));
   if (input.guide_id !== undefined)
     stmts.push(setSettingStmt(c.env.DB, 'guide_id', input.guide_id));
-  if (input.dashboard !== undefined)
-    stmts.push(setSettingStmt(c.env.DB, 'dashboard', JSON.stringify(input.dashboard)));
+  for (const key of ['dashboard_layout', 'insights_layout'] as const)
+    if (input[key] !== undefined)
+      stmts.push(setSettingStmt(c.env.DB, key, JSON.stringify(input[key])));
   if (stmts.length) await c.env.DB.batch(stmts);
   return c.json({ ok: true });
 });

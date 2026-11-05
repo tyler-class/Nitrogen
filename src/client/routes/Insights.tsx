@@ -18,6 +18,8 @@ import {
   type RankRow,
 } from '../components/charts';
 import { PageGlyph } from '../components/Icon';
+import { PanelBoard, type PanelDef } from '../components/Panels';
+import { usePanelLayout } from '../lib/queries';
 import { formatWhen } from './PageView';
 import '../styles/graph.css';
 import '../styles/insights.css';
@@ -59,11 +61,12 @@ export function Insights() {
   const [dim, setDim] = useState<Dim>('edited');
   const [period, setPeriod] = useState<Period>('e30');
   const d = q.data;
+  const layout = usePanelLayout('insights_layout');
   // About nine months fills the card on a computer; phones get five.
   const [weeks] = useState(() => (window.matchMedia('(max-width: 560px)').matches ? 20 : 39));
 
   const m = useMemo(() => (d ? model(d) : null), [d]);
-  if (!d || !m) return <div className="page-loading" aria-busy="true" />;
+  if (!d || !m || !layout.ready) return <div className="page-loading" aria-busy="true" />;
 
   if (!d.pages.length)
     return (
@@ -98,65 +101,99 @@ export function Insights() {
     </Link>
   );
 
-  return (
-    <div className="page insights">
-      <h1 className="page-title">Insights</h1>
-      <div className="stats">
-        <Stat v={fmt(d.pages.length)} l="Pages" d={`${fmt(m.new30)} new in 30 days`} />
-        <Stat
-          v={fmt(m.words)}
-          l="Words"
-          d={`about ${fmt(Math.round(m.words / d.pages.length))} per page`}
-        />
-        <Stat
-          v={fmt(m.edits30)}
-          l="Edits, 30 days"
-          d={m.edits30 ? `${Math.round((m.agents30 / m.edits30) * 100)}% by assistants` : undefined}
-        />
-        <Stat
-          v={plural(m.streak, 'day')}
-          l="Writing streak"
-          d={`longest ${plural(m.longest, 'day')}`}
-        />
-        <Stat v={fmt(d.links)} l="Links" d={`${fmt(m.orphans.length)} pages with none in`} />
-        <Stat
-          v={fmt(d.tags.length)}
-          l="Tags"
-          d={d.tags[0] ? `#${d.tags[0].tag} most used` : 'none yet'}
-        />
-      </div>
+  const attention = (
+    [
+      ['orphans', 'Nothing links to them', m.orphans.length],
+      ['quiet', 'Not touched in 90 days', m.stale],
+      ['empty', 'Empty pages', m.empty],
+    ] as const
+  ).map(([k, label, n]) => (
+    <button
+      key={label}
+      type="button"
+      onClick={() => {
+        setDim(k);
+        document
+          .querySelector('[aria-label="Page explorer"]')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }}
+    >
+      <span>{label}</span>
+      <strong>{fmt(n)}</strong>
+    </button>
+  ));
 
-      <div className="sec">
-        <div className="sec-h">
-          <h2>Your wiki calendar</h2>
-          <Chips label="Whose edits" options={WHO} value={who} onChange={setWho} />
+  const panels: PanelDef[] = [
+    {
+      id: 'glance',
+      title: 'At a glance',
+      size: 'full',
+      body: (
+        <div className="stats">
+          <Stat v={fmt(d.pages.length)} l="Pages" d={`${fmt(m.new30)} new in 30 days`} />
+          <Stat
+            v={fmt(m.words)}
+            l="Words"
+            d={`about ${fmt(Math.round(m.words / d.pages.length))} per page`}
+          />
+          <Stat
+            v={fmt(m.edits30)}
+            l="Edits, 30 days"
+            d={
+              m.edits30 ? `${Math.round((m.agents30 / m.edits30) * 100)}% by assistants` : undefined
+            }
+          />
+          <Stat
+            v={plural(m.streak, 'day')}
+            l="Writing streak"
+            d={`longest ${plural(m.longest, 'day')}`}
+          />
+          <Stat v={fmt(d.links)} l="Links" d={`${fmt(m.orphans.length)} pages with none in`} />
+          <Stat
+            v={fmt(d.tags.length)}
+            l="Tags"
+            d={d.tags[0] ? `#${d.tags[0].tag} most used` : 'none yet'}
+          />
         </div>
-        <div className="panel">
-          <Heatmap counts={counts} weeks={weeks} tone={who === 'agents' ? 'agents' : 'you'} />
-          <div className="hint">Last {weeks} weeks. Darker days had more edits.</div>
-        </div>
-      </div>
-
-      <div className="sec grid2">
-        <div className="panel">
-          <h3>Edits per week</h3>
-          <div className="sub">Last 12 weeks</div>
+      ),
+    },
+    {
+      id: 'calendar',
+      title: 'Your wiki calendar',
+      sub: `Last ${weeks} weeks. Darker days had more edits.`,
+      size: 'full',
+      actions: <Chips label="Whose edits" options={WHO} value={who} onChange={setWho} />,
+      body: <Heatmap counts={counts} weeks={weeks} tone={who === 'agents' ? 'agents' : 'you'} />,
+    },
+    {
+      id: 'weekly',
+      title: 'Edits per week',
+      sub: 'Last 12 weeks; follows the calendar’s filter',
+      size: 'half',
+      body: (
+        <>
           <Columns data={weekly} />
           {who === 'all' && <Legend />}
-        </div>
-        <div className="panel">
-          <div className="card-h">
-            <h3>Who writes your wiki</h3>
-            <Chips
-              label="Count"
-              options={[
-                ['edits', 'Edits'],
-                ['created', 'Pages created'],
-              ]}
-              value={authorBy}
-              onChange={setAuthorBy}
-            />
-          </div>
+        </>
+      ),
+    },
+    {
+      id: 'authors',
+      title: 'Who writes your wiki',
+      size: 'half',
+      actions: (
+        <Chips
+          label="Count"
+          options={[
+            ['edits', 'Edits'],
+            ['created', 'Pages created'],
+          ]}
+          value={authorBy}
+          onChange={setAuthorBy}
+        />
+      ),
+      body: (
+        <>
           {authors.length ? (
             <Rank
               rows={authors.map((a) => ({
@@ -176,101 +213,89 @@ export function Insights() {
               “Someone” is from before Nitrogen recorded who made a change.
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="sec" id="explorer">
-        <div className="sec-h">
-          <h2>Page explorer</h2>
-        </div>
-        <div className="panel">
-          <div className="card-h wrap">
-            <Chips label="Show" options={DIMS} value={dim} onChange={setDim} />
-            {dim === 'edited' && (
-              <Chips label="Period" options={PERIODS} value={period} onChange={setPeriod} />
-            )}
-          </div>
-          {explorer.rows.length ? (
-            <Rank rows={explorer.rows} max={explorer.max} link={pageLink} />
-          ) : (
-            <div className="empty">{explorer.empty}</div>
+        </>
+      ),
+    },
+    {
+      id: 'explorer',
+      title: 'Page explorer',
+      size: 'full',
+      actions: (
+        <>
+          <Chips label="Show" options={DIMS} value={dim} onChange={setDim} />
+          {dim === 'edited' && (
+            <Chips label="Period" options={PERIODS} value={period} onChange={setPeriod} />
           )}
-        </div>
-      </div>
+        </>
+      ),
+      body: explorer.rows.length ? (
+        <Rank rows={explorer.rows} max={explorer.max} link={pageLink} />
+      ) : (
+        <div className="empty">{explorer.empty}</div>
+      ),
+    },
+    {
+      id: 'months',
+      title: 'New pages per month',
+      sub: 'Pages that still exist, by when they were created',
+      size: 'half',
+      body: <Columns data={m.months} tones={['you']} />,
+    },
+    {
+      id: 'tags',
+      title: 'Top tags',
+      sub: 'Pages per tag',
+      size: 'half',
+      body: d.tags.length ? (
+        <Rank
+          rows={d.tags.slice(0, 8).map((t) => ({
+            key: t.tag,
+            label: `#${t.tag}`,
+            value: t.count,
+            vl: plural(t.count, 'page'),
+            href: `/tags/${encodeURIComponent(t.tag)}`,
+          }))}
+          max={d.tags[0]!.count}
+          link={pageLink}
+        />
+      ) : (
+        <div className="empty">Tag pages to see them here.</div>
+      ),
+    },
+    {
+      id: 'misses',
+      title: 'What assistants couldn’t find',
+      sub: 'Searches with no results, last 90 days. Pages worth writing.',
+      size: 'half',
+      body: d.misses.length ? (
+        <ul className="misses">
+          {d.misses.map((x) => (
+            <li key={x.query}>
+              <span className="q">“{x.query}”</span>
+              <span className="sub">
+                {x.count > 1 ? `${x.count}× · ` : ''}
+                {formatWhen(x.last)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="empty">Nothing yet.</div>
+      ),
+    },
+    {
+      id: 'attention',
+      title: 'Needs attention',
+      sub: 'Open one in the page explorer',
+      size: 'half',
+      body: <div className="attn">{attention}</div>,
+    },
+  ];
 
-      <div className="sec grid2">
-        <div className="panel">
-          <h3>New pages per month</h3>
-          <div className="sub">Pages that still exist, by when they were created</div>
-          <Columns data={m.months} tones={['you']} />
-        </div>
-        <div className="panel">
-          <h3>Top tags</h3>
-          <div className="sub">Pages per tag</div>
-          {d.tags.length ? (
-            <Rank
-              rows={d.tags.slice(0, 8).map((t) => ({
-                key: t.tag,
-                label: `#${t.tag}`,
-                value: t.count,
-                vl: plural(t.count, 'page'),
-                href: `/tags/${encodeURIComponent(t.tag)}`,
-              }))}
-              max={d.tags[0]!.count}
-              link={pageLink}
-            />
-          ) : (
-            <div className="empty">Tag pages to see them here.</div>
-          )}
-        </div>
-      </div>
-
-      <div className="sec grid2">
-        <div className="panel">
-          <h3>What assistants couldn’t find</h3>
-          <div className="sub">Searches with no results, last 90 days. Pages worth writing.</div>
-          {d.misses.length ? (
-            <ul className="misses">
-              {d.misses.map((x) => (
-                <li key={x.query}>
-                  <span className="q">“{x.query}”</span>
-                  <span className="sub">
-                    {x.count > 1 ? `${x.count}× · ` : ''}
-                    {formatWhen(x.last)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="empty">Nothing yet.</div>
-          )}
-        </div>
-        <div className="panel">
-          <h3>Needs attention</h3>
-          <div className="sub">Open one in the page explorer</div>
-          <div className="attn">
-            {(
-              [
-                ['orphans', 'Nothing links to them', m.orphans.length],
-                ['quiet', 'Not touched in 90 days', m.stale],
-                ['empty', 'Empty pages', m.empty],
-              ] as const
-            ).map(([k, label, n]) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => {
-                  setDim(k);
-                  document.getElementById('explorer')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                <span>{label}</span>
-                <strong>{fmt(n)}</strong>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+  return (
+    <div className="page insights">
+      <h1 className="page-title">Insights</h1>
+      <PanelBoard defs={panels} saved={layout.saved} onSave={layout.save} />
     </div>
   );
 }

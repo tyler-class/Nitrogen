@@ -16,11 +16,12 @@ straight into the page, search understands meaning, and Claude can read and writ
   and reorganize pages. Every edit is labelled with the assistant that made it, and you can undo
   a whole assistant session from the Activity page.
 - **A dashboard.** An inbox of what assistants changed since you last looked, pinned pages, recent
-  activity and a few numbers. Turn sections on and off, or pick a page as home instead.
+  activity and a few numbers. Drag panels to arrange them, make them half or full width, or hide
+  them; or pick a page as home instead.
 - **Tags and connections.** Tag pages (or write `#tag` in the text), see pages that mention this
   one without linking it and link them in one click, related pages found by meaning, and a local
   graph of everything within two links.
-- **Insights.** A year of edits by you and by assistants, who writes the wiki, what's busiest, what
+- **Insights.** Arrangeable panels like the dashboard: a calendar of edits by you and by assistants, who writes the wiki, what's busiest, what
   needs attention, and what assistants searched for and couldn't find.
 - **Yours.** It runs on your Cloudflare account; the free plan is enough for a personal wiki.
 
@@ -63,14 +64,19 @@ Tools: `get_tree`, `read_page`, `search`, `create_page`, `create_pages` (a whole
 `edit_page` (find/replace, section edits, append), `update_page`, `move_page`, `delete_page`
 (confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, `list_tags`,
 `tag_page`, `log_session` (files a dated note under “Sessions” listing every page the assistant
-touched), the `review_page` prompt (checks a page against newer pages for stale claims), and for
-images:
+touched), `recent_changes` (what changed, grouped by who), `get_started` (the wiki’s state plus
+example requests; assistants call it when you ask what they can do), and for images:
 
 - `add_image`: from a public URL or base64 bytes.
 - `request_image_upload`: for an image you have, such as one attached in chat (chat attachments
   can't be passed to tools). Claude gives you a one-time link; open it on any device and drop the
   image. Valid for an hour.
 - `image_upload_status`: checks whether an upload link has been used yet.
+
+Ready-made prompts appear in Claude’s **+** menu: **Save this conversation to the wiki**
+(`capture_conversation`), **Catch up on recent changes** (`catch_up`), **Brief from the wiki**
+(`research_brief`), **Tidy up a section** (`tidy_section`) and **Check a page for stale claims**
+(`review_page`). Settings → Connect an AI assistant has a “Try asking” list of example requests.
 
 Set a **conventions page** in Settings (or create the starter one) and every assistant reads it when
 it connects, so it files things the way you like.

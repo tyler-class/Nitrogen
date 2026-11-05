@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Page, PageDetail, TreeResponse } from '@shared/types';
+import type { Page, PageDetail, PanelLayout, TreeResponse } from '@shared/types';
 import { api } from './api';
 
 export const keys = {
@@ -73,4 +73,33 @@ export function useDeletePage() {
       void qc.invalidateQueries({ queryKey: ['page'] });
     },
   });
+}
+
+export interface SettingsData {
+  home_id: string | null;
+  guide_id: string | null;
+  dashboard_layout: PanelLayout[];
+  insights_layout: PanelLayout[];
+}
+
+export function useSettings() {
+  return useQuery({ queryKey: keys.settings, queryFn: () => api.get<SettingsData>('/settings') });
+}
+
+/** A board's saved layout, and a save that updates the cache first so nothing jumps. */
+export function usePanelLayout(key: 'dashboard_layout' | 'insights_layout') {
+  const qc = useQueryClient();
+  const settings = useSettings();
+  return {
+    ready: settings.isSuccess || settings.isError,
+    saved: settings.data?.[key] ?? [],
+    save: (layout: PanelLayout[]) => {
+      qc.setQueryData<SettingsData>(keys.settings, (old) =>
+        old ? { ...old, [key]: layout } : old,
+      );
+      void api.patch('/settings', { [key]: layout }).catch(() => {
+        void qc.invalidateQueries({ queryKey: keys.settings });
+      });
+    },
+  };
 }

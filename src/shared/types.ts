@@ -134,14 +134,14 @@ export interface InboxItem extends PageSummary {
   is_new: boolean;
 }
 
-export type DashboardSectionId = 'stats' | 'inbox' | 'pinned' | 'activity';
-export interface DashboardSection {
-  id: DashboardSectionId;
-  on: boolean;
+/** One panel on an arrangeable board (Dashboard, Insights): order is the array order. */
+export interface PanelLayout {
+  id: string;
+  size: 'half' | 'full';
+  hidden: boolean;
 }
 
 export interface Dashboard {
-  sections: DashboardSection[];
   stats: {
     pages: number;
     words: number;

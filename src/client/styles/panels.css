@@ -1,0 +1,207 @@
+/* Arrangeable panels (Dashboard, Insights). Ported from Ratio. */
+
+.pn-wrap {
+  container-type: inline-size;
+}
+.pn-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row dense;
+  gap: 12px;
+}
+@container (min-width: 600px) {
+  .pn-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pn[data-size='full'] {
+    grid-column: 1 / -1;
+  }
+}
+.pn {
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 14px 16px 16px;
+  background: var(--paper);
+}
+.pn-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: -6px -8px 10px -10px;
+}
+.pn-t {
+  flex: 1;
+  min-width: 0;
+  padding-top: 5px;
+}
+.pn-t h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.pn-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -2px 0 12px;
+}
+.pn-actions .seg {
+  margin: 0;
+  flex-wrap: wrap;
+}
+.pn-grip,
+.pn-tool {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--faint);
+}
+.pn-grip {
+  cursor: grab;
+  touch-action: none;
+}
+.pn-grip:active {
+  cursor: grabbing;
+}
+.pn-tool:hover,
+.pn-grip:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+.pn-tools {
+  display: flex;
+  gap: 2px;
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+.pn:hover .pn-tools,
+.pn:focus-within .pn-tools {
+  opacity: 1;
+}
+@media (hover: none) {
+  .pn-tools {
+    opacity: 1;
+  }
+}
+/* Width has no effect in one column, so the toggle hides there. */
+.pn-size {
+  display: none;
+}
+@container (min-width: 600px) {
+  .pn-size {
+    display: inline-flex;
+  }
+}
+.pn-ph {
+  opacity: 0.35;
+  border-style: dashed;
+}
+.pn-overlay {
+  box-shadow: var(--shadow);
+  cursor: grabbing;
+}
+.pn-hidden {
+  margin-top: 20px;
+}
+.pn-hidden summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 14px;
+  margin: 0 2px 8px;
+}
+.pn-hid-list {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 4px 8px 4px 14px;
+}
+.pn-hid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+.pn-hid-row + .pn-hid-row {
+  border-top: 1px solid var(--hairline);
+}
+.pn-hid-row span {
+  font-weight: 550;
+}
+
+/* Number tiles inside panels. */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+@media (max-width: 560px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.stat {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--paper);
+}
+.stat .v {
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.stat .l {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .d {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pn .stat {
+  background: var(--sidebar);
+  border-color: transparent;
+}
+.stats.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  .stats.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.pn .stats {
+  margin-top: 0;
+}
+.pn-empty {
+  margin: 0;
+  padding: 18px 0 6px;
+  text-align: center;
+  color: var(--muted);
+}
+.pn .dash-list li:first-child {
+  padding-top: 0;
+}

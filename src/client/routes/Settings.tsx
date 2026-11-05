@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { EXAMPLE_PROMPTS } from '@shared/examples';
 import { pageHref } from '@shared/markdown';
-import type { Backup, DashboardSection, Page, SearchStatus } from '@shared/types';
+import type { Backup, Page, SearchStatus } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { keys, useTree } from '../lib/queries';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
-import { Icon } from '../components/Icon';
 import { PagePicker } from '../components/PagePicker';
 import { useToast } from '../components/Toast';
 import { useTheme, type Theme } from '../lib/theme';
-import { SECTION_LABELS } from './Dashboard';
 import { Link } from 'react-router';
 
 export function Settings() {
@@ -22,7 +21,6 @@ export function Settings() {
       api.get<{
         home_id: string | null;
         guide_id: string | null;
-        dashboard: DashboardSection[];
       }>('/settings'),
   });
   const search = useQuery({
@@ -91,23 +89,6 @@ export function Settings() {
   }
 
   const [about, setAbout] = useState(false);
-  // /settings#dashboard (from the dashboard's Customize link) scrolls to that section.
-  useEffect(() => {
-    if (location.hash && settings.data)
-      document.getElementById(location.hash.slice(1))?.scrollIntoView();
-  }, [settings.data]);
-
-  const sections = settings.data?.dashboard ?? [];
-  function saveSections(next: DashboardSection[]) {
-    qc.setQueryData(keys.settings, { ...settings.data!, dashboard: next });
-    void patch({ dashboard: next }, 'Dashboard updated.');
-  }
-  function moveSection(i: number, by: -1 | 1) {
-    const next = [...sections];
-    const [s] = next.splice(i, 1);
-    next.splice(i + by, 0, s!);
-    saveSections(next);
-  }
 
   async function createGuide() {
     try {
@@ -170,44 +151,6 @@ export function Settings() {
         </div>
       </section>
 
-      <section id="dashboard">
-        <h2>Dashboard</h2>
-        <ul className="section-list">
-          {sections.map((sec, i) => (
-            <li key={sec.id}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={sec.on}
-                  onChange={(e) =>
-                    saveSections(
-                      sections.map((x) => (x.id === sec.id ? { ...x, on: e.target.checked } : x)),
-                    )
-                  }
-                />
-                {SECTION_LABELS[sec.id]}
-              </label>
-              <button
-                className="btn small icon-only"
-                aria-label={`Move ${SECTION_LABELS[sec.id]} up`}
-                disabled={i === 0}
-                onClick={() => moveSection(i, -1)}
-              >
-                <Icon name="chevron" size={13} />
-              </button>
-              <button
-                className="btn small icon-only down"
-                aria-label={`Move ${SECTION_LABELS[sec.id]} down`}
-                disabled={i === sections.length - 1}
-                onClick={() => moveSection(i, 1)}
-              >
-                <Icon name="chevron" size={13} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       <section>
         <h2>Connect an AI assistant</h2>
         <p>
@@ -233,6 +176,23 @@ export function Settings() {
             <code>claude mcp add --transport http nitrogen {mcpUrl}</code>
           </li>
         </ul>
+        <h3 className="try-h">Try asking</h3>
+        <ul className="try-list">
+          {EXAMPLE_PROMPTS.slice(0, 6).map((e) => (
+            <li key={e.prompt}>
+              <button
+                type="button"
+                title="Copy"
+                onClick={() =>
+                  void navigator.clipboard?.writeText(e.prompt).then(() => toast('Copied.'))
+                }
+              >
+                “{e.prompt}”
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="muted">Claude also lists ready-made Nitrogen prompts in its + menu.</p>
         <div className="field">
           <span>Conventions page</span>
           <PagePicker

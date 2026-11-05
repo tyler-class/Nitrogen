@@ -48,20 +48,25 @@ export const movePageInput = z.object({
   position: z.number().int().min(0).optional(),
 });
 
-const SECTION_IDS = ['stats', 'inbox', 'pinned', 'activity'] as const;
-export const DEFAULT_SECTIONS = SECTION_IDS.map((id) => ({ id, on: true }));
-
-export const dashboardSectionsInput = z
-  .array(z.object({ id: z.enum(SECTION_IDS), on: z.boolean() }))
-  .max(SECTION_IDS.length)
-  .refine((l) => new Set(l.map((s) => s.id)).size === l.length, 'Each section once.');
+export const panelLayoutInput = z
+  .array(
+    z.object({
+      id: z.string().min(1).max(40),
+      size: z.enum(['half', 'full']),
+      hidden: z.boolean(),
+    }),
+  )
+  .max(40)
+  .refine((l) => new Set(l.map((s) => s.id)).size === l.length, 'Each panel once.');
 
 export const settingsInput = z.object({
   /** A page to open at "/" instead of the dashboard. */
   home_id: z.string().min(1).nullable().optional(),
   /** The page assistants read first for your conventions. */
   guide_id: z.string().min(1).nullable().optional(),
-  dashboard: dashboardSectionsInput.optional(),
+  /** Panel order, width and visibility; unknown or missing panels use defaults. */
+  dashboard_layout: panelLayoutInput.optional(),
+  insights_layout: panelLayoutInput.optional(),
 });
 
 export const pinInput = z.object({ pinned: z.boolean() });

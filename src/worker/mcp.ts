@@ -5,6 +5,7 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { actorLabel, agent, encodeActor, type Actor } from '@shared/actor';
 import { applyEdits, EditError, headings, type EditOp } from '@shared/edit';
+import { EXAMPLE_PROMPTS, MCP_PROMPTS } from '@shared/examples';
 import { pageHref } from '@shared/markdown';
 import { describePlacement, placementSchema } from '@shared/placement';
 import { type PageTreeInput, pageTreeNode } from '@shared/schemas';
@@ -14,7 +15,9 @@ import type {
   Page,
   PageDetail,
   PageSummary,
+  Dashboard,
   Revision,
+  Session,
   RevisionDetail,
   SearchResponse,
   TagCount,
@@ -97,7 +100,10 @@ Markdown conventions:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
 - Callouts: "> [!NOTE]", "> [!TIP]", "> [!WARNING]" as the first line of a blockquote.
 - Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
-- Don't repeat the page title as a "# Title" heading at the top of the body; the title is shown separately. Start sections at "##".`;
+- Don't repeat the page title as a "# Title" heading at the top of the body; the title is shown separately. Start sections at "##".
+
+When someone asks what you can do with Nitrogen (or seems unsure where to start), call get_started: it returns their wiki's current state and example requests to offer. Suggest two or three that fit what they're doing, phrased for their wiki, rather than listing tools. Examples:
+${EXAMPLE_PROMPTS.map((e) => `- "${e.prompt}"`).join('\n')}`;
 
 interface TreeCtx {
   pages: PageSummary[];
@@ -803,6 +809,92 @@ function buildServer(
     }),
   );
 
+  // ---------------------------------------------------------------- orientation
+
+  server.registerTool(
+    'get_started',
+    {
+      title: 'What can I do here?',
+      description:
+        'Call when someone asks what you can do with Nitrogen or how to start. Returns the wiki’s current state (size, main areas, tags, inbox) and example requests that fit it, plus the ready-made prompts.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async () => {
+      const [t, tagRes, dash] = await Promise.all([
+        loadTree(),
+        call<{ tags: TagCount[] }>('GET', '/tags'),
+        call<Dashboard>('GET', '/dashboard'),
+      ]);
+      const top = t.roots.map((n) => n.page.title);
+      const state = t.pages.length
+        ? [
+            `The wiki has ${t.pages.length} pages and ${dash.stats.words.toLocaleString()} words.`,
+            top.length ? `Top-level areas: ${top.slice(0, 12).join(', ')}.` : '',
+            tagRes.tags.length
+              ? `Most used tags: ${tagRes.tags
+                  .slice(0, 8)
+                  .map((g) => `#${g.tag}`)
+                  .join(' ')}.`
+              : 'No tags yet.',
+            `${dash.stats.edits_week} edits this week (${dash.stats.agent_edits_week} by assistants).`,
+            dash.inbox.length
+              ? `${dash.inbox.length} page(s) changed by assistants that the owner hasn't opened yet.`
+              : '',
+            guide
+              ? 'The owner has a conventions page; follow it (it is in your instructions).'
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n')
+        : 'The wiki is empty. A good first step is setting up a structure for one area of their life or work.';
+      const examples = EXAMPLE_PROMPTS.map((e) => `- "${e.prompt}" — ${e.why}`).join('\n');
+      const prompts = MCP_PROMPTS.map((p) => `- ${p.title} (${p.name}): ${p.does}`).join('\n');
+      return text(
+        `${state}\n\nThings to offer (fill in <…> from the wiki above, and suggest the two or three that fit best):\n${examples}\n\nReady-made prompts the person can pick in their app's prompt menu:\n${prompts}`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    'recent_changes',
+    {
+      title: 'Recent changes',
+      description:
+        'What changed in the wiki recently, grouped into sessions by who made them (the owner or a named assistant). Use it to catch up, or to see what other assistants did before you continue their work.',
+      inputSchema: z.object({
+        days: z.number().min(0.1).max(90).optional().describe('How far back (default 7).'),
+        who: z.enum(['all', 'owner', 'assistants']).optional(),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async ({ days, who }) => {
+      const since = new Date(Date.now() - (days ?? 7) * 86_400_000).toISOString();
+      const { sessions } = await call<{ sessions: Session[] }>(
+        'GET',
+        `/activity?${new URLSearchParams({ since, limit: '400' })}`,
+      );
+      const picked = sessions.filter((x) =>
+        who === 'owner'
+          ? x.actor === 'you'
+          : who === 'assistants'
+            ? !!x.actor?.startsWith('agent:')
+            : true,
+      );
+      if (!picked.length) return text(`No changes in the last ${days ?? 7} day(s).`);
+      const lines = picked.map((x) => {
+        const name = actorLabel(x.actor) === 'You' ? 'The owner' : actorLabel(x.actor);
+        const items = x.events
+          .map(
+            (e) => `  - ${e.action} “${e.title}”${e.exists ? ` (${e.page_id})` : ' (now deleted)'}`,
+          )
+          .join('\n');
+        return `${name}, ${x.start.slice(0, 16).replace('T', ' ')}–${x.end.slice(11, 16)} UTC:\n${items}`;
+      });
+      return text(lines.join('\n\n'));
+    }),
+  );
+
   // ---------------------------------------------------------------- tags
 
   server.registerTool(
@@ -954,6 +1046,79 @@ function buildServer(
         },
       ],
     }),
+  );
+
+  const ask = (t: string) => ({
+    messages: [{ role: 'user' as const, content: { type: 'text' as const, text: t } }],
+  });
+
+  server.registerPrompt(
+    'capture_conversation',
+    {
+      title: 'Save this conversation to the wiki',
+      description:
+        'File the decisions, notes and open questions from this conversation into the right pages, then log the session.',
+      argsSchema: z.object({
+        focus: z.string().optional().describe('Optional: the project or topic to file it under.'),
+      }),
+    },
+    ({ focus }) =>
+      ask(`Save what we worked out in this conversation to my Nitrogen wiki${focus ? `, under "${focus}"` : ''}.
+
+1. List the decisions, facts worth keeping, and open questions from our conversation. Leave out chit-chat and anything already superseded.
+2. Search the wiki for the pages they belong on. Prefer adding to existing pages (edit_page) over creating new ones; create a page only when nothing fits, in the right place in the tree.
+3. Link related pages with [[Title]], tag decisions #decision and open questions #open-question.
+4. Finish with log_session, then tell me in a few lines what you changed, with links.`),
+  );
+
+  server.registerPrompt(
+    'catch_up',
+    {
+      title: 'Catch up on recent changes',
+      description: 'What changed in the wiki, who changed it, and what needs your attention.',
+      argsSchema: z.object({
+        days: z.string().optional().describe('How many days back (default 7).'),
+      }),
+    },
+    ({ days }) =>
+      ask(`Catch me up on my Nitrogen wiki for the last ${days || '7'} days.
+
+1. Use recent_changes to see what changed and who changed it (me or which assistant).
+2. Read the pages that changed the most and summarize what's new in each, in a sentence or two, grouped by area.
+3. Call out decisions, new open questions, and anything that looks contradictory or half-finished.
+4. End with the two or three things I should look at first, linked.`),
+  );
+
+  server.registerPrompt(
+    'research_brief',
+    {
+      title: 'Brief from the wiki',
+      description: 'Answer a question using only your pages, with links and a list of gaps.',
+      argsSchema: z.object({ question: z.string().describe('What the brief should answer.') }),
+    },
+    ({ question }) =>
+      ask(`Using only my Nitrogen wiki, write a one-page brief answering: ${question}
+
+1. Search (hybrid) from a few angles and read the most relevant pages fully.
+2. Write the brief: the answer first, then the supporting points. Cite pages inline as [[Title]]. Don't add outside knowledge; if you must, mark it clearly.
+3. End with "Gaps": what the wiki doesn't say that the question needs.
+4. Ask whether I want the brief saved as a page.`),
+  );
+
+  server.registerPrompt(
+    'tidy_section',
+    {
+      title: 'Tidy up a section',
+      description: 'Find duplicates, missing links and tags, and propose a cleaner structure.',
+      argsSchema: z.object({ section: z.string().describe('Page id, title or path to tidy.') }),
+    },
+    ({ section }) =>
+      ask(`Tidy up the "${section}" section of my Nitrogen wiki.
+
+1. get_tree under it and read its pages.
+2. Find: near-duplicate pages, pages in the wrong place, pages that mention each other without linking, missing or inconsistent tags (compare with list_tags), and empty or stub pages.
+3. Propose a cleaner structure as a short before/after outline plus a numbered list of changes (moves, merges, links, tags).
+4. Don't change anything until I say which changes to make. Then make them, and log_session at the end.`),
   );
 
   // ---------------------------------------------------------------- resources

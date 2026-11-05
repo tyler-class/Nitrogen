@@ -36,7 +36,6 @@ import {
 } from '../pages';
 import { indexSoon, semanticSearch } from '../search';
 import { deleteFiles } from './files';
-import { dashboardSections } from './admin';
 import { ApiError, body, type AppEnv } from './util';
 
 export const explore = new Hono<AppEnv>();
@@ -97,8 +96,7 @@ export function toSessions(events: PageEvent[]): Session[] {
 explore.get('/dashboard', async (c) => {
   const db = c.env.DB;
   const week = daysAgo(7);
-  const [sections, inbox, pinned, activity, counts] = await Promise.all([
-    dashboardSections(db),
+  const [inbox, pinned, activity, counts] = await Promise.all([
     all<Omit<InboxItem, 'is_new'> & { is_new: number }>(
       db,
       `SELECT ${summaryCols('p')}, (p.viewed_at IS NULL OR p.viewed_at < p.created_at) AS is_new
@@ -122,7 +120,6 @@ explore.get('/dashboard', async (c) => {
     ),
   ]);
   return c.json<Dashboard>({
-    sections,
     stats: {
       pages: counts?.pages ?? 0,
       words: counts?.words ?? 0,

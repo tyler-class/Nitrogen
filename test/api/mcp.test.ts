@@ -144,6 +144,7 @@ describe('MCP', () => {
       clientInfo: { name: 'test', version: '1' },
     });
     expect(init.result?.instructions).toContain('[[Page title]]');
+    expect(init.result?.instructions).toContain('call get_started');
 
     const tools = (await rpc(token, 'tools/list')).result!.tools!;
     expect(tools.map((t) => t.name).sort()).toEqual(
@@ -155,6 +156,7 @@ describe('MCP', () => {
         'create_pages',
         'delete_page',
         'edit_page',
+        'get_started',
         'get_tree',
         'list_revisions',
         'list_tags',
@@ -163,6 +165,7 @@ describe('MCP', () => {
         'move_page',
         'read_page',
         'read_revision',
+        'recent_changes',
         'restore_revision',
         'search',
         'update_page',
@@ -390,6 +393,21 @@ describe('MCP', () => {
     const prompts = (await rpc(token, 'prompts/list')).result as unknown as {
       prompts: { name: string }[];
     };
-    expect(prompts.prompts.map((p) => p.name)).toContain('review_page');
+    expect(prompts.prompts.map((p) => p.name).sort()).toEqual(
+      ['capture_conversation', 'catch_up', 'research_brief', 'review_page', 'tidy_section'].sort(),
+    );
+    const got = await rpc(token, 'prompts/get', {
+      name: 'research_brief',
+      arguments: { question: 'What is our plan?' },
+    });
+    expect(JSON.stringify(got.result)).toContain('What is our plan?');
+
+    // Orientation: state plus examples, and recent changes by actor.
+    const start = await tool(token, 'get_started', {});
+    expect(start.text).toContain('pages');
+    expect(start.text).toContain('Save the decisions');
+    expect(start.text).toContain('capture_conversation');
+    const recent = await tool(token, 'recent_changes', { days: 1, who: 'assistants' });
+    expect(recent.text).toContain('Test Assistant');
   });
 });

@@ -1988,3 +1988,27 @@ a.btn {
 .settings-top .page-title {
   margin: 0;
 }
+
+.try-h {
+  margin: 18px 0 6px;
+  font-size: 15px;
+}
+.try-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 640px;
+}
+.try-list li + li {
+  border-top: 1px solid var(--hairline);
+}
+.try-list button {
+  display: block;
+  width: 100%;
+  padding: 8px 2px;
+  text-align: left;
+  color: var(--ink);
+}
+.try-list button:hover {
+  color: var(--accent-ink);
+}

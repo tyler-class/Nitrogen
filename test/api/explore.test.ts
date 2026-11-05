@@ -78,21 +78,23 @@ describe('dashboard', () => {
     expect(p.created_by).toBe('you');
     expect(p.words).toBe(3);
     await api.post(`/pages/${p.id}/pin`, { pinned: true });
-    let dash = (await api.get<Dashboard>('/dashboard')).data;
+    const dash = (await api.get<Dashboard>('/dashboard')).data;
     expect(dash.pinned.map((x) => x.id)).toContain(p.id);
     expect(dash.inbox.some((x) => x.id === p.id)).toBe(false);
     expect(dash.activity[0]!.page_id).toBe(p.id);
     expect(dash.stats.pages).toBeGreaterThan(0);
 
-    await api.patch('/settings', {
-      dashboard: [
-        { id: 'pinned', on: true },
-        { id: 'stats', on: false },
-      ],
-    });
-    dash = (await api.get<Dashboard>('/dashboard')).data;
-    expect(dash.sections.map((s) => s.id)).toEqual(['pinned', 'stats', 'inbox', 'activity']);
-    expect(dash.sections[1]!.on).toBe(false);
+    const layout = [
+      { id: 'pinned', size: 'half', hidden: false },
+      { id: 'stats', size: 'full', hidden: true },
+    ];
+    expect((await api.patch('/settings', { dashboard_layout: layout })).status).toBe(200);
+    const saved = (await api.get<{ dashboard_layout: unknown }>('/settings')).data;
+    expect(saved.dashboard_layout).toEqual(layout);
+    expect(
+      (await api.patch('/settings', { insights_layout: [{ id: 'x', size: 'wide', hidden: 0 }] }))
+        .status,
+    ).toBe(400);
 
     // History records who wrote each version.
     await api.patch(`/pages/${p.id}`, { body: 'changed' });
