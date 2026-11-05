@@ -1,39 +1,52 @@
 # Architecture
 
 ```
-PWA (React, IndexedDB drafts) ──cookie──▶ Worker "nitrogen" ──installation token──▶ GitHub notes repo
-Claude (MCP over OAuth 2.1)  ──bearer──▶   /api /mcp /auth /oauth /hooks /admin       (single source of truth)
-                                           D1: index cache (pages, links, headings, FTS5, activity)
-                                           KV: OAuth provider state only
-GitHub Action (full parser) ──HMAC──▶ /admin/ingest
+PWA (React, CodeMirror) ──cookie──▶ Worker "nitrogen"
+Claude (MCP over OAuth 2.1) ─bearer─▶  /api  /files  /mcp  /authorize  /oauth
+                                       │
+                                       ├─ D1   pages (tree + markdown), page_revisions, links,
+                                       │       files, pages_fts (FTS5), settings, login_attempts
+                                       ├─ R2   images: img/<id>.<ext>, referenced as /files/<key>
+                                       ├─ AI Search  semantic index (instance SEARCH_INSTANCE in the
+                                       │       account's "default" namespace, created at runtime)
+                                       └─ KV   OAuth provider state only
 ```
 
-## Packages
+## Code layout
 
-| Package | Role |
-|---|---|
-| `packages/spec` | SPEC.md, JSON schemas, conformance fixtures (`*.in.md`, goldens). |
-| `packages/core` | Format engine. `@nitrogen/core` = full mode (remark); `@nitrogen/core/light` = line scanner + everything that does not need remark (used by the Worker). |
-| `packages/cli` | `nitrogen` / `n2`: lint, normalize, export, index, fix-links, setup, doctor. |
-| `packages/testing` | Fake GitHub (real git object ids) used by Worker and CLI tests. |
-| `apps/worker` | Cloudflare Worker: API, MCP, auth, webhook, ingest. |
-| `apps/web` | The PWA. |
-| `action` | Composite GitHub Action: full reindex and optional standard-markdown mirror. |
+| Path         | Role                                                                           |
+| ------------ | ------------------------------------------------------------------------------ |
+| `src/shared` | Types, zod schemas, markdown helpers (links, slugs, FTS query), tree, edit ops |
+| `src/worker` | Worker: entry + OAuth, Hono API, pages service, search, images, MCP server     |
+| `src/client` | React app                                                                      |
+| `migrations` | D1 schema                                                                      |
+| `test/logic` | Pure unit tests (Node)                                                         |
+| `test/api`   | API and MCP tests in the Workers runtime                                       |
 
-## Worker request budget (free plan)
+## Pages
 
-- Reads: page content comes from the Cache API by blob sha; D1 holds metadata. A cold page read is
-  1 GitHub call.
-- Commit: head, commit, tree (cached by sha), create tree (text inlined as `content`), create
-  commit, update ref = 5-6 GitHub calls, + 1 per binary blob, + 1 per inbound page fetched for a
-  move. Head moved -> retry (max 3).
-- Freshness: `/api/changes` checks head at most every 15 s, diffs with `compare`, enqueues paths;
-  `drain` indexes up to 20 per invocation (2 + N calls). Webhooks enqueue from the push payload
-  without calling GitHub.
+- A page has `parent_id` (NULL = top level) and an integer `position` among its siblings. Moves and
+  inserts renumber the new siblings in one batch. Moving into one's own subtree is refused.
+- Writes carry `base_version`; the UPDATE is a compare-and-swap on `version`, so concurrent editors
+  (the app's autosave, an assistant) get a 409 instead of silently overwriting each other.
+- History: the version being replaced is snapshotted when an edit session starts (the page was idle
+  for 10 minutes) and on every assistant edit; 100 snapshots are kept per page.
+- Links: `[[Title]]` (case-insensitive, oldest page wins on duplicates) and `/p/<id>` links are
+  extracted on save into `links` for backlinks.
+- Deleting a page deletes its subtree; images that no remaining page references are deleted from R2.
 
-## Index correctness
+## Search
 
-1. Commits through the Worker update D1 in the same request (light scanner).
-2. Webhook / polling enqueue changed paths; drained in bounded batches.
-3. The Action posts full-parser rows to `/admin/ingest`; the last batch prunes deleted pages.
-Rows carry blob shas; unchanged blobs are skipped.
+- Keyword: `pages_fts` (FTS5, kept in sync by triggers) with bm25 weighting titles 8× the body.
+  Queries are built from quoted words, so user input cannot inject FTS operators.
+- Semantic: each page is uploaded to AI Search as `pages/<id>.md` (title, tree path, plain text).
+  `indexed_version < version` marks pages that need (re)indexing; writes trigger indexing in
+  `waitUntil`, and a cron every 15 minutes retries anything missed. Deleted pages' items are queued
+  in `search_tombstones`.
+- Hybrid results merge both lists with reciprocal rank fusion. If AI Search fails (local dev, quota,
+  outage) the response falls back to keyword hits and carries `semantic_unavailable`.
+
+## Free-plan budget
+
+D1 allows 50 queries per Worker invocation on the free plan (a `batch()` counts as one), so
+multi-row writes are batched, and `create_pages` writes a whole subtree in one batch.

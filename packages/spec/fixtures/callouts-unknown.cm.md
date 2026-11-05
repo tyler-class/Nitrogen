@@ -1,5 +1,0 @@
-# Bad
-
-> **Warnign: Typo**
->
-> Body.

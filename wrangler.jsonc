@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "nitrogen",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-10-19",
+  // Needed for OAuth clients that identify themselves with a metadata URL.
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  "assets": {
+    // Static SPA. Unknown paths fall back to index.html; API, images and MCP always reach the Worker.
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*",
+      "/files/*",
+      "/mcp",
+      "/mcp/*",
+      "/authorize",
+      "/oauth/*",
+      "/.well-known/*",
+    ],
+  },
+  "d1_databases": [
+    {
+      // No database_id: the Deploy button and `wrangler deploy` provision it automatically.
+      "binding": "DB",
+      "database_name": "nitrogen",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      // Images added to pages. No bucket_name: provisioned automatically on deploy.
+      "binding": "FILES",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      // Sign-ins for AI assistants connected over MCP. Provisioned automatically on deploy.
+      "binding": "OAUTH_KV",
+    },
+  ],
+  // Semantic search. Every account has a "default" namespace, so nothing is provisioned at deploy;
+  // the Worker creates its own instance (SEARCH_INSTANCE) the first time it indexes a page.
+  // AI Search does not run locally: in `npm run dev` search falls back to keyword search.
+  "ai_search_namespaces": [{ "binding": "AI_SEARCH", "namespace": "default" }],
+  "vars": {
+    "SEARCH_INSTANCE": "nitrogen",
+    // "off" skips AI Search entirely (keyword search only). Local dev and tests set it to "off".
+    "SEMANTIC_SEARCH": "on",
+  },
+  // Retries semantic indexing for pages whose last attempt failed.
+  "triggers": { "crons": ["*/15 * * * *"] },
+}

@@ -1,5 +1,7 @@
-pnpm-lock.yaml
+node_modules
 dist
-packages/spec/fixtures
-examples
-*.md
+.wrangler
+package-lock.json
+src/worker/worker-configuration.d.ts
+public/*.svg
+*.local.*

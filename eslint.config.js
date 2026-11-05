@@ -1,28 +1,43 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.wrangler/**', 'packages/spec/fixtures/**', 'examples/**', '**/*.d.ts', 'playwright-report/**'],
+    ignores: [
+      'dist',
+      '.wrangler',
+      'data',
+      'docs/design',
+      'node_modules',
+      'src/worker/worker-configuration.d.ts',
+      'dev-dist',
+      '**/*.local.*',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['apps/web/**/*.tsx', 'apps/web/**/*.ts'],
-    plugins: { 'react-hooks': reactHooks },
-    rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'warn' },
+    files: ['src/client/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
+    plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
   },
   {
-    files: ['**/*.js', '**/*.mjs'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly', URL: 'readonly' } },
+    files: ['scripts/**', '*.config.{js,ts}', 'test/logic/**', 'test/e2e/**'],
+    languageOptions: { globals: globals.node },
   },
   {
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      '@typescript-eslint/consistent-type-imports': 'error',
-      'no-control-regex': 'off',
-      'no-useless-assignment': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   },
 );

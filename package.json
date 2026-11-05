@@ -1,43 +1,89 @@
 {
-  "name": "nitrogen-monorepo",
+  "name": "nitrogen",
+  "version": "0.2.0",
   "private": true,
-  "type": "module",
+  "description": "A personal wiki you host yourself on Cloudflare: a page tree, markdown, images, semantic search and an MCP server.",
   "license": "MIT",
-  "packageManager": "pnpm@10.28.0",
-  "engines": {
-    "node": ">=22"
-  },
+  "type": "module",
   "scripts": {
-    "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck",
-    "lint": "eslint .",
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "npm run build && vite preview",
+    "deploy": "npm run build && wrangler deploy && wrangler d1 migrations apply DB --remote",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "cf-typegen": "wrangler types src/worker/worker-configuration.d.ts",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "e2e": "playwright test",
-    "eval:mcp": "pnpm --filter @nitrogen/worker eval:mcp",
-    "n2": "tsx packages/cli/src/bin.ts"
+    "test": "vitest run"
+  },
+  "cloudflare": {
+    "bindings": {
+      "APP_PASSWORD": {
+        "description": "The password you sign in to Nitrogen with. Pick something long; you can change it later in the Cloudflare dashboard under **Workers → nitrogen → Settings → Variables and Secrets**."
+      },
+      "DB": {
+        "description": "Where your pages, the page tree, history and the keyword search index are stored."
+      },
+      "FILES": {
+        "description": "Where images you add to pages are stored."
+      },
+      "OAUTH_KV": {
+        "description": "Stores sign-ins for AI assistants you connect to Nitrogen over MCP."
+      },
+      "AI_SEARCH": {
+        "description": "Semantic (search by meaning) search. Nitrogen creates its own index here the first time it runs."
+      }
+    }
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.3",
+    "@codemirror/autocomplete": "6.20.4",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/language-data": "6.5.2",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@lezer/highlight": "1.2.5",
+    "@modelcontextprotocol/server": "2.3.1",
+    "@tanstack/react-query": "5.104.5",
+    "hast-util-sanitize": "5.0.2",
+    "hast-util-to-jsx-runtime": "2.3.7",
+    "hono": "4.13.13",
+    "mdast-util-from-markdown": "2.1.0",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-to-hast": "13.2.1",
+    "micromark-extension-gfm": "3.0.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router": "8.5.0",
+    "unist-util-visit": "5.2.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.14.0",
-    "@eslint/js": "^10.0.0",
-    "@playwright/test": "1.64.1",
-    "@types/node": "^22.10.0",
-    "eslint": "^10.14.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "fast-check": "^4.10.2",
-    "prettier": "^3.9.10",
-    "tsx": "^4.20.0",
-    "typescript": "~6.0.0",
-    "typescript-eslint": "^8.72.1",
-    "vitest": "^4.1.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "workerd",
-      "sharp"
-    ]
+    "@cloudflare/vite-plugin": "1.64.0",
+    "@cloudflare/vitest-plugin": "1.4.6",
+    "@eslint/js": "10.0.1",
+    "@types/hast": "3.0.4",
+    "@types/mdast": "4.0.4",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.4",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "4.1.12",
+    "workbox-window": "7.4.1",
+    "wrangler": "4.151.3"
   }
 }

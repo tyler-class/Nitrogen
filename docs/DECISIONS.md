@@ -2,13 +2,18 @@
 
 Format: number, date, decision, alternatives, why. Newest at the bottom.
 
+ADR-001 to ADR-017 describe v0.1, which stored pages in a GitHub repo. ADR-018 replaced that
+design; the earlier entries are kept for history.
+
 ## ADR-001 (2026-11-02) Toolchain versions
+
 - **Decision:** TypeScript `~6.0`, Vitest `^4.1`, ESLint 10 + typescript-eslint 8, pnpm 10, Node 22.
 - **Alternatives:** TypeScript 7.0 (Go port, `latest` on npm today); Vitest 5.
 - **Why:** typescript-eslint 8 declares `typescript <6.1`; `@cloudflare/vitest-pool-workers` declares
   `vitest ^4.1`. Picking the newest versions the ecosystem actually supports avoids peer breakage.
 
 ## ADR-002 (2026-11-02) Workspace packages export TypeScript source
+
 - **Decision:** internal packages set `exports` to `./src/*.ts`; `publishConfig.exports` points to
   `dist` for the npm-published packages (`@nitrogen/core`, `@nitrogen/cli`).
 - **Alternatives:** project references + `tsc -b` emitting to dist for every package; custom export
@@ -17,6 +22,7 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
   step in the inner loop and no stale-dist bugs. Publishing builds with esbuild.
 
 ## ADR-003 (2026-11-02) SPEC.md clarifications beyond the brief
+
 - **Decision:** SPEC.md copies section 5 of the brief and adds normative detail where the brief was
   ambiguous: a precise frontmatter grammar, case-insensitive title/alias matching for wikilinks,
   page-relative links accepted as input, canonical image fragment key order, E009/E010 being
@@ -24,6 +30,7 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
 - **Why:** the light scanner and the full parser must agree; that requires a grammar, not prose.
 
 ## ADR-004 (2026-11-02) One PageScan, two producers
+
 - **Decision:** both parser modes produce the same `PageScan` structure (frontmatter, headings,
   links, images, wikilinks, callouts, drawers, table directives, HTML tags, toggles). Lint and index
   extraction are pure functions of `PageScan` + source, so they are shared code. Parity tests compare
@@ -37,12 +44,14 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
   only affect index freshness until the full reindex (Action) runs.
 
 ## ADR-005 (2026-11-02) Text and leaf directives are not CFM
+
 - **Decision:** after parsing, `textDirective` and `leafDirective` nodes are turned back into the
   exact source text. Only `:::drawer` container directives are CFM; other container names are kept
   as generic containers (rendered as their children, normalized untouched).
 - **Why:** remark-directive otherwise eats ordinary prose (`10:30` became a directive named `30`).
 
 ## ADR-006 (2026-11-02) Normalizer works by source edits, in three stages
+
 - **Decision:** normalization applies offset-based edits to the original text in three reparsed
   stages (leaves: links, images, table directives, HTML; then callouts and toggles; then drawers).
   It never re-serializes the AST.
@@ -52,6 +61,7 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
   byte-identical; idempotency and fingerprint equality are property-tested.
 
 ## ADR-007 (2026-11-02) The GFM "lead title" convention for callouts
+
 - **Decision:** GFM alerts cannot carry a title, so normalized output writes
   `> [!WARNING]\n> **Title**` and extended types as `> [!NOTE]\n> **Decision: Title**`. An
   uppercase native marker alone on its line, followed in the same paragraph by a bold-only line,
@@ -62,30 +72,36 @@ Format: number, date, decision, alternatives, why. Newest at the bottom.
   consistent.
 
 ## ADR-008 (2026-11-02) Canonical wikilink text
+
 - **Decision:** `[[Target]]` becomes `[Target](/path.md)` (the text as written; the page title when
   the target was a path); `[[Target#Heading]]` becomes `[Target > Heading](/path.md#heading)`;
   a `|label` always wins.
 - **Why:** mirrors Obsidian's display, keeps the author's wording.
 
 ## ADR-009 (2026-11-02) Commonmark profile details
+
 - **Decision:** `<kbd>X</kbd>` -> `` `X` ``; `<br>` -> a space; `<sub>/<sup>` tags removed (text kept);
   HTML comments removed; toggles -> bold title paragraph + body; drawers -> titled blockquote. Task
   lists, footnotes, strikethrough and pipe tables are kept (documented exceptions; strict viewers
   show them as text).
 
 ## ADR-010 (2026-11-02) Ingest signature
+
 - **Decision:** `/admin/ingest` requires `X-Nitrogen-Timestamp` (unix seconds) and
   `X-Nitrogen-Signature: sha256=<hex HMAC-SHA256(secret, "<timestamp>.<body>")>`; the Worker rejects
   timestamps older than 5 minutes. Batches carry `allPaths` so the final batch can prune deleted pages.
 - **Why:** timestamped HMAC blocks replay; constant-time compare on the Worker.
 
 ## ADR-011 (2026-11-02) github-slugger is a runtime dependency of the light scanner
+
 - **Decision:** depend on `github-slugger` (one 8 KB file, no dependencies) instead of
   re-implementing it. Anchors must match github.com exactly; a copy would drift.
 
 ## ADR-012 (2026-11-02) Verified free-tier limits (sources: Cloudflare and GitHub docs sources on GitHub, npm)
+
 Cloudflare docs hosts were not reachable from the build sandbox; numbers were read from the
 `cloudflare/cloudflare-docs` and `github/docs` source repos on 2026-11-02.
+
 - **Workers Free:** 10 ms CPU/request (I/O wait excluded); 50 external subrequests + 1,000 to
   Cloudflare services per invocation; 100k requests/day; 128 MB memory; 64 MiB uncompressed bundle,
   no compressed limit. Static asset requests are free and unlimited, except paths routed through
@@ -103,6 +119,7 @@ Cloudflare docs hosts were not reachable from the build sandbox; numbers were re
   not KV; rate limits counted in D1, not KV; KV is used only by the OAuth provider.
 
 ## ADR-013 (2026-11-02) No commit lock
+
 - **Decision:** no KV or Durable Object lock around commits. The ref update is fast-forward only
   (compare-and-swap); on 422 the pipeline rebuilds on the new head, re-verifies base shas, and
   retries up to 3 times.
@@ -110,12 +127,14 @@ Cloudflare docs hosts were not reachable from the build sandbox; numbers were re
   user. CAS on the ref is the real serialization point.
 
 ## ADR-014 (2026-11-02) FTS table stores its own text; pages has no body column
+
 - **Decision:** `pages_fts` is a normal FTS5 table (with a `path UNINDEXED` column) instead of
   `content=''`; `pages` keeps the excerpt but not the full body.
 - **Why:** contentless FTS5 cannot produce `snippet()` highlights, which search requires. Storing
   the body once (in FTS) instead of twice keeps the DB small.
 
 ## ADR-015 (2026-11-02) Stateless signed-cookie sessions
+
 - **Decision:** PWA sessions are HMAC-signed cookies (`n2_session`, HttpOnly, Secure, SameSite=Lax,
   30-day sliding expiry, re-issued when older than a day). CSRF uses a double-submit token
   (`n2_csrf` cookie + `X-CSRF-Token` header) plus an Origin check. Login `state` is a signed cookie.
@@ -124,11 +143,13 @@ Cloudflare docs hosts were not reachable from the build sandbox; numbers were re
   (`nitrogen rotate-keys`).
 
 ## ADR-016 (2026-11-02) MCP transport
+
 - **Decision:** stateless streamable HTTP via `createMcpHandler` (`agents/mcp/server`) behind
   `@cloudflare/workers-oauth-provider` (single-Worker `OAuthProvider`), no Durable Objects.
 - **Why:** `McpAgent` is deprecated; stateless keeps the free plan simple.
 
 ## ADR-017 (2026-11-02) Setup runs from a Nitrogen checkout
+
 - **Decision:** `nitrogen setup` deploys the Worker from a local clone of this repo
   (`npm create nitrogen` clones it, installs, builds the web app, then runs setup). The deployment
   config is generated as `apps/worker/wrangler.generated.jsonc` (gitignored).
@@ -140,3 +161,26 @@ Cloudflare docs hosts were not reachable from the build sandbox; numbers were re
   would only skip two steps. Tracked for later.
 - **Deviation:** if setup is interrupted after the GitHub App is created but before installation,
   the private key is gone (memory only, by design); setup then asks for the installation id.
+
+## ADR-018 (2026-11-05) D1 is the source of truth; one-click deploy
+
+- **Decision:** pages, the tree and history live in D1; images in R2; the GitHub App, webhook,
+  Action and CLI are removed. The repo is one npm app at the root (Duffel layout) so the Deploy to
+  Cloudflare button and `wrangler deploy` provision everything (D1, R2, KV) with no ids in config.
+- **Alternatives:** keep GitHub as the store (needs a GitHub App the Deploy button cannot create);
+  D1 plus optional GitHub sync (more to build; can come later on top of this).
+- **Why:** one-click deploy, no external accounts, simpler and faster writes. Backups are a JSON
+  export/restore in Settings.
+
+## ADR-019 (2026-11-05) Semantic search with AI Search, keyword search with D1 FTS5
+
+- **Decision:** AI Search (hybrid vector + BM25) for meaning-based search, bound through
+  `ai_search_namespaces` to the account's built-in `default` namespace; the Worker creates its
+  instance at runtime. D1 FTS5 stays for instant keyword search and as the fallback.
+- **Alternatives:** Vectorize + Workers AI embeddings (cheaper at volume, but `wrangler deploy` does
+  not provision Vectorize indexes and an index needs its dimensions fixed at creation);
+  embeddings in D1 with brute-force cosine (no provisioning, but CPU-bound on the free plan).
+- **Why:** the only option that needs zero setup from both the Deploy button and plain wrangler.
+  Trade-offs: 1,000 semantic queries/month included (billing starts 2026-12-01), and AI Search does
+  not run locally, so dev and tests set `SEMANTIC_SEARCH=off`. The UI searches keywords as you type
+  and runs semantic search only on Enter to stay inside the allowance.
