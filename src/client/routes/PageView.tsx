@@ -7,6 +7,7 @@ import { api, ApiError, errorMessage } from '../lib/api';
 import { keys, useCreatePage, useDeletePage, usePage, useTree } from '../lib/queries';
 import { readLocal, writeLocal } from '../lib/storage';
 import type { EditorHandle } from '../components/Editor';
+import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
 import { Markdown, type TitleIndex } from '../components/Markdown';
 import { Menu } from '../components/Tree';
@@ -478,14 +479,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
 
       <header className="page-head">
         <div className="title-row">
-          <input
-            className="icon-input"
-            value={draft.icon}
-            onChange={(e) => change({ icon: [...e.target.value].slice(-4).join('') })}
-            placeholder="☺"
-            aria-label="Page icon (emoji)"
-            title="Page icon: type or paste an emoji"
-          />
+          <EmojiButton value={draft.icon} onChange={(icon) => change({ icon })} />
           <input
             className="title-input"
             value={draft.title}

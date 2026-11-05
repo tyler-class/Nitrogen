@@ -1,6 +1,6 @@
 {
   "name": "nitrogen",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "A personal wiki you host yourself on Cloudflare: a page tree, markdown, images, semantic search and an MCP server.",
   "license": "MIT",
@@ -49,6 +49,7 @@
     "@lezer/highlight": "1.2.5",
     "@modelcontextprotocol/server": "2.3.1",
     "@tanstack/react-query": "5.104.5",
+    "frimousse": "0.4.0",
     "hast-util-sanitize": "5.0.2",
     "hast-util-to-jsx-runtime": "2.3.7",
     "hono": "4.13.13",
@@ -72,6 +73,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "emojibase-data": "16.0.3",
     "eslint": "10.13.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.7",
