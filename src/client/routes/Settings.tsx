@@ -7,6 +7,7 @@ import { VERSION } from '@shared/version';
 import { Icon } from '../components/Icon';
 import { PagePicker } from '../components/PagePicker';
 import { useToast } from '../components/Toast';
+import { useTheme, type Theme } from '../lib/theme';
 
 export function Settings() {
   const qc = useQueryClient();
@@ -32,6 +33,7 @@ export function Settings() {
     queryKey: ['unused-files'],
     queryFn: () => api.get<{ count: number; bytes: number }>('/files/unused'),
   });
+  const [theme, setTheme] = useTheme();
   const restoreInput = useRef<HTMLInputElement>(null);
   const mcpUrl = `${window.location.origin}/mcp`;
 
@@ -84,6 +86,29 @@ export function Settings() {
   return (
     <div className="page settings">
       <h1 className="page-title">Settings</h1>
+
+      <section>
+        <h2>Appearance</h2>
+        <div className="seg" role="radiogroup" aria-label="Appearance">
+          {(
+            [
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+              ['system', 'System'],
+            ] as const satisfies readonly (readonly [Theme, string])[]
+          ).map(([t, label]) => (
+            <button
+              key={t}
+              role="radio"
+              aria-checked={theme === t}
+              className={theme === t ? 'on' : ''}
+              onClick={() => setTheme(t)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section>
         <h2>Home page</h2>

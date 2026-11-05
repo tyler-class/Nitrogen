@@ -12,6 +12,19 @@
     <meta name="apple-mobile-web-app-title" content="Nitrogen" />
     <meta name="description" content="A personal wiki." />
     <title>Nitrogen</title>
+    <script>
+      // Apply the saved Light/Dark choice before first paint (see src/client/lib/theme.ts).
+      try {
+        var t = localStorage.getItem('nitrogen-theme');
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.dataset.theme = t;
+          var c = t === 'dark' ? '#15171a' : '#ffffff';
+          document.querySelectorAll('meta[name=theme-color]').forEach(function (m) {
+            m.setAttribute('content', c);
+          });
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
