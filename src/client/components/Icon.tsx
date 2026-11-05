@@ -26,6 +26,8 @@ const PATHS: Record<string, string> = {
   check: 'M4 10l4 4 8-8',
   sparkle: 'M10 3l1.8 4.2L16 9l-4.2 1.8L10 15l-1.8-4.2L4 9l4.2-1.8z',
   bolt: 'M11 2L4 11h5l-1 7 7-9h-5z',
+  coffee:
+    'M3.5 7.5h11v4a4 4 0 0 1-4 4h-3a4 4 0 0 1-4-4zM14.5 8.5h1a2 2 0 0 1 0 4h-1M7 3v2M10.5 3v2',
 };
 
 export function Icon({ name, size = 16, label }: { name: string; size?: number; label?: string }) {

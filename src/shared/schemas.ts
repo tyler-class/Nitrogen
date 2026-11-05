@@ -37,7 +37,6 @@ export const movePageInput = z.object({
 });
 
 export const settingsInput = z.object({
-  instance_name: z.string().trim().min(1).max(60).optional(),
   home_id: z.string().min(1).nullable().optional(),
 });
 

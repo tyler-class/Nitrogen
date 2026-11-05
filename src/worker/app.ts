@@ -15,8 +15,7 @@ import {
   tooManyFailures,
   WINDOW_MINUTES,
 } from './auth';
-import { getSetting } from './db';
-import { admin, DEFAULT_INSTANCE_NAME } from './routes/admin';
+import { admin } from './routes/admin';
 import { connections } from './routes/connections';
 import { files } from './routes/files';
 import { pages } from './routes/pages';
@@ -31,8 +30,7 @@ app.get('/health', (c) => c.json({ ok: true }));
 app.get('/session', async (c) => {
   if (!(await isSignedIn(c)))
     return c.json({ error: 'unauthorized', message: 'Sign in first.' }, 401);
-  const name = (await getSetting(c.env.DB, 'instance_name')) ?? DEFAULT_INSTANCE_NAME;
-  return c.json({ ok: true, instance_name: name });
+  return c.json({ ok: true });
 });
 
 app.post('/login', async (c) => {

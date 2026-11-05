@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Backup, SearchStatus } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { keys, useTree } from '../lib/queries';
+import { VERSION } from '@shared/version';
+import { Icon } from '../components/Icon';
+import { PagePicker } from '../components/PagePicker';
 import { useToast } from '../components/Toast';
 
 export function Settings() {
@@ -11,7 +14,7 @@ export function Settings() {
   const tree = useTree();
   const settings = useQuery({
     queryKey: keys.settings,
-    queryFn: () => api.get<{ instance_name: string; home_id: string | null }>('/settings'),
+    queryFn: () => api.get<{ home_id: string | null }>('/settings'),
   });
   const search = useQuery({
     queryKey: ['search-status'],
@@ -29,7 +32,6 @@ export function Settings() {
     queryKey: ['unused-files'],
     queryFn: () => api.get<{ count: number; bytes: number }>('/files/unused'),
   });
-  const [name, setName] = useState<string | null>(null);
   const restoreInput = useRef<HTMLInputElement>(null);
   const mcpUrl = `${window.location.origin}/mcp`;
 
@@ -37,7 +39,6 @@ export function Settings() {
     try {
       await api.patch('/settings', body);
       await qc.invalidateQueries({ queryKey: keys.settings });
-      await qc.invalidateQueries({ queryKey: ['session'] });
       await qc.invalidateQueries({ queryKey: keys.tree });
       toast(done);
     } catch (e) {
@@ -85,42 +86,16 @@ export function Settings() {
       <h1 className="page-title">Settings</h1>
 
       <section>
-        <h2>Wiki</h2>
-        <label className="field">
-          <span>Name</span>
-          <div className="row">
-            <input
-              value={name ?? settings.data?.instance_name ?? ''}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={60}
-            />
-            <button
-              className="btn"
-              disabled={!name?.trim()}
-              onClick={() =>
-                name && patch({ instance_name: name.trim() }, 'Saved.').then(() => setName(null))
-              }
-            >
-              Save
-            </button>
-          </div>
-        </label>
-        <label className="field">
-          <span>Home page</span>
-          <select
-            value={settings.data?.home_id ?? ''}
-            onChange={(e) => patch({ home_id: e.target.value || null }, 'Home page updated.')}
-          >
-            <option value="">The first page in the tree</option>
-            {[...pages]
-              .sort((a, b) => a.title.localeCompare(b.title))
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-          </select>
-        </label>
+        <h2>Home page</h2>
+        <div className="field">
+          <PagePicker
+            aria-label="Home page"
+            pages={pages}
+            value={settings.data?.home_id ?? null}
+            noneLabel="The first page in the tree"
+            onChange={(id) => void patch({ home_id: id }, 'Home page updated.')}
+          />
+        </div>
       </section>
 
       <section>
@@ -186,16 +161,6 @@ export function Settings() {
         ) : (
           <p className="muted">Checking…</p>
         )}
-        <button
-          className="btn"
-          onClick={async () => {
-            await api.post('/search/reindex').catch((e) => toast(errorMessage(e)));
-            void qc.invalidateQueries({ queryKey: ['search-status'] });
-            toast('Re-indexing. Large wikis finish over the next few minutes.');
-          }}
-        >
-          Rebuild semantic index
-        </button>
       </section>
 
       <section>
@@ -255,6 +220,32 @@ export function Settings() {
         <p className="muted">
           To change the password, set a new APP_PASSWORD secret in Cloudflare. Everyone is signed
           out.
+        </p>
+      </section>
+
+      <section className="about">
+        <h2>About</h2>
+        <p>
+          Nitrogen is a free, open-source wiki. It runs on your own Cloudflare account, so your
+          pages stay yours.
+        </p>
+        <p>
+          Built by{' '}
+          <a href="https://tylerclass.net" target="_blank" rel="noreferrer">
+            Tyler Class
+          </a>
+          .
+        </p>
+        <a className="kofi" href="https://ko-fi.com/tylerclass" target="_blank" rel="noreferrer">
+          <Icon name="coffee" size={18} />
+          <span>If you want to say thank you, coffee is my love language</span>
+          <Icon name="chevron" size={14} />
+        </a>
+        <p className="about-meta">
+          <span>Nitrogen {VERSION}</span>
+          <a href="https://github.com/tyler-class/nitrogen" target="_blank" rel="noreferrer">
+            Nitrogen on GitHub
+          </a>
         </p>
       </section>
     </div>

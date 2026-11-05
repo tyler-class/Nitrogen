@@ -110,6 +110,10 @@ index locally, sign in with `npx wrangler login` and run `N2_REMOTE=1 npm run de
   installable as a PWA.
 - See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DECISIONS.md](docs/DECISIONS.md).
 
+## Support
+
+Nitrogen is free and built by [Tyler Class](https://tylerclass.net). If you want to say thank you, coffee is my love language: [ko-fi.com/tylerclass](https://ko-fi.com/tylerclass) ☕
+
 ## License
 
 [MIT](LICENSE)

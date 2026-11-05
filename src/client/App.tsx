@@ -39,7 +39,7 @@ function Gate() {
   const qc = useQueryClient();
   const session = useQuery({
     queryKey: ['session'],
-    queryFn: () => api.get<{ ok: true; instance_name: string }>('/session'),
+    queryFn: () => api.get<{ ok: true }>('/session'),
     retry: false,
     staleTime: Infinity,
     refetchOnWindowFocus: false,

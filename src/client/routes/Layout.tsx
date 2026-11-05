@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useMatch } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
 import { useTree } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
@@ -14,11 +12,6 @@ export function Layout() {
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
   const location = useLocation();
-  const session = useQuery({
-    queryKey: ['session'],
-    queryFn: () => api.get<{ instance_name: string }>('/session'),
-    staleTime: Infinity,
-  });
 
   // Close the mobile menu after navigating.
   const [navPath, setNavPath] = useState(location.pathname);
@@ -37,18 +30,13 @@ export function Layout() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const name = session.data?.instance_name ?? 'Nitrogen';
-  useEffect(() => {
-    document.title = name;
-  }, [name]);
-
   return (
     <div className={`shell${nav ? ' nav-open' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
           <Link to="/" className="brand-link">
             <img src="/favicon.svg" alt="" width={22} height={22} />
-            <span>{name}</span>
+            <span>Nitrogen</span>
           </Link>
         </div>
         <button className="search-button" onClick={() => setPalette(true)}>
@@ -82,7 +70,7 @@ export function Layout() {
           <button onClick={() => setNav(true)} aria-label="Open menu">
             <Icon name="menu" />
           </button>
-          <span className="mobile-title">{name}</span>
+          <span className="mobile-title">Nitrogen</span>
           <button onClick={() => setPalette(true)} aria-label="Search">
             <Icon name="search" />
           </button>

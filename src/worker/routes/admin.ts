@@ -4,28 +4,18 @@ import { extractLinks } from '@shared/markdown';
 import { restoreInput, settingsInput } from '@shared/schemas';
 import type { Backup, Page, SearchResponse } from '@shared/types';
 import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
-import { drainIndex, indexSoon, resetIndex, search, searchStatus } from '../search';
+import { indexSoon, resetIndex, search, searchStatus } from '../search';
 import { ApiError, body, type AppEnv } from './util';
-
-export const DEFAULT_INSTANCE_NAME = 'Nitrogen';
 
 export const admin = new Hono<AppEnv>();
 
 admin.get('/settings', async (c) => {
-  const [name, home] = await Promise.all([
-    getSetting(c.env.DB, 'instance_name'),
-    getSetting(c.env.DB, 'home_id'),
-  ]);
-  return c.json({ instance_name: name ?? DEFAULT_INSTANCE_NAME, home_id: home });
+  return c.json({ home_id: await getSetting(c.env.DB, 'home_id') });
 });
 
 admin.patch('/settings', async (c) => {
   const input = await body(c, settingsInput);
-  const stmts = [];
-  if (input.instance_name !== undefined)
-    stmts.push(setSettingStmt(c.env.DB, 'instance_name', input.instance_name));
-  if (input.home_id !== undefined) stmts.push(setSettingStmt(c.env.DB, 'home_id', input.home_id));
-  if (stmts.length) await c.env.DB.batch(stmts);
+  if (input.home_id !== undefined) await setSettingStmt(c.env.DB, 'home_id', input.home_id).run();
   return c.json({ ok: true });
 });
 
@@ -39,13 +29,6 @@ admin.get('/search', async (c) => {
 });
 
 admin.get('/search/status', async (c) => c.json(await searchStatus(c.env)));
-
-/** Re-index everything (e.g. after changing AI Search settings). Runs in batches via the cron. */
-admin.post('/search/reindex', async (c) => {
-  await c.env.DB.prepare('UPDATE pages SET indexed_version = 0').run();
-  const done = await drainIndex(c.env, 10).catch(() => 0);
-  return c.json({ ok: true, indexed_now: done });
-});
 
 admin.get('/backup', async (c) => {
   const pages = await all<Page>(
