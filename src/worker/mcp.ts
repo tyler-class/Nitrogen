@@ -3,6 +3,7 @@
 // because OAuthProvider has already checked the assistant's token.
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
+import { actorLabel, agent, encodeActor, type Actor } from '@shared/actor';
 import { applyEdits, EditError, headings, type EditOp } from '@shared/edit';
 import { pageHref } from '@shared/markdown';
 import { describePlacement, placementSchema } from '@shared/placement';
@@ -16,11 +17,15 @@ import type {
   Revision,
   RevisionDetail,
   SearchResponse,
+  TagCount,
   TreeResponse,
   UploadedFile,
 } from '@shared/types';
 import { app } from './app';
-import { INTERNAL } from './auth';
+import { ACTOR, INTERNAL } from './auth';
+import { getSetting } from './db';
+import { getPage } from './pages';
+import { pagesTouched } from './routes/explore';
 import { createUploadLink, placeImage, UPLOAD_LINK_MINUTES, uploadStatus, withAlt } from './images';
 import { MAX_IMAGE_BYTES, storeImage } from './routes/files';
 import { indexSoon } from './search';
@@ -36,8 +41,8 @@ class ToolError extends Error {
   }
 }
 
-function apiCaller(origin: string, env: Cloudflare.Env, ctx: ExecutionContext): Call {
-  const internalEnv = { ...env, [INTERNAL]: true };
+function apiCaller(origin: string, env: Cloudflare.Env, ctx: ExecutionContext, actor: Actor): Call {
+  const internalEnv = { ...env, [INTERNAL]: true, [ACTOR]: actor.name };
   return async <T>(method: string, path: string, body?: unknown) => {
     const res = await app.fetch(
       new Request(`${origin}/api${path}`, {
@@ -84,7 +89,9 @@ How to work with it:
 - Refer to a page by its id (best), its exact title, or its path from the top of the tree ("Projects / Nitrogen / Roadmap").
 - For small changes use edit_page (find/replace, append, section edits). It keeps the rest of the page byte-for-byte and retries safely if the page changed. Use update_page with base_version only to rewrite a whole page.
 - To build a structure (a project with sub-pages, meeting notes series), use create_pages to create the whole subtree in one call.
-- Every assistant edit is saved in the page history; list_revisions and restore_revision undo mistakes.
+- Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their inbox and activity log, and can undo a whole session.
+- Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
+- At the end of a working session that changed the wiki, call log_session with a short summary; it files a dated note under "Sessions" and lists the pages you touched.
 
 Markdown conventions:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
@@ -99,11 +106,28 @@ interface TreeCtx {
   home: string | null;
 }
 
-function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: ExecutionContext) {
-  const server = new McpServer(
-    { name: 'nitrogen', version: VERSION },
-    { instructions: INSTRUCTIONS },
-  );
+/** The owner's conventions page (Settings → Connect an AI assistant), if one is set. */
+async function guideText(db: D1Database): Promise<string> {
+  const id = await getSetting(db, 'guide_id');
+  const page = id ? await getPage(db, id).catch(() => null) : null;
+  if (!page?.body.trim()) return '';
+  const body =
+    page.body.length > 8000
+      ? `${page.body.slice(0, 8000)}\n\n(…truncated; read_page "${page.id}" for the rest.)`
+      : page.body;
+  return `\n\n## The owner's conventions for this wiki\nFrom the page “${page.title}” (id ${page.id}). Follow these over the general advice above.\n\n${body}`;
+}
+
+function buildServer(
+  call: Call,
+  origin: string,
+  env: Cloudflare.Env,
+  ctx: ExecutionContext,
+  actor: Actor,
+  guide: string,
+) {
+  const instructions = INSTRUCTIONS + guide;
+  const server = new McpServer({ name: 'nitrogen', version: VERSION }, { instructions });
 
   const loadTree = async (): Promise<TreeCtx> => {
     const t = await call<TreeResponse>('GET', '/tree');
@@ -216,7 +240,8 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
       const p = d.page;
       const meta = [
         `# ${p.icon ? `${p.icon} ` : ''}${p.title}`,
-        `id: ${p.id} · version: ${p.version} · updated: ${p.updated_at}`,
+        `id: ${p.id} · version: ${p.version} · updated: ${p.updated_at} by ${actorLabel(p.updated_by)} · created by ${actorLabel(p.created_by)}`,
+        `tags: ${d.all_tags.length ? d.all_tags.map((g) => `#${g}`).join(' ') : 'none'}`,
         `path: ${[...d.ancestors.map((a) => a.title), p.title].join(' / ')}`,
         `url: ${urlOf(p)}`,
         d.children.length
@@ -246,17 +271,18 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
         query: z.string().min(1),
         mode: z.enum(['hybrid', 'semantic', 'keyword']).optional(),
         under: z.string().optional().describe('Only return pages inside this page’s subtree.'),
+        tag: z.string().optional().describe('Only return pages with this tag.'),
         limit: z.number().int().min(1).max(50).optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    safe(async ({ query, mode, under, limit }) => {
+    safe(async ({ query, mode, under, tag, limit }) => {
       const t = await loadTree();
       const scope = under ? resolve(under, t) : null;
       const want = limit ?? 10;
       const res = await call<SearchResponse>(
         'GET',
-        `/search?${new URLSearchParams({ q: query, mode: mode ?? 'hybrid', limit: String(scope ? 50 : want) })}`,
+        `/search?${new URLSearchParams({ q: query, mode: mode ?? 'hybrid', limit: String(scope ? 50 : want), ...(tag ? { tag } : {}) })}`,
       );
       let hits = res.hits;
       if (scope)
@@ -294,6 +320,11 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
           .describe('Parent page id, title or path. Omit (or "top") for the top level.'),
         body: z.string().optional(),
         icon: z.string().max(16).optional().describe('An emoji, e.g. "📘".'),
+        tags: z
+          .array(z.string())
+          .max(30)
+          .optional()
+          .describe('Tags, e.g. ["decision", "nitrogen"].'),
         position: z
           .number()
           .int()
@@ -303,7 +334,7 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    safe(async ({ title, parent, body, icon, position }) => {
+    safe(async ({ title, parent, body, icon, tags, position }) => {
       const t = await loadTree();
       const parentId = resolveParent(parent, t);
       const dup = t.pages.find(
@@ -319,6 +350,7 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
         parent_id: parentId,
         body: body ?? '',
         icon: icon ?? null,
+        tags,
         position,
       });
       return text(
@@ -482,6 +514,7 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
         body: z.string().optional(),
         title: z.string().min(1).max(200).optional(),
         icon: z.string().max(16).nullable().optional(),
+        tags: z.array(z.string()).max(30).optional().describe('Replaces the page’s own tags.'),
       }),
       annotations: {
         readOnlyHint: false,
@@ -490,13 +523,14 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
         openWorldHint: false,
       },
     },
-    safe(async ({ page, base_version, body, title, icon }) => {
+    safe(async ({ page, base_version, body, title, icon, tags }) => {
       const t = await loadTree();
       const id = resolve(page, t).id;
       const next = await call<Page>('PATCH', `/pages/${id}`, {
         ...(body !== undefined ? { body } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(icon !== undefined ? { icon } : {}),
+        ...(tags !== undefined ? { tags } : {}),
         base_version,
       });
       return text(
@@ -701,7 +735,7 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
       );
       const markdown = withAlt(file.markdown, file.url, alt);
       if (!target) return text(`Stored. Markdown:\n${markdown}`);
-      const placed = await placeImage(env.DB, target.id, markdown, placement);
+      const placed = await placeImage(env.DB, target.id, markdown, placement, actor);
       indexSoon(env, ctx);
       return text(
         `${placed.fallback ? `Couldn’t find the requested spot (${placed.fallback}), so the image went at the end of the page. ` : ''}Added to ${describe(placed.page)} ${placed.fallback ? '' : describePlacement(placement)} (version ${placed.page.version}).\nMarkdown: ${markdown}`,
@@ -769,6 +803,159 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
     }),
   );
 
+  // ---------------------------------------------------------------- tags
+
+  server.registerTool(
+    'list_tags',
+    {
+      title: 'List tags',
+      description:
+        'Every tag in use with how many pages have it; or, with "tag", the pages that have that tag.',
+      inputSchema: z.object({ tag: z.string().optional() }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async ({ tag }) => {
+      if (tag) {
+        const res = await call<SearchResponse>(
+          'GET',
+          `/search?${new URLSearchParams({ q: '', tag, limit: '50' })}`,
+        );
+        if (!res.hits.length) return text(`No pages are tagged #${tag}.`);
+        return text(
+          `Pages tagged #${tag}:\n${res.hits.map((h) => `- ${h.title} (${h.id})${h.path.length ? ` — in ${h.path.join(' / ')}` : ''}`).join('\n')}`,
+        );
+      }
+      const { tags } = await call<{ tags: TagCount[] }>('GET', '/tags');
+      if (!tags.length) return text('No tags yet.');
+      return text(tags.map((t) => `#${t.tag} (${t.count})`).join('\n'));
+    }),
+  );
+
+  server.registerTool(
+    'tag_page',
+    {
+      title: 'Tag a page',
+      description:
+        'Add or remove tags on a page without touching its text. (#tags written in the body stay until the body changes.)',
+      inputSchema: z.object({
+        page: z.string(),
+        add: z.array(z.string()).max(30).optional(),
+        remove: z.array(z.string()).max(30).optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    safe(async ({ page, add, remove }) => {
+      const t = await loadTree();
+      const id = resolve(page, t).id;
+      const { page: cur } = await call<PageDetail>('GET', `/pages/${id}`);
+      const drop = new Set((remove ?? []).map((x) => x.replace(/^#/, '').toLowerCase()));
+      const tags = [...cur.tags.filter((x) => !drop.has(x)), ...(add ?? [])];
+      const next = await call<Page>('PATCH', `/pages/${id}`, { tags });
+      return text(
+        `${describe(next)} now has tags: ${next.tags.length ? next.tags.map((g) => `#${g}`).join(' ') : 'none'}.`,
+      );
+    }),
+  );
+
+  // ---------------------------------------------------------------- sessions
+
+  server.registerTool(
+    'log_session',
+    {
+      title: 'Log this session',
+      description:
+        'File a dated note of what you did in this conversation under the top-level "Sessions" page (created if missing), with links to every page you created or changed in the last hours. Call it once, at the end of a session that changed the wiki.',
+      inputSchema: z.object({
+        title: z.string().min(1).max(120).describe('A few words, e.g. "Planned the Q3 roadmap".'),
+        summary: z
+          .string()
+          .min(1)
+          .describe('Markdown: what was decided, done, and left open. Link pages with [[Title]].'),
+        hours: z
+          .number()
+          .min(0.25)
+          .max(48)
+          .optional()
+          .describe('How far back to look for pages you touched (default 6).'),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    safe(async ({ title, summary, hours }) => {
+      const t = await loadTree();
+      let sessions = t.pages.find((p) => !p.parent_id && p.title.toLowerCase() === 'sessions');
+      if (!sessions) {
+        const created = await call<Page>('POST', '/pages', {
+          title: 'Sessions',
+          parent_id: null,
+          icon: '🗂️',
+          body: 'Notes assistants filed at the end of working sessions, newest first.',
+        });
+        sessions = created;
+      }
+      const since = new Date(Date.now() - (hours ?? 6) * 3_600_000).toISOString();
+      const touched = (await pagesTouched(env.DB, encodeActor(actor), since)).filter(
+        (p) => p.page_id !== sessions.id && t.byId.get(p.page_id)?.parent_id !== sessions.id,
+      );
+      const verbs: Record<string, string> = {
+        create: 'created',
+        edit: 'edited',
+        move: 'moved',
+        delete: 'deleted',
+        restore: 'restored',
+      };
+      const list = touched.length
+        ? touched
+            .map(
+              (p) =>
+                `- ${t.byId.has(p.page_id) ? `[[${p.title}]]` : `${p.title} (deleted)`} — ${p.actions
+                  .split(',')
+                  .map((a) => verbs[a] ?? a)
+                  .join(', ')}`,
+            )
+            .join('\n')
+        : '- (no page changes recorded)';
+      const day = new Date().toISOString().slice(0, 10);
+      const page = await call<Page>('POST', '/pages', {
+        title: `${day} · ${title.trim()}`,
+        parent_id: sessions.id,
+        position: 0,
+        tags: ['session-log'],
+        body: `${summary.trim()}\n\n## Pages touched\n\n${list}\n\n_Logged by ${actor.name}._`,
+      });
+      return text(`Logged as ${describe(page)}.\nurl: ${urlOf(page)}`);
+    }),
+  );
+
+  // ---------------------------------------------------------------- prompts
+
+  server.registerPrompt(
+    'review_page',
+    {
+      title: 'Check a page against newer pages',
+      description:
+        'Re-read a page, look for newer pages on the same topic, and list claims that are stale or contradicted.',
+      argsSchema: z.object({
+        page: z.string().describe('Page id, exact title, or path.'),
+      }),
+    },
+    ({ page }) => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Review the Nitrogen wiki page "${page}" for claims that are out of date.
+
+1. read_page it and note its updated date and each concrete claim (decisions, numbers, statuses, plans, names).
+2. search (hybrid) for each main topic, and read the pages that were updated more recently than this one, plus the pages that link to it.
+3. Report a short list: each claim that is contradicted or superseded, the newer page that says otherwise ([[Title]], with its date), and a suggested fix. Also list open questions you couldn't settle.
+4. Don't change anything yet. Ask me which fixes to apply, then make them with edit_page so each one is in the history.`,
+          },
+        },
+      ],
+    }),
+  );
+
   // ---------------------------------------------------------------- resources
 
   server.registerResource(
@@ -780,7 +967,7 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
       mimeType: 'text/markdown',
     },
     async (uri) => ({
-      contents: [{ uri: uri.href, mimeType: 'text/markdown', text: INSTRUCTIONS }],
+      contents: [{ uri: uri.href, mimeType: 'text/markdown', text: instructions }],
     }),
   );
 
@@ -790,8 +977,12 @@ function buildServer(call: Call, origin: string, env: Cloudflare.Env, ctx: Execu
 export const mcpApiHandler = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const origin = new URL(request.url).origin;
-    const call = apiCaller(origin, env, ctx);
-    const handler = createMcpHandler(() => buildServer(call, origin, env, ctx));
+    // The OAuth provider puts the grant's props here: the connected app's name (see consent.ts).
+    const props = (ctx as ExecutionContext & { props?: { client?: string } }).props;
+    const actor = agent(props?.client);
+    const call = apiCaller(origin, env, ctx, actor);
+    const guide = await guideText(env.DB).catch(() => '');
+    const handler = createMcpHandler(() => buildServer(call, origin, env, ctx, actor, guide));
     return handler.fetch(request);
   },
 };

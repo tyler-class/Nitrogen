@@ -1,8 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { pageHref } from '@shared/markdown';
-import type { Page, PageDetail, PageSummary, Revision, RevisionDetail } from '@shared/types';
+import { actorLabel } from '@shared/actor';
+import { extractTags, pageHref } from '@shared/markdown';
+import type {
+  Graph,
+  Mention,
+  Page,
+  PageDetail,
+  PageSummary,
+  RelatedPage,
+  Revision,
+  RevisionDetail,
+} from '@shared/types';
 import { api, ApiError, errorMessage } from '../lib/api';
 import { keys, useCreatePage, useDeletePage, usePage, useTree } from '../lib/queries';
 import { readLocal, writeLocal } from '../lib/storage';
@@ -10,6 +20,9 @@ import type { EditorHandle } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
 import { Markdown, type TitleIndex } from '../components/Markdown';
+import { GraphView } from '../components/GraphView';
+import { Sheet } from '../components/Sheet';
+import { TagEditor, TagList } from '../components/Tags';
 import { Menu } from '../components/Tree';
 import { useToast } from '../components/Toast';
 
@@ -99,6 +112,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
   const { index } = useTitleIndex();
   const [menu, setMenu] = useState(false);
   const [history, setHistory] = useState(false);
+  const [graph, setGraph] = useState(false);
   const create = useCreatePage();
   const del = useDeletePage();
   const tree = useTree();
@@ -145,6 +159,18 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
     toast('This is now your home page.');
   }
 
+  async function pin() {
+    setMenu(false);
+    try {
+      await api.post(`/pages/${page.id}/pin`, { pinned: !page.pinned_at });
+      await qc.invalidateQueries({ queryKey: keys.page(page.id) });
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
+      toast(page.pinned_at ? 'Unpinned.' : 'Pinned to the dashboard.');
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
+
   async function remove() {
     setMenu(false);
     const n = (tree.data?.pages ?? []).filter((p) => p.parent_id === page.id).length;
@@ -175,6 +201,14 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
           </button>
           <button
             className="btn icon-only"
+            onClick={() => setGraph(true)}
+            aria-label="Graph"
+            title="Graph"
+          >
+            <Icon name="graph" size={15} />
+          </button>
+          <button
+            className="btn icon-only"
             onClick={() => setHistory(true)}
             aria-label="History"
             title="History"
@@ -196,6 +230,9 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
                 <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
                   Add subpage
                 </button>
+                <button role="menuitem" onClick={pin}>
+                  {page.pinned_at ? 'Unpin from dashboard' : 'Pin to dashboard'}
+                </button>
                 <button role="menuitem" onClick={setHome}>
                   Set as home page
                 </button>
@@ -209,6 +246,18 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
                 >
                   Copy wiki link
                 </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(false);
+                    void navigator.clipboard?.writeText(
+                      `Use the Nitrogen review_page prompt on “${page.title}” (id ${page.id}): check it against newer pages and list anything stale or contradicted.`,
+                    );
+                    toast('Copied. Paste it into Claude to check this page.');
+                  }}
+                >
+                  Copy review request
+                </button>
                 <button role="menuitem" className="danger" onClick={remove}>
                   Delete
                 </button>
@@ -220,7 +269,14 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
       <header className="page-head">
         {page.icon && <div className="page-icon">{page.icon}</div>}
         <h1 className="page-title">{page.title}</h1>
-        <p className="page-meta">Updated {formatWhen(page.updated_at)}</p>
+        <p className="page-meta">
+          Updated {formatWhen(page.updated_at)}
+          {page.updated_by && ` by ${actorLabel(page.updated_by)}`}
+          {page.created_by && page.created_by !== page.updated_by
+            ? ` · created by ${actorLabel(page.created_by)}`
+            : ''}
+        </p>
+        <TagList tags={detail.all_tags} />
       </header>
       <div className="prose">
         {page.body.trim() ? (
@@ -269,7 +325,10 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
           </ul>
         </section>
       )}
+      <Mentions page={page} />
+      <Related page={page} />
       {history && <HistoryPanel page={page} onClose={() => setHistory(false)} />}
+      {graph && <GraphSheet page={page} onClose={() => setGraph(false)} />}
     </article>
   );
 }
@@ -279,8 +338,12 @@ interface Draft {
   title: string;
   icon: string;
   body: string;
+  tags: string[];
   base: number;
 }
+
+const sameTags = (a: string[] | undefined, b: string[] | undefined) =>
+  JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
 
 function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
   const { page, ancestors } = detail;
@@ -293,6 +356,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
     title: page.title,
     icon: page.icon ?? '',
     body: page.body,
+    tags: page.tags,
     base: page.version,
   });
   const [state, setState] = useState<SaveState>('saved');
@@ -320,6 +384,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         d.body === cached.body &&
         d.title === cached.title &&
         (d.icon || null) === cached.icon &&
+        sameTags(d.tags, cached.tags) &&
         d.base === cached.version
       ) {
         setState('saved');
@@ -333,6 +398,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
             title: d.title.trim(),
             icon: d.icon.trim() || null,
             body: d.body,
+            tags: d.tags,
             ...(force ? {} : { base_version: d.base }),
           });
           setDraft((cur) => ({ ...cur, base: next.version }));
@@ -342,8 +408,16 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           );
           if (!cached || cached.title !== next.title || cached.icon !== next.icon)
             void qc.invalidateQueries({ queryKey: keys.tree });
+          // all_tags (incl. #tags in the body) comes from the server; refresh it when viewing.
+          if (!cached || !sameTags(cached.tags, next.tags) || cached.body !== next.body)
+            void qc.invalidateQueries({ queryKey: keys.page(page.id), refetchType: 'none' });
           const latest = current.current;
-          if (latest.body === d.body && latest.title === d.title && latest.icon === d.icon) {
+          if (
+            latest.body === d.body &&
+            latest.title === d.title &&
+            latest.icon === d.icon &&
+            sameTags(latest.tags, d.tags)
+          ) {
             writeLocal(draftKey, undefined);
             setState('saved');
           } else setState('dirty');
@@ -406,6 +480,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
       title: fresh.page.title,
       icon: fresh.page.icon ?? '',
       body: fresh.page.body,
+      tags: fresh.page.tags,
       base: fresh.page.version,
     };
     setDraft(d);
@@ -457,7 +532,12 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
             <button
               className="btn small"
               onClick={() => {
-                change({ title: stale.title, icon: stale.icon, body: stale.body });
+                change({
+                  title: stale.title,
+                  icon: stale.icon,
+                  body: stale.body,
+                  tags: stale.tags ?? draft.tags,
+                });
                 setEditorKey((k) => k + 1);
                 setOfferDraft(false);
               }}
@@ -496,6 +576,11 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
             }}
           />
         </div>
+        <TagEditor
+          tags={draft.tags}
+          bodyTags={extractTags(draft.body)}
+          onChange={(tags) => change({ tags })}
+        />
       </header>
 
       <div className="toolbar" role="toolbar" aria-label="Formatting">
@@ -614,7 +699,7 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
               <button className={sel === null ? 'current' : ''} onClick={() => setSel(null)}>
                 <strong>Current</strong>
                 <span>
-                  version {page.version} · {formatWhen(page.updated_at)}
+                  {actorLabel(page.updated_by)} · {formatWhen(page.updated_at)}
                 </span>
               </button>
             </li>
@@ -623,7 +708,7 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
                 <button className={sel === r.id ? 'current' : ''} onClick={() => setSel(r.id)}>
                   <strong>{formatWhen(r.created_at)}</strong>
                   <span>
-                    version {r.version}
+                    {actorLabel(r.actor)} · version {r.version}
                     {r.title !== page.title ? ` · “${r.title}”` : ''}
                   </span>
                 </button>
@@ -651,6 +736,113 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Pages that name this one without linking to it, with a one-click "link it". */
+function Mentions({ page }: { page: Page }) {
+  const q = useQuery({
+    queryKey: ['mentions', page.id, page.title],
+    queryFn: () => api.get<{ mentions: Mention[] }>(`/pages/${page.id}/mentions`),
+    staleTime: 60_000,
+  });
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const list = q.data?.mentions ?? [];
+  if (!list.length) return null;
+
+  async function link(src: string) {
+    setBusy(src);
+    try {
+      await api.post(`/pages/${page.id}/mentions/link`, { src });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['mentions', page.id] }),
+        qc.invalidateQueries({ queryKey: keys.page(page.id) }),
+        qc.invalidateQueries({ queryKey: keys.page(src) }),
+      ]);
+    } catch (e) {
+      toast(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="related" aria-label="Mentioned in">
+      <div className="related-head">
+        <h2>Mentioned in</h2>
+        <span className="muted">Not linked yet</span>
+      </div>
+      <ul className="mentions">
+        {list.map((m) => (
+          <li key={m.id}>
+            <div>
+              <Link to={pageHref(m.id, m.title)}>
+                <PageGlyph icon={m.icon} folder={false} /> {m.title}
+              </Link>
+              <p className="snippet">{m.snippet}</p>
+            </div>
+            <button className="btn small" disabled={busy === m.id} onClick={() => void link(m.id)}>
+              <Icon name="link" size={14} /> Link
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Pages about similar things that aren't connected yet (semantic search). */
+function Related({ page }: { page: Page }) {
+  const q = useQuery({
+    queryKey: ['related', page.id, page.version],
+    queryFn: () => api.get<{ related: RelatedPage[] }>(`/pages/${page.id}/related`),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const list = q.data?.related ?? [];
+  if (!list.length) return null;
+  return (
+    <section className="related" aria-label="Related pages">
+      <div className="related-head">
+        <h2>Related</h2>
+      </div>
+      <ul className="backlinks related-list">
+        {list.map((r) => (
+          <li key={r.id}>
+            <Link to={pageHref(r.id, r.title)}>
+              <PageGlyph icon={r.icon} folder={false} /> {r.title}
+            </Link>
+            {r.path.length > 0 && <span className="muted"> · {r.path.join(' › ')}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function GraphSheet({ page, onClose }: { page: Page; onClose(): void }) {
+  const navigate = useNavigate();
+  const q = useQuery({
+    queryKey: ['graph', page.id, page.version],
+    queryFn: () => api.get<Graph>(`/pages/${page.id}/graph`),
+  });
+  return (
+    <Sheet title="Graph" sub={`Within two links of “${page.title}”`} onClose={onClose} wide>
+      {q.data ? (
+        <GraphView
+          graph={q.data}
+          onOpen={(id) => {
+            const n = q.data.nodes.find((x) => x.id === id);
+            onClose();
+            navigate(pageHref(id, n?.title));
+          }}
+        />
+      ) : (
+        <p className="muted">{q.isError ? errorMessage(q.error) : 'Loading…'}</p>
+      )}
+    </Sheet>
   );
 }
 

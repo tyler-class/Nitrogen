@@ -2,6 +2,7 @@
 // from APP_PASSWORD + a random per-instance salt, so changing the password
 // signs everyone out.
 import type { Context, MiddlewareHandler } from 'hono';
+import { agent, YOU, type Actor } from '@shared/actor';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { first, nowIso } from './db';
 
@@ -165,6 +166,14 @@ export const SETUP_MESSAGE =
 export const INTERNAL = Symbol('nitrogen-internal');
 export function isInternal(env: object): boolean {
   return (env as Record<symbol, unknown>)[INTERNAL] === true;
+}
+
+/** The connected assistant's name, set alongside INTERNAL by the MCP server. */
+export const ACTOR = Symbol('nitrogen-actor');
+
+/** Who is making this request: an assistant over MCP, or the owner in the app. */
+export function actorOf(env: object): Actor {
+  return isInternal(env) ? agent((env as Record<symbol, unknown>)[ACTOR] as string) : YOU;
 }
 
 /** Refuses to run open, blocks cross-site writes, and requires a session for the API. */

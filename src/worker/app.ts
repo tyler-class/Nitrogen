@@ -17,6 +17,7 @@ import {
 } from './auth';
 import { admin } from './routes/admin';
 import { connections } from './routes/connections';
+import { explore } from './routes/explore';
 import { files } from './routes/files';
 import { pages } from './routes/pages';
 import { ApiError, body, type AppEnv } from './routes/util';
@@ -63,6 +64,7 @@ app.route('/', pages);
 app.route('/', files);
 app.route('/', admin);
 app.route('/', connections);
+app.route('/', explore);
 
 app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));
 

@@ -1,21 +1,54 @@
 // Settings, search, backup and restore.
 import { Hono } from 'hono';
-import { extractLinks } from '@shared/markdown';
-import { restoreInput, settingsInput } from '@shared/schemas';
-import type { Backup, Page, SearchResponse } from '@shared/types';
+import { encodeActor } from '@shared/actor';
+import { ancestorsOf } from '@shared/tree';
+import { extractLinks, extractTags, normalizeTag, wordCount } from '@shared/markdown';
+import {
+  DEFAULT_SECTIONS,
+  dashboardSectionsInput,
+  restoreInput,
+  settingsInput,
+} from '@shared/schemas';
+import type { Backup, DashboardSection, SearchHit, SearchResponse } from '@shared/types';
+import { actorOf, isInternal } from '../auth';
 import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
+import { hydrate, listSummaries } from '../pages';
 import { indexSoon, resetIndex, search, searchStatus } from '../search';
 import { ApiError, body, type AppEnv } from './util';
 
 export const admin = new Hono<AppEnv>();
 
+/** The dashboard's sections in order; sections added in later versions are appended. */
+export async function dashboardSections(db: D1Database): Promise<DashboardSection[]> {
+  const raw = await getSetting(db, 'dashboard');
+  let saved: DashboardSection[] = [];
+  try {
+    const r = dashboardSectionsInput.safeParse(JSON.parse(raw ?? '[]'));
+    if (r.success) saved = r.data;
+  } catch {
+    /* default */
+  }
+  return [...saved, ...DEFAULT_SECTIONS.filter((d) => !saved.some((s) => s.id === d.id))];
+}
+
 admin.get('/settings', async (c) => {
-  return c.json({ home_id: await getSetting(c.env.DB, 'home_id') });
+  const [home, guide, dashboard] = await Promise.all([
+    getSetting(c.env.DB, 'home_id'),
+    getSetting(c.env.DB, 'guide_id'),
+    dashboardSections(c.env.DB),
+  ]);
+  return c.json({ home_id: home, guide_id: guide, dashboard });
 });
 
 admin.patch('/settings', async (c) => {
   const input = await body(c, settingsInput);
-  if (input.home_id !== undefined) await setSettingStmt(c.env.DB, 'home_id', input.home_id).run();
+  const stmts = [];
+  if (input.home_id !== undefined) stmts.push(setSettingStmt(c.env.DB, 'home_id', input.home_id));
+  if (input.guide_id !== undefined)
+    stmts.push(setSettingStmt(c.env.DB, 'guide_id', input.guide_id));
+  if (input.dashboard !== undefined)
+    stmts.push(setSettingStmt(c.env.DB, 'dashboard', JSON.stringify(input.dashboard)));
+  if (stmts.length) await c.env.DB.batch(stmts);
   return c.json({ ok: true });
 });
 
@@ -25,16 +58,63 @@ admin.get('/search', async (c) => {
   if (!['keyword', 'semantic', 'hybrid'].includes(mode))
     throw new ApiError(400, 'invalid', 'mode must be keyword, semantic or hybrid.');
   const limit = Math.min(50, Math.max(1, Number(c.req.query('limit') ?? 20) || 20));
-  return c.json(await search(c.env, q, mode, limit));
+  const tag = normalizeTag(c.req.query('tag') ?? '');
+  let res: SearchResponse;
+  if (tag) {
+    const tagged = new Set(
+      (
+        await all<{ page_id: string }>(c.env.DB, 'SELECT page_id FROM page_tags WHERE tag = ?', tag)
+      ).map((r) => r.page_id),
+    );
+    if (q.trim()) {
+      res = await search(c.env, q, mode, 50);
+      res = { ...res, hits: res.hits.filter((h) => tagged.has(h.id)).slice(0, limit) };
+    } else {
+      // No words: every page with the tag, most recently changed first.
+      const list = await listSummaries(c.env.DB);
+      const byId = new Map(list.map((p) => [p.id, p]));
+      res = {
+        query: '',
+        mode,
+        hits: list
+          .filter((p) => tagged.has(p.id))
+          .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+          .slice(0, limit)
+          .map((p): SearchHit => ({
+            id: p.id,
+            title: p.title,
+            icon: p.icon,
+            snippet: '',
+            path: ancestorsOf(p.id, byId).map((a) => a.title),
+            score: 1,
+            source: 'keyword',
+          })),
+      };
+    }
+  } else res = await search(c.env, q, mode, limit);
+
+  // Remember what assistants looked for, to show what the wiki couldn't answer.
+  if (isInternal(c.env) && q.trim())
+    c.executionCtx.waitUntil(
+      c.env.DB.batch([
+        c.env.DB.prepare(
+          'INSERT INTO search_log (query, actor, hits, created_at) VALUES (?, ?, ?, ?)',
+        ).bind(q.trim().slice(0, 300), encodeActor(actorOf(c.env)), res.hits.length, nowIso()),
+        c.env.DB.prepare(
+          'DELETE FROM search_log WHERE id NOT IN (SELECT id FROM search_log ORDER BY id DESC LIMIT 2000)',
+        ),
+      ]),
+    );
+  return c.json(res);
 });
 
 admin.get('/search/status', async (c) => c.json(await searchStatus(c.env)));
 
 admin.get('/backup', async (c) => {
-  const pages = await all<Page>(
+  const pages = await all(
     c.env.DB,
-    'SELECT id, parent_id, position, title, icon, body, version, created_at, updated_at FROM pages ORDER BY created_at',
-  );
+    'SELECT id, parent_id, position, title, icon, body, version, created_at, updated_at, created_by, updated_by, pinned_at, tags, words FROM pages ORDER BY created_at',
+  ).then((rows) => rows.map((r) => hydrate(r as never)));
   const files = await all<Backup['files'][number]>(
     c.env.DB,
     'SELECT key, page_id, name, content_type, size FROM files',
@@ -76,6 +156,7 @@ admin.post('/restore', async (c) => {
   await resetIndex(db);
   await db.batch([
     db.prepare('DELETE FROM links'),
+    db.prepare('DELETE FROM page_tags'),
     db.prepare('DELETE FROM page_revisions'),
     db.prepare('UPDATE files SET page_id = NULL'),
     // Children first for the self-referencing foreign key.
@@ -87,13 +168,38 @@ admin.post('/restore', async (c) => {
       part.map((p) =>
         db
           .prepare(
-            `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+            `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at,
+               created_by, updated_by, viewed_at, pinned_at, tags, words)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .bind(p.id, p.parent_id, p.position, p.title, p.icon, p.body, p.created_at, p.updated_at),
+          .bind(
+            p.id,
+            p.parent_id,
+            p.position,
+            p.title,
+            p.icon,
+            p.body,
+            p.created_at,
+            p.updated_at,
+            p.created_by ?? null,
+            p.updated_by ?? null,
+            p.updated_at,
+            p.pinned_at ?? null,
+            JSON.stringify(p.tags ?? []),
+            wordCount(p.body),
+          ),
       ),
     );
   }
+  const tagRows = ordered.flatMap((p) =>
+    [...new Set([...(p.tags ?? []), ...extractTags(p.body)])].map((t) => [p.id, t] as const),
+  );
+  for (const part of chunks(tagRows, 80))
+    await db.batch(
+      part.map(([id, t]) =>
+        db.prepare('INSERT OR IGNORE INTO page_tags (page_id, tag) VALUES (?, ?)').bind(id, t),
+      ),
+    );
 
   // Links, resolved in memory against the restored titles.
   const byTitle = new Map<string, string>();

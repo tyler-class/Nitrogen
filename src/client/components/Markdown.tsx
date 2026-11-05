@@ -10,7 +10,7 @@ import { gfm } from 'micromark-extension-gfm';
 import { defaultSchema, sanitize, type Schema } from 'hast-util-sanitize';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit, SKIP } from 'unist-util-visit';
-import { pageHref, slugify, WIKILINK_RE } from '@shared/markdown';
+import { pageHref, slugify, splitTags, WIKILINK_RE } from '@shared/markdown';
 
 const CALLOUTS = ['note', 'tip', 'important', 'warning', 'caution', 'info', 'question'];
 
@@ -30,8 +30,9 @@ function transform(tree: Root, titles: TitleIndex) {
   visit(tree, 'text', (node: Text, index, parent) => {
     if (!parent || index === undefined || parent.type === 'link') return;
     const value = node.value;
-    WIKILINK_RE.lastIndex = 0;
-    if (!WIKILINK_RE.test(value)) return;
+    // Not WIKILINK_RE.test(): it moves the global regex's lastIndex, and matchAll below would
+    // then start after the first link and find nothing.
+    if (!value.includes('[[')) return;
     const parts: PhrasingContent[] = [];
     let last = 0;
     for (const m of value.matchAll(WIKILINK_RE)) {
@@ -51,6 +52,26 @@ function transform(tree: Root, titles: TitleIndex) {
       last = m.index + m[0].length;
     }
     if (last < value.length) parts.push({ type: 'text', value: value.slice(last) });
+    parent.children.splice(index, 1, ...(parts as never[]));
+    return [SKIP, index + parts.length];
+  });
+
+  // #tags become links to the tag's page.
+  visit(tree, 'text', (node: Text, index, parent) => {
+    if (!parent || index === undefined || parent.type === 'link') return;
+    if (!node.value.includes('#')) return;
+    const split = splitTags(node.value);
+    if (split.length === 1 && 'text' in split[0]!) return;
+    const parts: PhrasingContent[] = split.map((p) =>
+      'text' in p
+        ? { type: 'text', value: p.text }
+        : {
+            type: 'link',
+            url: `/tags/${encodeURIComponent(p.tag)}`,
+            children: [{ type: 'text', value: p.raw }],
+            data: { hProperties: { className: ['tag'] } },
+          },
+    );
     parent.children.splice(index, 1, ...(parts as never[]));
     return [SKIP, index + parts.length];
   });
@@ -102,7 +123,13 @@ const schema: Schema = {
   tagNames: [...(defaultSchema.tagNames ?? []), 'aside'],
   attributes: {
     ...defaultSchema.attributes,
-    a: [...(defaultSchema.attributes?.a ?? []), ['className', 'wikilink', 'missing']],
+    // The default allows only one class on links; the first className rule wins, so replace it.
+    a: [
+      ...(defaultSchema.attributes?.a ?? []).filter(
+        (x) => !(Array.isArray(x) && x[0] === 'className'),
+      ),
+      ['className', 'wikilink', 'missing', 'tag', 'data-footnote-backref'],
+    ],
     aside: [['className', 'callout', ...CALLOUTS.map((c) => `callout-${c}`)]],
     p: [['className', 'callout-title']],
     code: [['className', /^language-./]],

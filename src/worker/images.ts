@@ -1,5 +1,6 @@
 // Putting images into pages: placing stored images at a spot in a body, and one-time upload links
 // (/u/<token>) that let a person hand an image to an assistant from any device.
+import { YOU, type Actor } from '@shared/actor';
 import { applyEdits, EditError } from '@shared/edit';
 import { pageHref } from '@shared/markdown';
 import { describePlacement, placementOp, type Placement } from '@shared/placement';
@@ -25,6 +26,7 @@ export async function placeImage(
   pageId: string,
   markdown: string,
   placement: Placement | undefined,
+  actor: Actor,
 ): Promise<Placed> {
   for (let attempt = 0; ; attempt++) {
     const cur = await requirePage(db, pageId);
@@ -42,7 +44,7 @@ export async function placeImage(
         db,
         pageId,
         { body: body.replace(/\n{3,}/g, '\n\n'), base_version: cur.version },
-        { snapshot: true },
+        { snapshot: true, actor },
       );
       return { page, fallback };
     } catch (e) {
@@ -285,7 +287,8 @@ export async function handleUploadLink(
     const file = await storeImage(env, bytes, row.alt || name, row.page_id);
     const markdown = withAlt(file.markdown, file.url, row.alt);
     const placement = JSON.parse(row.placement) as Placement;
-    const placed = await placeImage(env.DB, row.page_id, markdown, placement);
+    // The person dropped the image in, though an assistant asked for it.
+    const placed = await placeImage(env.DB, row.page_id, markdown, placement, YOU);
     const note = placed.fallback
       ? `Couldn’t find the requested spot (${placed.fallback}); added at the end of the page instead.`
       : null;

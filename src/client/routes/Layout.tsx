@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useMatch } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
+import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { useTree } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
@@ -11,6 +12,7 @@ export function Layout() {
   const match = useMatch('/p/:id/*');
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [about, setAbout] = useState(false);
   const location = useLocation();
 
   // Close the mobile menu after navigating.
@@ -44,6 +46,20 @@ export function Layout() {
           <span>Search</span>
           <kbd>⌘K</kbd>
         </button>
+        <nav className="side-nav" aria-label="Wiki">
+          {(
+            [
+              ['/dashboard', 'home', 'Dashboard'],
+              ['/activity', 'activity', 'Activity'],
+              ['/insights', 'insights', 'Insights'],
+              ['/tags', 'tag', 'Tags'],
+            ] as const
+          ).map(([to, icon, label]) => (
+            <NavLink key={to} to={to} end className="foot-link">
+              <Icon name={icon} size={15} /> {label}
+            </NavLink>
+          ))}
+        </nav>
         {tree.data ? (
           <Tree
             pages={tree.data.pages}
@@ -54,9 +70,10 @@ export function Layout() {
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
         )}
         <div className="sidebar-foot">
-          <Link to="/settings" className="foot-link">
+          <NavLink to="/settings" className="foot-link">
             <Icon name="settings" size={15} /> Settings
-          </Link>
+          </NavLink>
+          <AboutButton className="foot-link about-side" onClick={() => setAbout(true)} />
         </div>
       </aside>
       <button
@@ -77,6 +94,7 @@ export function Layout() {
         </header>
         <Outlet />
       </div>
+      {about && <AboutSheet onClose={() => setAbout(false)} />}
       {palette && tree.data && (
         <Palette pages={tree.data.pages} onClose={() => setPalette(false)} />
       )}

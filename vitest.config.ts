@@ -13,7 +13,11 @@ export default defineConfig(async () => {
       projects: [
         {
           resolve: { alias: { '@shared': shared } },
-          test: { name: 'logic', include: ['test/logic/**/*.test.ts'], environment: 'node' },
+          test: {
+            name: 'logic',
+            include: ['test/logic/**/*.test.ts', 'test/client/**/*.test.ts'],
+            environment: 'node',
+          },
         },
         {
           resolve: { alias: { '@shared': shared } },

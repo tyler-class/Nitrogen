@@ -4,12 +4,16 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import { registerSW } from 'virtual:pwa-register';
 import { api, ApiError, onUnauthorized } from './lib/api';
 import { ToastProvider } from './components/Toast';
+import { Activity } from './routes/Activity';
+import { Dashboard } from './routes/Dashboard';
 import { Home } from './routes/Home';
+import { Insights } from './routes/Insights';
 import { Layout } from './routes/Layout';
 import { Login, SetupNeeded } from './routes/Login';
 import { PageView } from './routes/PageView';
 import { SearchPage } from './routes/SearchPage';
 import { Settings } from './routes/Settings';
+import { Tags } from './routes/Tags';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +34,11 @@ const router = createBrowserRouter([
       { path: '/p/:id/*', element: <PageView /> },
       { path: '/search', element: <SearchPage /> },
       { path: '/settings', element: <Settings /> },
+      { path: '/dashboard', element: <Dashboard /> },
+      { path: '/activity', element: <Activity /> },
+      { path: '/insights', element: <Insights /> },
+      { path: '/tags', element: <Tags /> },
+      { path: '/tags/:tag', element: <Tags /> },
       { path: '*', element: <Home /> },
     ],
   },

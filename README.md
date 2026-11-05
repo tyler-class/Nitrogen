@@ -11,9 +11,17 @@ straight into the page, search understands meaning, and Claude can read and writ
 - **Images where you put them.** Paste, drop or pick an image in the editor; it uploads to R2 and its
   markdown lands at the cursor.
 - **Semantic search.** Find pages by meaning and by keywords (Cloudflare AI Search + D1 full-text).
-- **History.** Every page keeps earlier versions; restore any of them.
+- **History.** Every page keeps earlier versions, each marked with who wrote it; restore any of them.
 - **Claude and other assistants.** A built-in MCP server lets assistants search, read, create, edit
-  and reorganize pages. Every assistant edit is saved in the history.
+  and reorganize pages. Every edit is labelled with the assistant that made it, and you can undo
+  a whole assistant session from the Activity page.
+- **A dashboard.** An inbox of what assistants changed since you last looked, pinned pages, recent
+  activity and a few numbers. Turn sections on and off, or pick a page as home instead.
+- **Tags and connections.** Tag pages (or write `#tag` in the text), see pages that mention this
+  one without linking it and link them in one click, related pages found by meaning, and a local
+  graph of everything within two links.
+- **Insights.** A year of edits by you and by assistants, who writes the wiki, what's busiest, what
+  needs attention, and what assistants searched for and couldn't find.
 - **Yours.** It runs on your Cloudflare account; the free plan is enough for a personal wiki.
 
 ## Deploy
@@ -53,13 +61,19 @@ In Nitrogen, open **Settings → Connect an AI assistant** and copy your MCP URL
 
 Tools: `get_tree`, `read_page`, `search`, `create_page`, `create_pages` (a whole subtree at once),
 `edit_page` (find/replace, section edits, append), `update_page`, `move_page`, `delete_page`
-(confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, and for images:
+(confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, `list_tags`,
+`tag_page`, `log_session` (files a dated note under “Sessions” listing every page the assistant
+touched), the `review_page` prompt (checks a page against newer pages for stale claims), and for
+images:
 
 - `add_image`: from a public URL or base64 bytes.
 - `request_image_upload`: for an image you have, such as one attached in chat (chat attachments
   can't be passed to tools). Claude gives you a one-time link; open it on any device and drop the
   image. Valid for an hour.
 - `image_upload_status`: checks whether an upload link has been used yet.
+
+Set a **conventions page** in Settings (or create the starter one) and every assistant reads it when
+it connects, so it files things the way you like.
 
 Images go exactly where the assistant asks: under a heading, at the end of a section, before or
 after some text, in place of a placeholder like `[photo]`, or at the top or bottom of the page.

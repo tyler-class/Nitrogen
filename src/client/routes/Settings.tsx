@@ -1,13 +1,16 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Backup, SearchStatus } from '@shared/types';
+import { pageHref } from '@shared/markdown';
+import type { Backup, DashboardSection, Page, SearchStatus } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { keys, useTree } from '../lib/queries';
-import { VERSION } from '@shared/version';
+import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { Icon } from '../components/Icon';
 import { PagePicker } from '../components/PagePicker';
 import { useToast } from '../components/Toast';
 import { useTheme, type Theme } from '../lib/theme';
+import { SECTION_LABELS } from './Dashboard';
+import { Link } from 'react-router';
 
 export function Settings() {
   const qc = useQueryClient();
@@ -15,7 +18,12 @@ export function Settings() {
   const tree = useTree();
   const settings = useQuery({
     queryKey: keys.settings,
-    queryFn: () => api.get<{ home_id: string | null }>('/settings'),
+    queryFn: () =>
+      api.get<{
+        home_id: string | null;
+        guide_id: string | null;
+        dashboard: DashboardSection[];
+      }>('/settings'),
   });
   const search = useQuery({
     queryKey: ['search-status'],
@@ -82,10 +90,49 @@ export function Settings() {
     }
   }
 
+  const [about, setAbout] = useState(false);
+  // /settings#dashboard (from the dashboard's Customize link) scrolls to that section.
+  useEffect(() => {
+    if (location.hash && settings.data)
+      document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, [settings.data]);
+
+  const sections = settings.data?.dashboard ?? [];
+  function saveSections(next: DashboardSection[]) {
+    qc.setQueryData(keys.settings, { ...settings.data!, dashboard: next });
+    void patch({ dashboard: next }, 'Dashboard updated.');
+  }
+  function moveSection(i: number, by: -1 | 1) {
+    const next = [...sections];
+    const [s] = next.splice(i, 1);
+    next.splice(i + by, 0, s!);
+    saveSections(next);
+  }
+
+  async function createGuide() {
+    try {
+      const p = await api.post<Page>('/pages', {
+        title: 'How to use this wiki',
+        parent_id: null,
+        icon: '🧭',
+        body: GUIDE_TEMPLATE,
+      });
+      await patch({ guide_id: p.id }, 'Created. Assistants will read it first.');
+      void qc.invalidateQueries({ queryKey: keys.tree });
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
+
   const pages = tree.data?.pages ?? [];
+  const guide = pages.find((p) => p.id === settings.data?.guide_id);
   return (
     <div className="page settings">
-      <h1 className="page-title">Settings</h1>
+      <div className="settings-top">
+        <h1 className="page-title">Settings</h1>
+        <AboutButton className="btn small about-mobile" onClick={() => setAbout(true)} />
+      </div>
+      {about && <AboutSheet onClose={() => setAbout(false)} />}
 
       <section>
         <h2>Appearance</h2>
@@ -117,10 +164,48 @@ export function Settings() {
             aria-label="Home page"
             pages={pages}
             value={settings.data?.home_id ?? null}
-            noneLabel="The first page in the tree"
+            noneLabel="Dashboard"
             onChange={(id) => void patch({ home_id: id }, 'Home page updated.')}
           />
         </div>
+      </section>
+
+      <section id="dashboard">
+        <h2>Dashboard</h2>
+        <ul className="section-list">
+          {sections.map((sec, i) => (
+            <li key={sec.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={sec.on}
+                  onChange={(e) =>
+                    saveSections(
+                      sections.map((x) => (x.id === sec.id ? { ...x, on: e.target.checked } : x)),
+                    )
+                  }
+                />
+                {SECTION_LABELS[sec.id]}
+              </label>
+              <button
+                className="btn small icon-only"
+                aria-label={`Move ${SECTION_LABELS[sec.id]} up`}
+                disabled={i === 0}
+                onClick={() => moveSection(i, -1)}
+              >
+                <Icon name="chevron" size={13} />
+              </button>
+              <button
+                className="btn small icon-only down"
+                aria-label={`Move ${SECTION_LABELS[sec.id]} down`}
+                disabled={i === sections.length - 1}
+                onClick={() => moveSection(i, 1)}
+              >
+                <Icon name="chevron" size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section>
@@ -148,6 +233,31 @@ export function Settings() {
             <code>claude mcp add --transport http nitrogen {mcpUrl}</code>
           </li>
         </ul>
+        <div className="field">
+          <span>Conventions page</span>
+          <PagePicker
+            aria-label="Conventions page"
+            pages={pages}
+            value={settings.data?.guide_id ?? null}
+            noneLabel="None"
+            onChange={(id) => void patch({ guide_id: id }, 'Saved.')}
+          />
+        </div>
+        <p className="muted">
+          {guide ? (
+            <>
+              Assistants read <Link to={pageHref(guide.id, guide.title)}>{guide.title}</Link> before
+              anything else.
+            </>
+          ) : (
+            <>
+              Tell assistants how you like the wiki organized.{' '}
+              <button className="link" onClick={() => void createGuide()}>
+                Create a starter page
+              </button>
+            </>
+          )}
+        </p>
         {connections.data && (
           <>
             <p className="muted">
@@ -242,37 +352,26 @@ export function Settings() {
         >
           Sign out
         </button>
-        <p className="muted">
-          To change the password, set a new APP_PASSWORD secret in Cloudflare. Everyone is signed
-          out.
-        </p>
-      </section>
-
-      <section className="about">
-        <h2>About</h2>
-        <p>
-          Nitrogen is a free, open-source wiki. It runs on your own Cloudflare account, so your
-          pages stay yours.
-        </p>
-        <p>
-          Built by{' '}
-          <a href="https://tylerclass.net" target="_blank" rel="noreferrer">
-            Tyler Class
-          </a>
-          .
-        </p>
-        <a className="kofi" href="https://ko-fi.com/tylerclass" target="_blank" rel="noreferrer">
-          <Icon name="coffee" size={18} />
-          <span>If you want to say thank you, coffee is my love language</span>
-          <Icon name="chevron" size={14} />
-        </a>
-        <p className="about-meta">
-          <span>Nitrogen {VERSION}</span>
-          <a href="https://github.com/tyler-class/nitrogen" target="_blank" rel="noreferrer">
-            Nitrogen on GitHub
-          </a>
-        </p>
       </section>
     </div>
   );
 }
+
+const GUIDE_TEMPLATE = `Assistants read this page before working in the wiki. Edit it to match how you work.
+
+## Where things go
+- One top-level page per area of life or work; projects live under their area.
+- Meeting notes go under the project, titled "YYYY-MM-DD · Topic".
+- Session notes are filed under [[Sessions]] with log_session.
+
+## Before writing
+- Search first and add to an existing page rather than creating a near-duplicate.
+- Link related pages with [[Page title]] the first time they come up.
+
+## Tags
+- Reuse existing tags (list_tags). Common ones: #decision, #open-question, #idea, #reference.
+
+## Style
+- Short sections with "##" headings; lead with the conclusion.
+- Mark anything uncertain with a > [!NOTE] callout.
+`;

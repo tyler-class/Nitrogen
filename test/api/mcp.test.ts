@@ -1,6 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { ORIGIN, PASSWORD } from './helpers';
+import type { Dashboard, Insights, PageDetail, RevertResult, Session } from '@shared/types';
+import { ORIGIN, PASSWORD, session } from './helpers';
 
 const REDIRECT = 'https://client.example/callback';
 const PNG_B64 =
@@ -156,6 +157,9 @@ describe('MCP', () => {
         'edit_page',
         'get_tree',
         'list_revisions',
+        'list_tags',
+        'log_session',
+        'tag_page',
         'move_page',
         'read_page',
         'read_revision',
@@ -316,5 +320,76 @@ describe('MCP', () => {
       confirm_title: 'MCP Garden',
     });
     expect(gone.text).toContain('Deleted 2 page(s)');
+  });
+
+  it('records who changed what, tags, logs sessions and undoes them', async () => {
+    const token = await connect();
+    const api = await session();
+
+    const made = await tool(token, 'create_page', {
+      title: 'Agent Notes',
+      body: 'Started by the assistant. #research',
+      tags: ['Planning'],
+    });
+    expect(made.isError).toBe(false);
+    const id = /id ([a-z0-9]+)/.exec(made.text)![1]!;
+
+    // Attributed to the connected app, shown in the owner's inbox until opened.
+    let dash = (await api.get<Dashboard>('/dashboard')).data;
+    const item = dash.inbox.find((p) => p.id === id)!;
+    expect(item.updated_by).toBe('agent:Test Assistant');
+    expect(item.is_new).toBe(true);
+    const detail = (await api.get<PageDetail>(`/pages/${id}`)).data;
+    expect(detail.page.created_by).toBe('agent:Test Assistant');
+    expect(detail.all_tags).toEqual(['planning', 'research']);
+    dash = (await api.get<Dashboard>('/dashboard')).data;
+    expect(dash.inbox.some((p) => p.id === id)).toBe(false);
+
+    // Tags from tools.
+    const tagged = await tool(token, 'tag_page', { page: id, add: ['ops'], remove: ['planning'] });
+    expect(tagged.text).toContain('#ops');
+    expect((await tool(token, 'list_tags', {})).text).toContain('#research (1)');
+    expect((await tool(token, 'list_tags', { tag: 'ops' })).text).toContain('Agent Notes');
+    expect((await tool(token, 'read_page', { page: id })).text).toContain('by Test Assistant');
+
+    // An edit, then a session log listing what was touched.
+    const edit = await tool(token, 'edit_page', {
+      page: id,
+      edits: [{ type: 'append', text: 'A second paragraph.' }],
+    });
+    expect(edit.isError).toBe(false);
+    const logged = await tool(token, 'log_session', {
+      title: 'Research kickoff',
+      summary: 'Set up [[Agent Notes]].',
+    });
+    expect(logged.isError).toBe(false);
+    const tree = await tool(token, 'get_tree', { under: 'Sessions' });
+    expect(tree.text).toContain('Research kickoff');
+
+    // Searches that find nothing show up in insights.
+    await tool(token, 'search', { query: 'zzqx nothing here', mode: 'keyword' });
+    const insights = (await api.get<Insights>('/insights')).data;
+    expect(insights.misses.some((m) => m.query === 'zzqx nothing here')).toBe(true);
+    expect(insights.authors.some((a) => a.actor === 'agent:Test Assistant')).toBe(true);
+
+    // The owner's edit in the middle is kept; the assistant's session is undone.
+    const { sessions } = (await api.get<{ sessions: Session[] }>('/activity?limit=50')).data;
+    const mine = sessions.find((x) => x.actor === 'agent:Test Assistant')!;
+    expect(mine.events.length).toBeGreaterThan(1);
+    const undo = (
+      await api.post<RevertResult>('/activity/revert', {
+        actor: mine.actor,
+        from: mine.start,
+        to: mine.end,
+      })
+    ).data;
+    expect(undo.deleted).toContain('Agent Notes');
+    expect((await api.get(`/pages/${id}`)).status).toBe(404);
+
+    // The review prompt is offered.
+    const prompts = (await rpc(token, 'prompts/list')).result as unknown as {
+      prompts: { name: string }[];
+    };
+    expect(prompts.prompts.map((p) => p.name)).toContain('review_page');
   });
 });

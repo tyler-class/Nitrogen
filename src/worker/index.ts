@@ -43,6 +43,18 @@ function providerFor(origin: string) {
       requiredScopes: ['wiki'],
       resourceMetadata: { resource: `${origin}/mcp`, authorization_servers: [origin] },
       clientIdMetadataDocumentEnabled: true,
+      // Grants made before v0.5 have no client name in their props; add it on the next refresh.
+      tokenExchangeCallback: async ({ props, clientId, env }) => {
+        const p = (props ?? {}) as { client?: string };
+        if (p.client) return;
+        // The provider stores registered clients in KV as client:<id>.
+        const info = await env.OAUTH_KV.get<{ clientName?: string }>(
+          `client:${clientId}`,
+          'json',
+        ).catch(() => null);
+        const client = info?.clientName?.trim() || 'An assistant';
+        return { accessTokenProps: { ...p, client }, newProps: { ...p, client } };
+      },
     });
     providers.set(origin, p);
   }

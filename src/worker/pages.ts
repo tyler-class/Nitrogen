@@ -1,6 +1,7 @@
 // Page storage: the tree, edits with optimistic concurrency, history, links and deletion.
 import type { z } from 'zod';
-import { extractFileKeys, extractLinks } from '@shared/markdown';
+import { encodeActor, type Actor } from '@shared/actor';
+import { extractFileKeys, extractLinks, extractTags, wordCount } from '@shared/markdown';
 import {
   MAX_BULK_PAGES,
   type createPageInput,
@@ -9,7 +10,14 @@ import {
   type PageTreeInput,
   type updatePageInput,
 } from '@shared/schemas';
-import type { Page, PageDetail, PageSummary, Revision, RevisionDetail } from '@shared/types';
+import type {
+  EventAction,
+  Page,
+  PageDetail,
+  PageSummary,
+  Revision,
+  RevisionDetail,
+} from '@shared/types';
 import { all, chunks, first, marks, newId, nowIso } from './db';
 import { ApiError, notFound } from './routes/util';
 
@@ -17,8 +25,29 @@ import { ApiError, notFound } from './routes/util';
 export const REVISION_WINDOW_MS = 10 * 60_000;
 export const MAX_REVISIONS = 100;
 
-const SUMMARY_COLS = 'id, parent_id, position, title, icon, updated_at';
-const PAGE_COLS = `${SUMMARY_COLS}, body, version, created_at`;
+export const SUMMARY_COLS =
+  'id, parent_id, position, title, icon, updated_at, updated_by, pinned_at';
+const PAGE_COLS = `${SUMMARY_COLS}, body, version, created_at, created_by, tags, words`;
+/** SUMMARY_COLS prefixed with a table alias. */
+export const summaryCols = (alias: string) =>
+  SUMMARY_COLS.split(', ')
+    .map((c) => `${alias}.${c}`)
+    .join(', ');
+
+type PageRow = Omit<Page, 'tags'> & { tags: string | string[] };
+
+/** Rows store tags as JSON text. */
+export function hydrate(row: PageRow): Page {
+  if (Array.isArray(row.tags)) return row as Page;
+  let tags: string[] = [];
+  try {
+    const v: unknown = JSON.parse(row.tags || '[]');
+    if (Array.isArray(v)) tags = v.filter((t): t is string => typeof t === 'string');
+  } catch {
+    /* malformed: no tags */
+  }
+  return { ...row, tags };
+}
 
 export function listSummaries(db: D1Database): Promise<PageSummary[]> {
   return all<PageSummary>(
@@ -27,8 +56,9 @@ export function listSummaries(db: D1Database): Promise<PageSummary[]> {
   );
 }
 
-export function getPage(db: D1Database, id: string): Promise<Page | null> {
-  return first<Page>(db, `SELECT ${PAGE_COLS} FROM pages WHERE id = ?`, id);
+export async function getPage(db: D1Database, id: string): Promise<Page | null> {
+  const row = await first<PageRow>(db, `SELECT ${PAGE_COLS} FROM pages WHERE id = ?`, id);
+  return row ? hydrate(row) : null;
 }
 
 export async function requirePage(db: D1Database, id: string): Promise<Page> {
@@ -39,7 +69,7 @@ export async function requirePage(db: D1Database, id: string): Promise<Page> {
 
 /** The page plus everything a page view needs, in one round trip. */
 export async function getDetail(db: D1Database, id: string): Promise<PageDetail> {
-  const [pageRes, ancRes, childRes, backRes] = await db.batch([
+  const [pageRes, ancRes, childRes, backRes, tagRes] = await db.batch([
     db.prepare(`SELECT ${PAGE_COLS} FROM pages WHERE id = ?`).bind(id),
     db
       .prepare(
@@ -48,9 +78,7 @@ export async function getDetail(db: D1Database, id: string): Promise<PageDetail>
            UNION ALL SELECT p.parent_id, up.depth + 1 FROM pages p JOIN up ON p.id = up.id
            WHERE up.depth < 64
          )
-         SELECT ${SUMMARY_COLS.split(', ')
-           .map((c) => `p.${c}`)
-           .join(', ')} FROM up JOIN pages p ON p.id = up.id ORDER BY up.depth DESC`,
+         SELECT ${summaryCols('p')} FROM up JOIN pages p ON p.id = up.id ORDER BY up.depth DESC`,
       )
       .bind(id),
     db
@@ -58,17 +86,17 @@ export async function getDetail(db: D1Database, id: string): Promise<PageDetail>
       .bind(id),
     db
       .prepare(
-        `SELECT ${SUMMARY_COLS.split(', ')
-          .map((c) => `p.${c}`)
-          .join(', ')} FROM links l JOIN pages p ON p.id = l.src
+        `SELECT ${summaryCols('p')} FROM links l JOIN pages p ON p.id = l.src
          WHERE l.dst = ? AND l.src != l.dst ORDER BY p.title`,
       )
       .bind(id),
+    db.prepare('SELECT tag FROM page_tags WHERE page_id = ? ORDER BY tag').bind(id),
   ]);
-  const page = pageRes!.results[0] as Page | undefined;
-  if (!page) throw notFound('Page');
+  const row = pageRes!.results[0] as PageRow | undefined;
+  if (!row) throw notFound('Page');
   return {
-    page,
+    page: hydrate(row),
+    all_tags: (tagRes!.results as { tag: string }[]).map((t) => t.tag),
     ancestors: ancRes!.results as unknown as PageSummary[],
     children: childRes!.results as unknown as PageSummary[],
     backlinks: backRes!.results as unknown as PageSummary[],
@@ -148,9 +176,66 @@ function claimFiles(db: D1Database, id: string, body: string): D1PreparedStateme
   );
 }
 
+/** Replace a page's tag index with its own tags plus #tags in the body. */
+function tagStatements(db: D1Database, id: string, own: string[], body: string) {
+  const all = [...new Set([...own, ...extractTags(body)])];
+  return [
+    db.prepare('DELETE FROM page_tags WHERE page_id = ?').bind(id),
+    ...all.map((t) =>
+      db.prepare('INSERT OR IGNORE INTO page_tags (page_id, tag) VALUES (?, ?)').bind(id, t),
+    ),
+  ];
+}
+
+/** Edits by the same actor closer together than this are one event in the activity log. */
+export const EVENT_MERGE_MS = REVISION_WINDOW_MS;
+
+/** Log an event, merging it into the page's last one when it continues the same burst. */
+async function eventStatements(
+  db: D1Database,
+  e: { page_id: string; title: string; action: EventAction; actor: Actor; words: number | null },
+): Promise<D1PreparedStatement[]> {
+  const actor = encodeActor(e.actor);
+  const now = nowIso();
+  if (e.action === 'edit') {
+    const last = await first<{
+      id: number;
+      action: string;
+      actor: string | null;
+      created_at: string;
+    }>(
+      db,
+      'SELECT id, action, actor, created_at FROM page_events WHERE page_id = ? ORDER BY id DESC LIMIT 1',
+      e.page_id,
+    );
+    if (
+      last &&
+      last.actor === actor &&
+      (last.action === 'edit' || last.action === 'create') &&
+      Date.now() - Date.parse(last.created_at) < EVENT_MERGE_MS
+    )
+      return [
+        db
+          .prepare(
+            `UPDATE page_events SET title = ?, words = ?,
+               created_at = CASE WHEN action = 'create' THEN created_at ELSE ? END WHERE id = ?`,
+          )
+          .bind(e.title, e.words, now, last.id),
+      ];
+  }
+  return [
+    db
+      .prepare(
+        'INSERT INTO page_events (page_id, title, action, actor, words, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(e.page_id, e.title, e.action, actor, e.words, now, now),
+  ];
+}
+
 export async function createPage(
   db: D1Database,
   input: z.output<typeof createPageInput>,
+  actor: Actor,
 ): Promise<Page> {
   await requireParent(db, input.parent_id);
   const id = newId();
@@ -158,16 +243,42 @@ export async function createPage(
   const siblings = await siblingIds(db, input.parent_id);
   const at = Math.min(input.position ?? siblings.length, siblings.length);
   siblings.splice(at, 0, id);
+  const by = encodeActor(actor);
+  const tags = input.tags ?? [];
+  const words = wordCount(input.body);
   await db.batch([
     db
       .prepare(
-        `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at,
+           created_by, updated_by, viewed_at, tags, words)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, input.parent_id, at, input.title, input.icon ?? null, input.body, now, now),
+      .bind(
+        id,
+        input.parent_id,
+        at,
+        input.title,
+        input.icon ?? null,
+        input.body,
+        now,
+        now,
+        by,
+        by,
+        actor.kind === 'you' ? now : null,
+        JSON.stringify(tags),
+        words,
+      ),
     ...renumber(db, siblings),
     ...(await linkStatements(db, id, input.body)),
     ...claimFiles(db, id, input.body),
+    ...tagStatements(db, id, tags, input.body),
+    ...(await eventStatements(db, {
+      page_id: id,
+      title: input.title,
+      action: 'create',
+      actor,
+      words,
+    })),
   ]);
   return (await getPage(db, id))!;
 }
@@ -187,7 +298,7 @@ export async function updatePage(
   db: D1Database,
   id: string,
   input: z.output<typeof updatePageInput>,
-  opts: { snapshot?: boolean } = {},
+  opts: { actor: Actor; snapshot?: boolean; action?: 'edit' | 'restore' },
 ): Promise<Page> {
   const cur = await requirePage(db, id);
   if (input.base_version !== undefined && input.base_version !== cur.version)
@@ -196,7 +307,11 @@ export async function updatePage(
   const title = input.title ?? cur.title;
   const body = input.body ?? cur.body;
   const icon = input.icon === undefined ? cur.icon : input.icon;
-  if (title === cur.title && body === cur.body && icon === cur.icon) return cur;
+  const tags = input.tags ?? cur.tags;
+  const tagsChanged = JSON.stringify(tags) !== JSON.stringify(cur.tags);
+  if (title === cur.title && body === cur.body && icon === cur.icon && !tagsChanged) return cur;
+  const by = encodeActor(opts.actor);
+  const words = body === cur.body ? cur.words : wordCount(body);
 
   const stmts: D1PreparedStatement[] = [];
   const contentChanged = title !== cur.title || body !== cur.body;
@@ -208,9 +323,9 @@ export async function updatePage(
       stmts.push(
         db
           .prepare(
-            'INSERT INTO page_revisions (page_id, version, title, body, created_at) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO page_revisions (page_id, version, title, body, created_at, actor) VALUES (?, ?, ?, ?, ?, ?)',
           )
-          .bind(id, cur.version, cur.title, cur.body, nowIso()),
+          .bind(id, cur.version, cur.title, cur.body, nowIso(), cur.updated_by),
         db
           .prepare(
             `DELETE FROM page_revisions WHERE page_id = ?1 AND id NOT IN
@@ -223,12 +338,34 @@ export async function updatePage(
   // The WHERE on version makes the write a compare-and-swap with concurrent editors.
   const update = db
     .prepare(
-      `UPDATE pages SET title = ?, icon = ?, body = ?, version = version + 1, updated_at = ?
-       WHERE id = ? AND version = ?`,
+      `UPDATE pages SET title = ?1, icon = ?2, body = ?3, tags = ?4, words = ?5, version = version + 1,
+         updated_at = ?6, updated_by = ?7, viewed_at = CASE WHEN ?8 THEN ?6 ELSE viewed_at END
+       WHERE id = ?9 AND version = ?10`,
     )
-    .bind(title, icon, body, nowIso(), id, cur.version);
+    .bind(
+      title,
+      icon,
+      body,
+      JSON.stringify(tags),
+      words,
+      nowIso(),
+      by,
+      opts.actor.kind === 'you' ? 1 : 0,
+      id,
+      cur.version,
+    );
   if (body !== cur.body)
     stmts.push(...(await linkStatements(db, id, body)), ...claimFiles(db, id, body));
+  if (body !== cur.body || tagsChanged) stmts.push(...tagStatements(db, id, tags, body));
+  stmts.push(
+    ...(await eventStatements(db, {
+      page_id: id,
+      title,
+      action: opts.action ?? 'edit',
+      actor: opts.actor,
+      words,
+    })),
+  );
 
   const results = await db.batch([update, ...stmts]);
   if (!results[0]!.meta.changes) throw new ConflictError((await getPage(db, id)) ?? cur);
@@ -239,6 +376,7 @@ export async function movePage(
   db: D1Database,
   id: string,
   input: z.output<typeof movePageInput>,
+  actor: Actor,
 ): Promise<Page> {
   const cur = await requirePage(db, id);
   await requireParent(db, input.parent_id);
@@ -254,6 +392,15 @@ export async function movePage(
       .prepare('UPDATE pages SET parent_id = ?, indexed_version = 0 WHERE id = ?')
       .bind(input.parent_id, id),
     ...renumber(db, siblings),
+    ...(cur.parent_id !== input.parent_id
+      ? await eventStatements(db, {
+          page_id: id,
+          title: cur.title,
+          action: 'move',
+          actor,
+          words: null,
+        })
+      : []),
   ]);
   return { ...cur, parent_id: input.parent_id, position: at };
 }
@@ -266,7 +413,7 @@ export interface DeleteResult {
   orphanFiles: string[];
 }
 
-export async function deletePage(db: D1Database, id: string): Promise<DeleteResult> {
+export async function deletePage(db: D1Database, id: string, actor: Actor): Promise<DeleteResult> {
   await requirePage(db, id);
   const ids = await subtreeIds(db, id);
   const searchItems: string[] = [];
@@ -286,11 +433,22 @@ export async function deletePage(db: D1Database, id: string): Promise<DeleteResu
     files.forEach((f) => fileKeys.push(f.key));
   }
 
-  // Children first, so the self-referencing foreign key never sees a dangling parent.
-  const stmts = chunks([...ids].reverse()).map((part) =>
-    db.prepare(`DELETE FROM pages WHERE id IN (${marks(part.length)})`).bind(...part),
-  );
   const now = nowIso();
+  // Log first, while the titles still exist.
+  const stmts = chunks(ids).map((part) =>
+    db
+      .prepare(
+        `INSERT INTO page_events (page_id, title, action, actor, words, started_at, created_at)
+         SELECT id, title, 'delete', ?, words, ?, ? FROM pages WHERE id IN (${marks(part.length)})`,
+      )
+      .bind(encodeActor(actor), now, now, ...part),
+  );
+  // Children first, so the self-referencing foreign key never sees a dangling parent.
+  stmts.push(
+    ...chunks([...ids].reverse()).map((part) =>
+      db.prepare(`DELETE FROM pages WHERE id IN (${marks(part.length)})`).bind(...part),
+    ),
+  );
   stmts.push(
     ...searchItems.map((item) =>
       db
@@ -321,7 +479,7 @@ export async function deletePage(db: D1Database, id: string): Promise<DeleteResu
 export function listRevisions(db: D1Database, id: string): Promise<Revision[]> {
   return all<Revision>(
     db,
-    'SELECT id, version, title, created_at FROM page_revisions WHERE page_id = ? ORDER BY id DESC',
+    'SELECT id, version, title, created_at, actor FROM page_revisions WHERE page_id = ? ORDER BY id DESC',
     id,
   );
 }
@@ -333,7 +491,7 @@ export async function getRevision(
 ): Promise<RevisionDetail> {
   const row = await first<RevisionDetail>(
     db,
-    'SELECT id, version, title, body, created_at FROM page_revisions WHERE page_id = ? AND id = ?',
+    'SELECT id, version, title, body, created_at, actor FROM page_revisions WHERE page_id = ? AND id = ?',
     id,
     rev,
   );
@@ -342,14 +500,19 @@ export async function getRevision(
 }
 
 /** Restores an old version as a new edit, so the current text stays in history. */
-export async function restoreRevision(db: D1Database, id: string, rev: number): Promise<Page> {
+export async function restoreRevision(
+  db: D1Database,
+  id: string,
+  rev: number,
+  actor: Actor,
+): Promise<Page> {
   const old = await getRevision(db, id, rev);
   const cur = await requirePage(db, id);
   return updatePage(
     db,
     id,
     { title: old.title, body: old.body, base_version: cur.version },
-    { snapshot: true },
+    { snapshot: true, actor, action: 'restore' },
   );
 }
 
@@ -358,12 +521,12 @@ export async function findPage(db: D1Database, key: string): Promise<Page> {
   const k = key.trim();
   const byId = await getPage(db, k);
   if (byId) return byId;
-  const byTitle = await all<Page>(
+  const byTitle = await all<PageRow>(
     db,
     `SELECT ${PAGE_COLS} FROM pages WHERE lower(title) = lower(?) ORDER BY created_at LIMIT 5`,
     k,
   );
-  if (byTitle.length === 1) return byTitle[0]!;
+  if (byTitle.length === 1) return hydrate(byTitle[0]!);
   if (byTitle.length > 1)
     throw new ApiError(
       409,
@@ -377,6 +540,7 @@ export async function findPage(db: D1Database, key: string): Promise<Page> {
 export async function createTree(
   db: D1Database,
   input: z.output<typeof createTreeInput>,
+  actor: Actor,
 ): Promise<{ id: string; title: string; parent_id: string | null }[]> {
   await requireParent(db, input.parent_id);
   type Flat = { id: string; parent_id: string | null; position: number; node: PageTreeInput };
@@ -415,11 +579,13 @@ export async function createTree(
   const newIds = new Set(flat.map((f) => f.id));
 
   const now = nowIso();
+  const by = encodeActor(actor);
   const stmts: D1PreparedStatement[] = flat.map((f) =>
     db
       .prepare(
-        `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at,
+           created_by, updated_by, viewed_at, tags, words)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         f.id,
@@ -430,6 +596,11 @@ export async function createTree(
         f.node.body ?? '',
         now,
         now,
+        by,
+        by,
+        actor.kind === 'you' ? now : null,
+        JSON.stringify(f.node.tags ?? []),
+        wordCount(f.node.body ?? ''),
       ),
   );
   stmts.push(...renumber(db, siblings));
@@ -443,7 +614,20 @@ export async function createTree(
     for (const d of dsts)
       stmts.push(db.prepare('INSERT OR IGNORE INTO links (src, dst) VALUES (?, ?)').bind(f.id, d));
     stmts.push(...claimFiles(db, f.id, f.node.body ?? ''));
+    for (const t of new Set([...(f.node.tags ?? []), ...extractTags(f.node.body ?? '')]))
+      stmts.push(
+        db.prepare('INSERT OR IGNORE INTO page_tags (page_id, tag) VALUES (?, ?)').bind(f.id, t),
+      );
   }
+  for (const part of chunks(flat.map((f) => f.id)))
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO page_events (page_id, title, action, actor, words, started_at, created_at)
+           SELECT id, title, 'create', ?, words, created_at, created_at FROM pages WHERE id IN (${marks(part.length)})`,
+        )
+        .bind(by, ...part),
+    );
   await db.batch(stmts);
   return flat.map((f) => ({ id: f.id, title: f.node.title, parent_id: f.parent_id }));
 }

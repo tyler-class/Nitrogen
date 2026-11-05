@@ -1,11 +1,11 @@
 import { Navigate, useNavigate } from 'react-router';
 import { pageHref } from '@shared/markdown';
-import { buildTree } from '@shared/tree';
 import { errorMessage } from '../lib/api';
 import { useCreatePage, useTree } from '../lib/queries';
 import { useToast } from '../components/Toast';
+import { Dashboard } from './Dashboard';
 
-/** "/" opens the home page (Settings), else the first page, else a welcome. */
+/** "/" opens the chosen home page (Settings), else the dashboard, else a welcome. */
 export function Home() {
   const tree = useTree();
   const create = useCreatePage();
@@ -13,9 +13,9 @@ export function Home() {
   const toast = useToast();
   if (!tree.data) return <div className="page-loading" aria-busy="true" />;
   const { pages, home_id } = tree.data;
-  const first = buildTree(pages)[0]?.page;
-  const target = home_id ? pages.find((p) => p.id === home_id) : first;
+  const target = home_id ? pages.find((p) => p.id === home_id) : undefined;
   if (target) return <Navigate to={pageHref(target.id, target.title)} replace />;
+  if (pages.length) return <Dashboard />;
 
   async function start() {
     try {

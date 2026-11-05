@@ -140,7 +140,13 @@ export async function handleAuthorize(request: Request, env: Cloudflare.Env): Pr
       userId: MCP_USER,
       metadata: {},
       scope: approved.request.scope,
-      props: { owner: true },
+      // The client's registered name, so edits it makes are labelled with it.
+      props: {
+        owner: true,
+        client: approved.request.clientId
+          ? await clientName(env, approved.request.clientId, info.clientName)
+          : info.clientName,
+      },
     });
     approved.headers.set('Location', redirectTo);
     return new Response(null, { status: 302, headers: approved.headers });
@@ -152,4 +158,10 @@ export async function handleAuthorize(request: Request, env: Cloudflare.Env): Pr
     if (error instanceof CimdFetchError) return plainError('This app could not be verified.');
     throw error;
   }
+}
+
+/** The registered client name, falling back to what the consent page showed. */
+async function clientName(env: Cloudflare.Env, clientId: string, shown: string): Promise<string> {
+  const info = await (env.OAUTH_PROVIDER as OAuthHelpers).lookupClient(clientId).catch(() => null);
+  return info?.clientName || shown;
 }

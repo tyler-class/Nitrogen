@@ -108,10 +108,11 @@ describe('markdown helpers', () => {
 });
 
 describe('tree', () => {
+  const base = { updated_at: '', updated_by: null, pinned_at: null };
   const pages = [
-    { id: 'b', parent_id: 'a', position: 1, title: 'B', icon: null, updated_at: '' },
-    { id: 'a', parent_id: null, position: 0, title: 'A', icon: '📘', updated_at: '' },
-    { id: 'c', parent_id: 'a', position: 0, title: 'C', icon: null, updated_at: '' },
+    { ...base, id: 'b', parent_id: 'a', position: 1, title: 'B', icon: null },
+    { ...base, id: 'a', parent_id: null, position: 0, title: 'A', icon: '📘' },
+    { ...base, id: 'c', parent_id: 'a', position: 0, title: 'C', icon: null },
   ];
   it('nests and orders siblings by position', () => {
     const roots = buildTree(pages);

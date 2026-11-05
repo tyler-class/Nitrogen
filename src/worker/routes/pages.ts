@@ -1,7 +1,13 @@
 import { Hono } from 'hono';
-import { createPageInput, createTreeInput, movePageInput, updatePageInput } from '@shared/schemas';
+import {
+  createPageInput,
+  createTreeInput,
+  movePageInput,
+  pinInput,
+  updatePageInput,
+} from '@shared/schemas';
 import type { TreeResponse } from '@shared/types';
-import { getSetting } from '../db';
+import { getSetting, nowIso } from '../db';
 import {
   createPage,
   createTree,
@@ -15,7 +21,7 @@ import {
   updatePage,
 } from '../pages';
 import { indexSoon } from '../search';
-import { isInternal } from '../auth';
+import { actorOf, isInternal } from '../auth';
 import { deleteFiles } from './files';
 import { ApiError, body, type AppEnv } from './util';
 
@@ -30,16 +36,26 @@ pages.get('/tree', async (c) => {
   return c.json<TreeResponse>({ pages: list, home_id: homeId });
 });
 
-pages.get('/pages/:id', async (c) => c.json(await getDetail(c.env.DB, c.req.param('id'))));
+pages.get('/pages/:id', async (c) => {
+  const detail = await getDetail(c.env.DB, c.req.param('id'));
+  // The owner opening a page clears it from the inbox; assistants reading it don't.
+  if (!isInternal(c.env))
+    c.executionCtx.waitUntil(
+      c.env.DB.prepare('UPDATE pages SET viewed_at = ? WHERE id = ?')
+        .bind(nowIso(), detail.page.id)
+        .run(),
+    );
+  return c.json(detail);
+});
 
 pages.post('/pages', async (c) => {
-  const page = await createPage(c.env.DB, await body(c, createPageInput));
+  const page = await createPage(c.env.DB, await body(c, createPageInput), actorOf(c.env));
   indexSoon(c.env, c.executionCtx);
   return c.json(page, 201);
 });
 
 pages.post('/pages/tree', async (c) => {
-  const created = await createTree(c.env.DB, await body(c, createTreeInput));
+  const created = await createTree(c.env.DB, await body(c, createTreeInput), actorOf(c.env));
   indexSoon(c.env, c.executionCtx);
   return c.json({ created }, 201);
 });
@@ -49,19 +65,25 @@ pages.patch('/pages/:id', async (c) => {
   // Assistants always get a history snapshot so each of their edits can be undone.
   const page = await updatePage(c.env.DB, c.req.param('id'), input, {
     snapshot: isInternal(c.env),
+    actor: actorOf(c.env),
   });
   indexSoon(c.env, c.executionCtx);
   return c.json(page);
 });
 
 pages.post('/pages/:id/move', async (c) => {
-  const page = await movePage(c.env.DB, c.req.param('id'), await body(c, movePageInput));
+  const page = await movePage(
+    c.env.DB,
+    c.req.param('id'),
+    await body(c, movePageInput),
+    actorOf(c.env),
+  );
   indexSoon(c.env, c.executionCtx);
   return c.json(page);
 });
 
 pages.delete('/pages/:id', async (c) => {
-  const res = await deletePage(c.env.DB, c.req.param('id'));
+  const res = await deletePage(c.env.DB, c.req.param('id'), actorOf(c.env));
   await deleteFiles(c.env, res.orphanFiles);
   indexSoon(c.env, c.executionCtx);
   return c.json({ ok: true, deleted: res.deleted.length, images_removed: res.orphanFiles.length });
@@ -80,7 +102,17 @@ pages.get('/pages/:id/revisions/:rev', async (c) => {
 pages.post('/pages/:id/revisions/:rev/restore', async (c) => {
   const rev = Number(c.req.param('rev'));
   if (!Number.isInteger(rev)) throw new ApiError(400, 'invalid', 'Bad revision id.');
-  const page = await restoreRevision(c.env.DB, c.req.param('id'), rev);
+  const page = await restoreRevision(c.env.DB, c.req.param('id'), rev, actorOf(c.env));
   indexSoon(c.env, c.executionCtx);
   return c.json(page);
+});
+
+/** Pinned pages show on the dashboard. Not a content change: no history or event. */
+pages.post('/pages/:id/pin', async (c) => {
+  const { pinned } = await body(c, pinInput);
+  const res = await c.env.DB.prepare('UPDATE pages SET pinned_at = ? WHERE id = ?')
+    .bind(pinned ? nowIso() : null, c.req.param('id'))
+    .run();
+  if (!res.meta.changes) throw new ApiError(404, 'not_found', 'Page not found.');
+  return c.json({ ok: true, pinned });
 });
