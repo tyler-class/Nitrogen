@@ -1,6 +1,6 @@
 // The local graph: a page, the pages it links with, and theirs. A small deterministic
 // force layout (no library); the centre stays in the middle.
-import '../styles/insights.css';
+import '../styles/graph.css';
 import { useMemo } from 'react';
 import type { Graph } from '@shared/types';
 

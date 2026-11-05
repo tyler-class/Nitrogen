@@ -15,6 +15,7 @@ import type {
   Insights,
   Mention,
   PageEvent,
+  PageStat,
   PageSummary,
   RelatedPage,
   RevertResult,
@@ -427,97 +428,64 @@ explore.get('/pages/:id/graph', async (c) => {
 
 explore.get('/insights', async (c) => {
   const db = c.env.DB;
-  const year = daysAgo(365);
-  const month = daysAgo(30);
-  const [
-    days,
-    authors,
-    created,
-    mostEdited,
-    mostLinked,
-    neglected,
-    orphanRows,
-    growth,
-    totals,
-    biggest,
-    misses,
-  ] = await Promise.all([
+  const [days, authors, created, pages, tags, misses, home, links] = await Promise.all([
     all<{ day: string; you: number; agents: number }>(
       db,
       `SELECT substr(created_at, 1, 10) AS day,
-                SUM(CASE WHEN actor LIKE 'agent:%' THEN 0 ELSE 1 END) AS you,
-                SUM(CASE WHEN actor LIKE 'agent:%' THEN 1 ELSE 0 END) AS agents
-         FROM page_events WHERE created_at >= ? GROUP BY day ORDER BY day`,
-      year,
+              SUM(CASE WHEN actor LIKE 'agent:%' THEN 0 ELSE 1 END) AS you,
+              SUM(CASE WHEN actor LIKE 'agent:%' THEN 1 ELSE 0 END) AS agents
+       FROM page_events WHERE created_at >= ? GROUP BY day ORDER BY day`,
+      daysAgo(366),
     ),
     all<{ actor: string | null; edits: number }>(
       db,
-      `SELECT actor, COUNT(*) AS edits FROM page_events GROUP BY actor ORDER BY edits DESC`,
+      'SELECT actor, COUNT(*) AS edits FROM page_events GROUP BY actor ORDER BY edits DESC',
     ),
     all<{ actor: string | null; created: number }>(
       db,
       'SELECT created_by AS actor, COUNT(*) AS created FROM pages GROUP BY created_by',
     ),
-    all<{ id: string; title: string; icon: string | null; edits: number }>(
+    all<PageStat>(
       db,
-      `SELECT p.id, p.title, p.icon, COUNT(*) AS edits FROM page_events e JOIN pages p ON p.id = e.page_id
-         WHERE e.created_at >= ? AND e.action IN ('edit', 'restore', 'create')
-         GROUP BY p.id ORDER BY edits DESC, p.updated_at DESC LIMIT 8`,
-      month,
-    ),
-    all<{ id: string; title: string; icon: string | null; backlinks: number }>(
-      db,
-      `SELECT p.id, p.title, p.icon, COUNT(*) AS backlinks FROM links l JOIN pages p ON p.id = l.dst
-         WHERE l.src != l.dst GROUP BY p.id ORDER BY backlinks DESC, p.title LIMIT 8`,
-    ),
-    all<{ id: string; title: string; icon: string | null; updated_at: string }>(
-      db,
-      `SELECT id, title, icon, updated_at FROM pages WHERE updated_at < ? ORDER BY updated_at LIMIT 8`,
+      `SELECT p.id, p.title, p.icon, p.parent_id, p.words, p.created_at, p.updated_at,
+              (SELECT COUNT(*) FROM links l WHERE l.dst = p.id AND l.src != p.id) AS backlinks,
+              COALESCE(e.e7, 0) AS e7, COALESCE(e.e30, 0) AS e30,
+              COALESCE(e.e90, 0) AS e90, COALESCE(e.eall, 0) AS eall
+       FROM pages p LEFT JOIN (
+         SELECT page_id,
+                SUM(created_at >= ?1) AS e7, SUM(created_at >= ?2) AS e30,
+                SUM(created_at >= ?3) AS e90, COUNT(*) AS eall
+         FROM page_events WHERE action IN ('create', 'edit', 'restore') GROUP BY page_id
+       ) e ON e.page_id = p.id`,
+      daysAgo(7),
+      daysAgo(30),
       daysAgo(90),
     ),
-    all<{ id: string; title: string; icon: string | null }>(
+    all<TagCount>(
       db,
-      `SELECT id, title, icon FROM pages
-         WHERE id NOT IN (SELECT dst FROM links WHERE src != dst)
-           AND id NOT IN (SELECT value FROM settings WHERE key = 'home_id')
-         ORDER BY updated_at DESC`,
-    ),
-    all<{ month: string; pages: number; words: number }>(
-      db,
-      `SELECT substr(created_at, 1, 7) AS month, COUNT(*) AS pages, SUM(words) AS words
-         FROM pages GROUP BY month ORDER BY month`,
-    ),
-    first<{ pages: number; words: number; links: number; tags: number; empty: number }>(
-      db,
-      `SELECT (SELECT COUNT(*) FROM pages) AS pages,
-                (SELECT COALESCE(SUM(words), 0) FROM pages) AS words,
-                (SELECT COUNT(*) FROM links WHERE src != dst) AS links,
-                (SELECT COUNT(DISTINCT tag) FROM page_tags) AS tags,
-                (SELECT COUNT(*) FROM pages WHERE words = 0) AS empty`,
-    ),
-    all<{ id: string; title: string; icon: string | null; words: number }>(
-      db,
-      'SELECT id, title, icon, words FROM pages ORDER BY words DESC LIMIT 5',
+      'SELECT tag, COUNT(*) AS count FROM page_tags GROUP BY tag ORDER BY count DESC, tag',
     ),
     all<{ query: string; count: number; last: string }>(
       db,
       `SELECT lower(query) AS query, COUNT(*) AS count, MAX(created_at) AS last FROM search_log
-         WHERE hits = 0 AND created_at >= ? GROUP BY lower(query) ORDER BY last DESC LIMIT 20`,
+       WHERE hits = 0 AND created_at >= ? GROUP BY lower(query) ORDER BY last DESC LIMIT 20`,
       daysAgo(90),
     ),
+    first<{ value: string }>(db, "SELECT value FROM settings WHERE key = 'home_id'"),
+    first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM links WHERE src != dst'),
   ]);
   const createdBy = new Map(created.map((r) => [r.actor, r.created]));
+  // Authors who created pages but whose edits were all merged away still show up.
+  for (const r of created)
+    if (!authors.some((a) => a.actor === r.actor)) authors.push({ actor: r.actor, edits: 0 });
   return c.json<Insights>({
     days,
     authors: authors.map((a) => ({ ...a, created: createdBy.get(a.actor) ?? 0 })),
-    most_edited: mostEdited,
-    most_linked: mostLinked,
-    neglected,
-    orphans: { count: orphanRows.length, pages: orphanRows.slice(0, 8) },
-    growth,
-    totals: totals ?? { pages: 0, words: 0, links: 0, tags: 0, empty: 0 },
-    biggest,
+    pages,
+    tags,
     misses,
+    home_id: home?.value ?? null,
+    links: links?.n ?? 0,
   });
 });
 

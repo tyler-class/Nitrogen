@@ -193,18 +193,30 @@ export interface Graph {
   truncated: boolean;
 }
 
+export interface PageStat {
+  id: string;
+  title: string;
+  icon: string | null;
+  parent_id: string | null;
+  words: number;
+  created_at: string;
+  updated_at: string;
+  backlinks: number;
+  /** Edits (create/edit/restore events) in the last 7, 30 and 90 days, and ever. */
+  e7: number;
+  e30: number;
+  e90: number;
+  eall: number;
+}
+
 export interface Insights {
-  /** One entry per day with activity, oldest first (last 365 days). */
+  /** One entry per day with activity, oldest first (last 365 days, UTC dates). */
   days: { day: string; you: number; agents: number }[];
   authors: { actor: string | null; edits: number; created: number }[];
-  most_edited: { id: string; title: string; icon: string | null; edits: number }[];
-  most_linked: { id: string; title: string; icon: string | null; backlinks: number }[];
-  neglected: { id: string; title: string; icon: string | null; updated_at: string }[];
-  orphans: { count: number; pages: { id: string; title: string; icon: string | null }[] };
-  /** Pages and words that exist now, by month they were created. */
-  growth: { month: string; pages: number; words: number }[];
-  totals: { pages: number; words: number; links: number; tags: number; empty: number };
-  biggest: { id: string; title: string; icon: string | null; words: number }[];
+  pages: PageStat[];
+  tags: TagCount[];
   /** Assistant searches that found nothing (last 90 days). */
   misses: { query: string; count: number; last: string }[];
+  home_id: string | null;
+  links: number;
 }
