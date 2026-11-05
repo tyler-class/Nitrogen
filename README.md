@@ -3,7 +3,7 @@
 A personal wiki you host yourself on Cloudflare. Pages live in a tree, bodies are markdown, images go
 straight into the page, search understands meaning, and Claude can read and write it over MCP.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/nitrogen)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
 - **A page tree.** Every page can hold subpages. Drag pages in the sidebar to reorder or nest them.
 - **Markdown with wiki links.** `[[Page title]]` links pages and powers “Linked from” backlinks.
@@ -35,14 +35,14 @@ straight into the page, search understands meaning, and Claude can read and writ
    with. Pick something long.
 3. Open the `*.workers.dev` link when the deploy finishes and sign in.
 
-The deploy command (`npm run deploy`) builds the app, deploys the Worker and applies the database
-migrations. Semantic search needs no setup: Nitrogen creates its AI Search index the first time it
-saves a page.
+The deploy command (`npm run deploy`) builds the app, applies database migrations, then deploys the
+Worker, so new code never runs against an older database. Semantic search needs no setup: Nitrogen
+creates its AI Search index the first time it saves a page.
 
 ### By hand
 
 ```sh
-git clone https://github.com/tyler-class/nitrogen.git && cd nitrogen
+git clone https://github.com/tyler-class/Nitrogen.git && cd Nitrogen
 npm install
 npx wrangler login
 npm run deploy
@@ -50,6 +50,22 @@ npx wrangler secret put APP_PASSWORD
 ```
 
 Wrangler creates the D1 database, R2 bucket and KV namespace on the first deploy.
+
+## Update your copy
+
+If you deployed with the button, your copy lives in your own GitHub account and updates itself:
+every Monday a GitHub Action takes the latest Nitrogen and pushes it to your copy, and Cloudflare
+migrates the database and redeploys. To update right away, open your copy on GitHub, go to
+**Actions → Update Nitrogen** and click **Run workflow**. Your pages and images are in the database
+and R2, not the repo, so updates don’t touch them.
+
+The update replaces the app’s code, so changes you made to your copy’s code are overwritten. Your
+`.github/workflows` and a `wrangler.jsonc` with your database id are kept.
+
+If you deployed by hand, `git pull` and `npm run deploy`.
+
+How the button, Workers Builds and the update workflow fit together:
+[docs/deploy-and-updates.md](docs/deploy-and-updates.md).
 
 ## Connect Claude
 
@@ -119,7 +135,8 @@ index locally, sign in with `npx wrangler login` and run `N2_REMOTE=1 npm run de
 | `npm run build` / `preview`  | Production build / serve the build locally         |
 | `npm test`                   | Unit tests and Workers-runtime API and MCP tests   |
 | `npm run typecheck` / `lint` | TypeScript, ESLint and Prettier                    |
-| `npm run deploy`             | Build, deploy, migrate the remote database         |
+| `npm run deploy`             | Build, migrate the remote database, then deploy    |
+| `npm run release`            | Migrate, then deploy (the Workers Builds command)  |
 
 ### How it’s built
 

@@ -1,0 +1,60 @@
+# Keeps a copy made with the Deploy to Cloudflare button up to date with tyler-class/Nitrogen.
+# The button makes a plain copy, not a fork, so GitHub's "Sync fork" isn't available.
+# Each run replaces the app with the latest Nitrogen and pushes; Cloudflare then migrates and
+# redeploys. Your data lives in the database and file storage, not here, so it isn't touched.
+name: Update Nitrogen
+
+on:
+  schedule:
+    - cron: '23 9 * * 1' # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  # For the keep-alive step below.
+  actions: write
+
+jobs:
+  update:
+    # Only in copies, never in Nitrogen itself.
+    if: github.repository != 'tyler-class/Nitrogen'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Take the latest Nitrogen
+        run: |
+          git fetch --depth=1 https://github.com/tyler-class/Nitrogen.git main
+          upstream=$(git rev-parse FETCH_HEAD)
+
+          # Kept from this copy: its workflows (GitHub doesn't let this job change them) and a
+          # wrangler.jsonc that has its own database id written in.
+          keep=$(mktemp -d)
+          cp -r .github/workflows "$keep/workflows"
+          if grep -q '"database_id"' wrangler.jsonc; then cp wrangler.jsonc "$keep/"; fi
+
+          git rm -rq .
+          git checkout "$upstream" -- .
+          rm -rf .github/workflows && cp -r "$keep/workflows" .github/workflows
+          if [ -f "$keep/wrangler.jsonc" ]; then cp "$keep/wrangler.jsonc" .; fi
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Already up to date."
+            exit 0
+          fi
+          if ! git diff --quiet "$upstream" HEAD -- .github/workflows 2>/dev/null; then
+            echo "::notice::Your .github/workflows differ from Nitrogen's and were left as they are. Copy any you want from tyler-class/Nitrogen by hand."
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -qm "Update Nitrogen to ${upstream:0:7}"
+          git push
+
+      # GitHub turns off scheduled workflows in a repo with no activity for 60 days, and this one
+      # only commits when there's a new version. Re-enabling it on every run resets that timer,
+      # so the weekly check never switches itself off.
+      - name: Keep this workflow enabled
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/update.yml/enable"

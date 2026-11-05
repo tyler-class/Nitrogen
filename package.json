@@ -1,6 +1,6 @@
 {
   "name": "nitrogen",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "A personal wiki you host yourself on Cloudflare: a page tree, markdown, images, semantic search and an MCP server.",
   "license": "MIT",
@@ -9,7 +9,8 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "npm run build && vite preview",
-    "deploy": "npm run build && wrangler deploy && wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run build && npm run release",
+    "release": "tsx scripts/release.ts",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "cf-typegen": "wrangler types src/worker/worker-configuration.d.ts",
