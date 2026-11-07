@@ -96,13 +96,17 @@ How to work with it:
 - Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their inbox and activity log, and can undo a whole session.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
-- Open items: write to-dos, questions and reminders inline, on their own line, anywhere they belong:
-  "- [ ] todo: Draft the brief @alex due:2026-11-20", "- question: Which vendor?", "- [ ] reminder: Renew the domain due:2026-12-01" (reminders need a due date).
-  Check one off with "[x]"; resolve a question by checking it and adding " answer: …". open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: line on the page it belongs to.
+- Open items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
 
 Markdown conventions:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
 - Callouts: "> [!NOTE]", "> [!TIP]", "> [!WARNING]" as the first line of a blockquote.
+- Typed items (to-dos, questions, reminders). One item per line, as a list item:
+    - [ ] todo: <text> [@owner] [due:YYYY-MM-DD]
+    - [ ] question: <text> [@owner]
+    - [ ] reminder: <text> due:YYYY-MM-DD        (reminders must have a due date)
+  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon. Done: change "[ ]" to "[x]". A question is resolved by checking it and ending the line with " answer: <the answer>". Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
+  Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- [ ] reminder: Renew the domain due:2026-12-01".
 - Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
 - Don't repeat the page title as a "# Title" heading at the top of the body; the title is shown separately. Start sections at "##".
 
@@ -328,7 +332,12 @@ function buildServer(
           .string()
           .optional()
           .describe('Parent page id, title or path. Omit (or "top") for the top level.'),
-        body: z.string().optional(),
+        body: z
+          .string()
+          .optional()
+          .describe(
+            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD") are in the server instructions.',
+          ),
         icon: z.string().max(16).optional().describe('An emoji, e.g. "📘".'),
         tags: z
           .array(z.string())
@@ -441,7 +450,7 @@ function buildServer(
     {
       title: 'Edit part of a page',
       description:
-        'Make targeted changes to a page body: replace/delete exact text, insert text before/after exact text, append/prepend, or edit a section by its heading. Edits apply in order and all-or-nothing. If the page changed meanwhile, the edits are re-applied to the latest version (unless base_version is given). Can also rename the page or change its icon.',
+        'Make targeted changes to a page body: replace/delete exact text, insert text before/after exact text, append/prepend, or edit a section by its heading. Edits apply in order and all-or-nothing. If the page changed meanwhile, the edits are re-applied to the latest version (unless base_version is given). Can also rename the page or change its icon. To check off a typed item, replace its "- [ ] " with "- [x] " (questions: also append " answer: …").',
       inputSchema: z.object({
         page: z.string().describe('Page id, exact title, or path.'),
         edits: z.array(editOp).max(50).optional(),
@@ -521,7 +530,12 @@ function buildServer(
       inputSchema: z.object({
         page: z.string(),
         base_version: z.number().int().describe('The version you read.'),
-        body: z.string().optional(),
+        body: z
+          .string()
+          .optional()
+          .describe(
+            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD") are in the server instructions.',
+          ),
         title: z.string().min(1).max(200).optional(),
         icon: z.string().max(16).nullable().optional(),
         tags: z.array(z.string()).max(30).optional().describe('Replaces the page’s own tags.'),
@@ -1083,7 +1097,7 @@ function buildServer(
 
 1. List the decisions, facts worth keeping, and open questions from our conversation. Leave out chit-chat and anything already superseded.
 2. Search the wiki for the pages they belong on. Prefer adding to existing pages (edit_page) over creating new ones; create a page only when nothing fits, in the right place in the tree.
-3. Link related pages with [[Title]], tag decisions #decision and open questions #open-question.
+3. Link related pages with [[Title]] and tag decisions #decision. Write follow-ups and open questions as typed items on the page they belong to: "- [ ] todo: … @owner due:YYYY-MM-DD", "- [ ] question: …", "- [ ] reminder: … due:YYYY-MM-DD".
 4. Finish with log_session, then tell me in a few lines what you changed, with links.`),
   );
 
