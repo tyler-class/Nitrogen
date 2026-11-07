@@ -486,6 +486,14 @@ describe('MCP', () => {
     });
     expect(toggled.data.body.startsWith('- [x] todo: Ship it')).toBe(true);
     expect((await tool(token, 'open_items', { type: 'todo' })).text).not.toContain('Ship it');
+    const answered = await api.post<{ body: string }>(`/pages/${id}/items/answer`, {
+      line: 2,
+      answer: 'Green.',
+    });
+    expect(answered.data.body).toContain('- [x] question: Which colour? answer: Green.');
+    expect((await tool(token, 'open_items', { type: 'question' })).text).not.toContain(
+      'Which colour?',
+    );
 
     const log = (await api.get<{ entries: SessionEntry[] }>('/sessions')).data.entries;
     const listed = log.find((e) => e.id === mine.id)!;

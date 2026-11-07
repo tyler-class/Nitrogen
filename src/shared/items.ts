@@ -102,5 +102,21 @@ export function setItemDone(md: string, line: number, done: boolean): string | n
   return lines.join('\n');
 }
 
+/** Set (or clear) a question's answer. Answering resolves it; clearing reopens it. */
+export function setItemAnswer(md: string, line: number, answer: string): string | null {
+  const lines = md.split('\n');
+  const raw = lines[line - 1];
+  const item =
+    raw === undefined ? null : parseItemLine(stripCode(md).split('\n')[line - 1] ?? '', line);
+  if (!item || item.type !== 'question') return null;
+  const m = ITEM_LINE_RE.exec(raw!)!;
+  const lead = m[1]!.trim() ? m[1]! : `${m[1]!}- `;
+  const rest = m[4]!.replace(/\s+answer:\s+.*$/i, '');
+  const clean = answer.replace(/\s+/g, ' ').trim();
+  lines[line - 1] =
+    `${lead.endsWith(' ') ? lead : `${lead} `}${clean ? '[x] ' : '[ ] '}${m[3]}: ${rest}${clean ? ` answer: ${clean}` : ''}`;
+  return lines.join('\n');
+}
+
 /** Today in UTC as YYYY-MM-DD. */
 export const todayKey = () => new Date().toISOString().slice(0, 10);

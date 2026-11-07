@@ -1,7 +1,7 @@
 // Typed items (the open-items index and checking items off) and the protected Sessions section.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { extractItems, ITEM_TYPES, setItemDone } from '@shared/items';
+import { extractItems, ITEM_TYPES, setItemAnswer, setItemDone } from '@shared/items';
 import { plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
 import type { OpenItem, SessionEntry } from '@shared/types';
@@ -138,6 +138,35 @@ system.get('/sessions', async (c) => {
     };
   });
   return c.json({ root_id: root, entries });
+});
+
+/** Answer a question where it's written (or clear the answer). */
+system.post('/pages/:id/items/answer', async (c) => {
+  const { line, answer } = await body(
+    c,
+    z.object({ line: z.number().int().min(1), answer: z.string().max(2000) }),
+  );
+  const db = c.env.DB;
+  for (let attempt = 0; ; attempt++) {
+    const page = await requirePage(db, c.req.param('id'));
+    const next = setItemAnswer(page.body, line, answer);
+    if (next === null)
+      throw new ApiError(409, 'conflict', 'That question has moved. Reload the page.');
+    if (next === page.body) return c.json(page);
+    try {
+      const saved = await updatePage(
+        db,
+        page.id,
+        { body: next, base_version: page.version },
+        { actor: actorOf(c.env) },
+      );
+      indexSoon(c.env, c.executionCtx);
+      return c.json(saved);
+    } catch (e) {
+      if (e instanceof ConflictError && attempt < 2) continue;
+      throw e;
+    }
+  }
 });
 
 /** log_session: an assistant's title and summary for its current session (MCP only). */

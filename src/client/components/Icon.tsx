@@ -3,7 +3,8 @@ const PATHS: Record<string, string> = {
   menu: 'M3 5h14M3 10h14M3 15h14',
   search: 'M9 15A6 6 0 1 0 9 3a6 6 0 0 0 0 12zm4.5-1.5L17 17',
   edit: 'M4 14.5V17h2.5L15 8.5 12.5 6 4 14.5zM14 4.5 15.5 3 18 5.5 16.5 7',
-  more: 'M5 10h.01M10 10h.01M15 10h.01',
+  // Small rings that the stroke fills in: about twice the size of the old dots.
+  more: 'M3.9 10a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0M8.9 10a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0M13.9 10a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0',
   close: 'M5 5l10 10M15 5L5 15',
   folder: 'M3 6.5V15a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H9.5L8 5H4a1 1 0 0 0-1 1.5z',
   page: 'M6 3h6l4 4v10H6zM12 3v4h4',

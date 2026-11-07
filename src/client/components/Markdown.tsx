@@ -285,7 +285,58 @@ type ItemProps = { className?: string; children?: ReactNode } & Record<
 >;
 
 /** A typed item as a card: check it off (when the page allows), label, text, owner, due date. */
-function itemCard(Tag: 'li' | 'div', onToggle?: (line: number, done: boolean) => void) {
+type Handlers = {
+  onToggle?: (line: number, done: boolean) => void;
+  onAnswer?: (line: number, answer: string) => void;
+};
+
+/** A question's answer, typed in place: a small grey label and an underline to write on. */
+function AnswerField({
+  line,
+  initial,
+  onAnswer,
+}: {
+  line: number;
+  initial: string;
+  onAnswer?: (line: number, answer: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const [saved, setSaved] = useState(initial);
+  if (saved !== initial) {
+    // The page changed underneath (another device, an assistant): show the new answer.
+    setSaved(initial);
+    setValue(initial);
+  }
+  const commit = () => {
+    if (value.trim() !== initial.trim()) onAnswer?.(line, value);
+  };
+  if (!onAnswer && !initial) return null;
+  return (
+    <label className="item-answer">
+      <span className="item-answer-label">Answer</span>
+      {onAnswer ? (
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') {
+              setValue(initial);
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          aria-label="Answer"
+          placeholder=" "
+        />
+      ) : (
+        <span className="item-answer-text">{initial}</span>
+      )}
+    </label>
+  );
+}
+
+function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer }: Handlers) {
   return function ItemOrPlain(props: ItemProps) {
     const { className, children, ...rest } = props as ItemProps & Record<string, unknown>;
     if (!className?.split(' ').includes('item'))
@@ -326,10 +377,8 @@ function itemCard(Tag: 'li' | 'div', onToggle?: (line: number, done: boolean) =>
               {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
             </span>
           )}
-          {props['data-answer'] && (
-            <div className="item-answer">
-              <strong>Answer:</strong> {props['data-answer']}
-            </div>
+          {type === 'question' && (
+            <AnswerField line={line} initial={props['data-answer'] ?? ''} onAnswer={onAnswer} />
           )}
         </div>
       </Tag>
@@ -348,11 +397,14 @@ export const Markdown = memo(function Markdown({
   source,
   titles,
   onToggleItem,
+  onAnswerItem,
 }: {
   source: string;
   titles: TitleIndex;
   /** Lets readers check items off; without it the checkboxes are shown but disabled. */
   onToggleItem?: (line: number, done: boolean) => void;
+  /** Lets readers answer questions in place. */
+  onAnswerItem?: (line: number, answer: string) => void;
 }): ReactNode {
   return useMemo(() => {
     const tree = fromMarkdown(source, {
@@ -370,9 +422,9 @@ export const Markdown = memo(function Markdown({
         img: Img,
         table: TableWrap,
         pre: Pre,
-        li: itemCard('li', onToggleItem),
-        div: itemCard('div', onToggleItem),
+        li: itemCard('li', { onToggle: onToggleItem, onAnswer: onAnswerItem }),
+        div: itemCard('div', { onToggle: onToggleItem, onAnswer: onAnswerItem }),
       },
     });
-  }, [source, titles, onToggleItem]);
+  }, [source, titles, onToggleItem, onAnswerItem]);
 });

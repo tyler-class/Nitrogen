@@ -40,8 +40,9 @@ pages.get('/tree', async (c) => {
 
 pages.get('/pages/:id', async (c) => {
   const detail = await getDetail(c.env.DB, c.req.param('id'));
-  // The owner opening a page clears it from the inbox; assistants reading it don't.
-  if (!isInternal(c.env))
+  // The owner opening a page clears it from the inbox; assistants reading it, and previews
+  // (?peek=1, e.g. the graph's side card), don't.
+  if (!isInternal(c.env) && c.req.query('peek') !== '1')
     c.executionCtx.waitUntil(
       c.env.DB.prepare('UPDATE pages SET viewed_at = ? WHERE id = ?')
         .bind(nowIso(), detail.page.id)

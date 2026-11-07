@@ -22,6 +22,7 @@ import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
 import { formatDue, Markdown, type TitleIndex } from '../components/Markdown';
 import { downloadPage } from '../lib/exportMarkdown';
+import { Chips } from '../components/charts';
 import { GraphView } from '../components/GraphView';
 import { Sheet } from '../components/Sheet';
 import { TagEditor, TagList } from '../components/Tags';
@@ -145,6 +146,21 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
     async (line: number, done: boolean) => {
       try {
         const next = await api.post<Page>(`/pages/${page.id}/items/toggle`, { line, done });
+        qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
+          old ? { ...old, page: next } : old,
+        );
+        void qc.invalidateQueries({ queryKey: ['items'] });
+      } catch (e) {
+        toast(errorMessage(e));
+      }
+    },
+    [page.id, qc, toast],
+  );
+
+  const answerItem = useCallback(
+    async (line: number, answer: string) => {
+      try {
+        const next = await api.post<Page>(`/pages/${page.id}/items/answer`, { line, answer });
         qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
           old ? { ...old, page: next } : old,
         );
@@ -364,6 +380,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
             source={page.body}
             titles={index}
             onToggleItem={locked ? undefined : toggleItem}
+            onAnswerItem={locked ? undefined : answerItem}
           />
         ) : locked ? null : (
           <button className="empty-body" onClick={onEdit}>
@@ -1004,23 +1021,157 @@ function Related({ page }: { page: Page }) {
   );
 }
 
+const AREA_COLORS = 7;
+
+/** A page's opening text for previews: no markdown, bullets or item markers. */
+function peekText(md: string): string {
+  return plainText(md)
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/(^|\s)\[[ xX]\]\s+/g, '$1')
+    .replace(/\b(?:todo|question|reminder):\s+/gi, '')
+    .replace(/\s+(?:due:\S+|answer:)/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 360);
+}
+
+/** Explore the wiki's links: click to re-centre, open from the side card, step back along the trail. */
 function GraphSheet({ page, onClose }: { page: Page; onClose(): void }) {
   const navigate = useNavigate();
+  const tree = useTree();
+  const [trail, setTrail] = useState<string[]>([page.id]);
+  const [depth, setDepth] = useState<'1' | '2' | '3'>('2');
+  const center = trail[trail.length - 1]!;
   const q = useQuery({
-    queryKey: ['graph', page.id, page.version],
-    queryFn: () => api.get<Graph>(`/pages/${page.id}/graph`),
+    queryKey: ['graph', center, depth],
+    queryFn: () => api.get<Graph>(`/pages/${center}/graph?depth=${depth}`),
+    placeholderData: (prev) => prev,
   });
+  const peek = useQuery({
+    queryKey: ['peek', center],
+    queryFn: () => api.get<PageDetail>(`/pages/${center}?peek=1`),
+  });
+
+  // Colour by top-level area, so clusters read at a glance.
+  const { areaOf, areas } = useMemo(() => {
+    const pages = tree.data?.pages ?? [];
+    const byId = new Map(pages.map((p) => [p.id, p]));
+    const rootOf = (id: string) => {
+      let cur = byId.get(id);
+      const seen = new Set<string>();
+      while (cur?.parent_id && byId.has(cur.parent_id) && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        cur = byId.get(cur.parent_id);
+      }
+      return cur;
+    };
+    const roots = pages.filter((p) => !p.parent_id).sort((a, b) => a.position - b.position);
+    const index = new Map(roots.map((r, i) => [r.id, i % AREA_COLORS]));
+    return {
+      areaOf: (id: string) => {
+        const r = rootOf(id);
+        return r
+          ? { id: r.id, title: r.title, color: `var(--area-${(index.get(r.id) ?? 0) + 1})` }
+          : null;
+      },
+      areas: roots,
+    };
+  }, [tree.data]);
+
+  const g = q.data;
+  const shownAreas = g ? areas.filter((a) => g.nodes.some((n) => areaOf(n.id)?.id === a.id)) : [];
+  const open = (id: string) => {
+    const t = tree.data?.pages.find((p) => p.id === id)?.title;
+    onClose();
+    navigate(pageHref(id, t));
+  };
+  const titleOf = (id: string) => tree.data?.pages.find((p) => p.id === id)?.title ?? '…';
+  const p = peek.data;
+  const links = g
+    ? g.edges.filter((e) => e.kind === 'link' && (e.source === center || e.target === center))
+        .length
+    : 0;
+
   return (
-    <Sheet title="Graph" sub={`Within two links of “${page.title}”`} onClose={onClose} wide>
-      {q.data ? (
-        <GraphView
-          graph={q.data}
-          onOpen={(id) => {
-            const n = q.data.nodes.find((x) => x.id === id);
-            onClose();
-            navigate(pageHref(id, n?.title));
-          }}
+    <Sheet title="Graph" sub="Explore how pages connect" onClose={onClose} wide>
+      <div className="graph-bar">
+        <Chips
+          label="Depth"
+          options={[
+            ['1', '1 link'],
+            ['2', '2 links'],
+            ['3', '3 links'],
+          ]}
+          value={depth}
+          onChange={setDepth}
         />
+        {trail.length > 1 && (
+          <nav className="graph-trail" aria-label="Pages you explored">
+            {trail.map((id, i) => (
+              <span key={`${id}-${i}`}>
+                {i > 0 && '› '}
+                {i < trail.length - 1 ? (
+                  <button type="button" onClick={() => setTrail(trail.slice(0, i + 1))}>
+                    {titleOf(id)}
+                  </button>
+                ) : (
+                  <strong>{titleOf(id)}</strong>
+                )}
+              </span>
+            ))}
+          </nav>
+        )}
+      </div>
+      {g ? (
+        <div className="graph-explorer">
+          <div>
+            <GraphView
+              key={center}
+              graph={g}
+              onOpen={open}
+              onSelect={(id) => id !== center && setTrail([...trail, id])}
+              colorOf={(id) => areaOf(id)?.color}
+            />
+            {shownAreas.length > 1 && (
+              <div className="graph-legend" aria-label="Areas">
+                {shownAreas.map((a) => (
+                  <span key={a.id}>
+                    <i style={{ background: areaOf(a.id)?.color }} /> {a.title}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <aside className="graph-side" aria-label="Selected page">
+            {p ? (
+              <>
+                <div>
+                  <h3>
+                    {p.page.icon ? `${p.page.icon} ` : ''}
+                    {p.page.title}
+                  </h3>
+                  {p.ancestors.length > 0 && (
+                    <div className="path">{p.ancestors.map((a) => a.title).join(' › ')}</div>
+                  )}
+                </div>
+                {p.page.body.trim() && <p className="peek">{peekText(p.page.body)}</p>}
+                <div className="facts">
+                  <span>
+                    {links} link{links === 1 ? '' : 's'} here
+                  </span>
+                  <span>{p.backlinks.length} linking in</span>
+                  {p.children.length > 0 && <span>{p.children.length} inside</span>}
+                  <span>{formatWhen(p.page.updated_at)}</span>
+                </div>
+                <button className="btn primary" onClick={() => open(center)}>
+                  Open page
+                </button>
+              </>
+            ) : (
+              <p className="muted">{peek.isError ? errorMessage(peek.error) : 'Loading…'}</p>
+            )}
+          </aside>
+        </div>
       ) : (
         <p className="muted">{q.isError ? errorMessage(q.error) : 'Loading…'}</p>
       )}

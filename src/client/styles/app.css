@@ -2497,3 +2497,226 @@ body.resizing {
   margin: 6px 0 0;
   color: var(--ink);
 }
+
+/* ===================================================== modern shape layer
+   Pills for actions and navigation, rounder surfaces with soft shadows
+   (same conventions as Ratio). Kept together so the look is easy to tune. */
+
+:root {
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 18px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 20px rgb(0 0 0 / 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
+  }
+}
+:root[data-theme='dark'] {
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+/* Buttons */
+.btn {
+  border-radius: 999px;
+  padding: 7px 15px;
+  font-weight: 600;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.08s;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn.small {
+  padding: 5px 12px;
+}
+.btn.icon-only {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+}
+.btn.small.icon-only {
+  width: 30px;
+  height: 30px;
+}
+
+/* Toggles: separate pills, the chosen one filled */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.seg button {
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.seg button:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--hairline));
+}
+.seg button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+  box-shadow: none;
+}
+
+/* Navigation */
+.search-button {
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+.foot-link {
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-weight: 550;
+}
+.foot-link:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.foot-link.active {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.tree-row {
+  border-radius: 999px;
+}
+.tree-row.current {
+  background: var(--accent-soft);
+}
+
+/* Menus and pop-ups */
+.menu,
+.picker-pop,
+.emoji-pop,
+.palette {
+  border-radius: 16px;
+  padding: 6px;
+}
+.menu button,
+.picker-list li,
+.palette-list li {
+  border-radius: 10px;
+}
+
+/* Editor toolbar */
+.toolbar {
+  border-radius: 999px;
+  padding: 5px 8px;
+  box-shadow: var(--shadow-sm);
+}
+.toolbar button {
+  border-radius: 999px;
+}
+
+/* Fields */
+.field input,
+.picker-trigger,
+.tag-filter,
+.emoji-search,
+.copy-row,
+.search-form input {
+  border-radius: var(--radius);
+}
+
+/* Surfaces */
+.pn {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.stat {
+  border-radius: 14px;
+}
+.card {
+  border-radius: 14px;
+  transition:
+    box-shadow 0.12s,
+    border-color 0.12s;
+}
+.card:hover {
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+.item-summary,
+.session-card,
+.act-session,
+.mermaid-box,
+.graph {
+  border-radius: 16px;
+}
+.session-card,
+.act-session {
+  box-shadow: var(--shadow-sm);
+}
+@media (min-width: 640px) {
+  .sheet {
+    border-radius: 22px;
+  }
+}
+.badge,
+.count {
+  border-radius: 999px;
+}
+
+/* A question's answer, written in place. */
+.item-answer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 3px;
+  max-width: 560px;
+}
+.item-answer-label {
+  flex: none;
+  font-size: 0.68em;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.item-answer input {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.item-answer input:hover {
+  border-bottom-color: color-mix(in srgb, var(--ink) 30%, var(--hairline));
+}
+.item-answer input:focus {
+  outline: none;
+  box-shadow: none;
+  border-bottom-color: var(--info);
+}
+.item-answer-text {
+  color: var(--ink);
+  font-size: 15px;
+}
+/* An answered question stays readable; the check shows it's resolved. */
+.item-question.done .item-text {
+  text-decoration: none;
+}
+
+/* Writing needs room: the editor is wider than the reading column. */
+.page.editing {
+  max-width: 1080px;
+}

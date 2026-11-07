@@ -38,3 +38,17 @@ describe('typed items', () => {
     expect(setItemDone(md, 1, true)).toBeNull();
   });
 });
+
+describe('answers', () => {
+  it('answers, edits and clears a question in place', async () => {
+    const { setItemAnswer } = await import('@shared/items');
+    const md = 'x\n- question: Which vendor? @sam\n- [ ] todo: y';
+    const a = setItemAnswer(md, 2, 'Acme')!;
+    expect(a).toBe('x\n- [x] question: Which vendor? @sam answer: Acme\n- [ ] todo: y');
+    expect(setItemAnswer(a, 2, 'Beta Co')).toBe(
+      'x\n- [x] question: Which vendor? @sam answer: Beta Co\n- [ ] todo: y',
+    );
+    expect(setItemAnswer(a, 2, '  ')).toBe('x\n- [ ] question: Which vendor? @sam\n- [ ] todo: y');
+    expect(setItemAnswer(md, 3, 'no')).toBeNull();
+  });
+});

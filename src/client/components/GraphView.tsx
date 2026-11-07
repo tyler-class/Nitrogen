@@ -124,7 +124,20 @@ const initialView = (c: { x: number; y: number }): View => ({
   y: H / 2 - c.y * DEFAULT_ZOOM,
 });
 
-export function GraphView({ graph, onOpen }: { graph: Graph; onOpen(id: string): void }) {
+export function GraphView({
+  graph,
+  onOpen,
+  onSelect,
+  colorOf,
+}: {
+  graph: Graph;
+  /** Double-click (or Enter): open the page. */
+  onOpen(id: string): void;
+  /** Click: explore from this page. Without it a click opens the page. */
+  onSelect?(id: string): void;
+  /** Fill colour per page (e.g. by top-level area). */
+  colorOf?(id: string): string | undefined;
+}) {
   const pos = useMemo(() => layout(graph), [graph]);
   const center = pos.get(graph.center) ?? { x: W / 2, y: H / 2 };
   const [view, setView] = useState<View>(() => initialView(center));
@@ -133,6 +146,7 @@ export function GraphView({ graph, onOpen }: { graph: Graph; onOpen(id: string):
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ dist: number; view: View; mid: { x: number; y: number } } | null>(null);
   const moved = useRef(false);
+  const downOn = useRef<string | null>(null);
 
   // Neighbours of the hovered page, for highlighting and stacking order.
   const nbrs = useMemo(() => {
@@ -273,7 +287,18 @@ export function GraphView({ graph, onOpen }: { graph: Graph; onOpen(id: string):
                 onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}
                 onFocus={() => setHover(n.id)}
                 onBlur={() => setHover((h) => (h === n.id ? null : h))}
-                onClick={() => !moved.current && onOpen(n.id)}
+                // Selection on pointer-up, not click: hovering re-orders nodes (to draw them on
+                // top), and moving an element between down and up cancels the browser's click.
+                onPointerDown={() => {
+                  downOn.current = n.id;
+                }}
+                onPointerUp={() => {
+                  if (downOn.current !== n.id || moved.current) return;
+                  downOn.current = null;
+                  if (onSelect) onSelect(n.id);
+                  else onOpen(n.id);
+                }}
+                onDoubleClick={() => onOpen(n.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -281,7 +306,14 @@ export function GraphView({ graph, onOpen }: { graph: Graph; onOpen(id: string):
                   }
                 }}
               >
-                <circle r={isCenter ? 9 : n.depth === 1 ? 6.5 : 5} />
+                <circle
+                  r={isCenter ? 10 : n.depth === 1 ? 7 : 5.5}
+                  style={
+                    colorOf?.(n.id)
+                      ? ({ '--node': colorOf(n.id) } as React.CSSProperties)
+                      : undefined
+                  }
+                />
                 <text x={isCenter ? 14 : 10} y={4}>
                   {on || isCenter ? name : clip(name)}
                 </text>
@@ -303,8 +335,10 @@ export function GraphView({ graph, onOpen }: { graph: Graph; onOpen(id: string):
         </button>
       </div>
       <p className="graph-note">
-        Scroll or pinch to zoom, drag to move. Solid lines are links; dashed lines are the parent
-        and subpages.
+        {onSelect
+          ? 'Click a page to explore from it, double-click to open it. Scroll or pinch to zoom, drag to move.'
+          : 'Scroll or pinch to zoom, drag to move.'}{' '}
+        Dashed lines are parent and subpages.
         {graph.truncated ? ' Showing the closest 60 pages.' : ''}
       </p>
     </div>
