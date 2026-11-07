@@ -1,5 +1,13 @@
 // Markdown → mdast (GFM) → wikilinks + callouts → hast → sanitized → React.
-import { memo, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import {
+  lazy,
+  memo,
+  Suspense,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { Link } from 'react-router';
 import type {
@@ -246,6 +254,23 @@ function Img({ src, alt, title }: ComponentProps<'img'>) {
   );
 }
 
+/** ```mermaid blocks become diagrams; other code blocks render as usual. */
+function Pre(props: ComponentProps<'pre'>) {
+  const child = props.children as { props?: { className?: string; children?: unknown } } | null;
+  const cls = child?.props?.className ?? '';
+  if (/\blanguage-mermaid\b/.test(cls)) {
+    const code = String(child?.props?.children ?? '').replace(/\n$/, '');
+    return (
+      <Suspense fallback={<div className="mermaid-box loading" aria-busy="true" />}>
+        <Mermaid code={code} />
+      </Suspense>
+    );
+  }
+  return <pre {...props} />;
+}
+
+const Mermaid = lazy(() => import('./Mermaid').then((m) => ({ default: m.Mermaid })));
+
 function TableWrap(props: ComponentProps<'table'>) {
   return (
     <div className="table-wrap">
@@ -344,6 +369,7 @@ export const Markdown = memo(function Markdown({
         a: Anchor,
         img: Img,
         table: TableWrap,
+        pre: Pre,
         li: itemCard('li', onToggleItem),
         div: itemCard('div', onToggleItem),
       },

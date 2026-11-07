@@ -31,3 +31,21 @@ export async function clientDisplayName(
   }
   return clean(shown) || UNKNOWN_ASSISTANT;
 }
+
+const cache = new Map<string, { name: string; at: number }>();
+
+/** The connected assistant's name for an MCP request: the sign-in's saved name when it has a real
+ * one, else looked up from the client id (cached for a day per Worker instance). */
+export async function requestActorName(
+  env: Cloudflare.Env,
+  saved: string | undefined,
+  clientId: string | undefined,
+): Promise<string> {
+  if (saved && saved !== UNKNOWN_ASSISTANT) return saved;
+  if (!clientId) return saved || UNKNOWN_ASSISTANT;
+  const hit = cache.get(clientId);
+  if (hit && Date.now() - hit.at < 86_400_000) return hit.name;
+  const name = await clientDisplayName(env, clientId).catch(() => UNKNOWN_ASSISTANT);
+  cache.set(clientId, { name, at: Date.now() });
+  return name;
+}

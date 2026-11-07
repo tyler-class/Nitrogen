@@ -1,7 +1,7 @@
 // The local graph: a page, the pages it links with, and theirs. A small deterministic
 // force layout (no library); the centre stays in the middle.
 import '../styles/graph.css';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Graph } from '@shared/types';
 
 const W = 720;
@@ -108,64 +108,203 @@ function layout(graph: Graph): Map<string, { x: number; y: number }> {
 
 const clip = (s: string, n = 22) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+interface View {
+  k: number;
+  x: number;
+  y: number;
+}
+const DEFAULT_ZOOM = 1.3;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 4;
+
+/** Zoomed in a little, with the centre page in the middle. */
+const initialView = (c: { x: number; y: number }): View => ({
+  k: DEFAULT_ZOOM,
+  x: W / 2 - c.x * DEFAULT_ZOOM,
+  y: H / 2 - c.y * DEFAULT_ZOOM,
+});
+
 export function GraphView({ graph, onOpen }: { graph: Graph; onOpen(id: string): void }) {
   const pos = useMemo(() => layout(graph), [graph]);
+  const center = pos.get(graph.center) ?? { x: W / 2, y: H / 2 };
+  const [view, setView] = useState<View>(() => initialView(center));
+  const [hover, setHover] = useState<string | null>(null);
+  const svg = useRef<SVGSVGElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ dist: number; view: View; mid: { x: number; y: number } } | null>(null);
+  const moved = useRef(false);
+
+  // Neighbours of the hovered page, for highlighting and stacking order.
+  const nbrs = useMemo(() => {
+    const out = new Set<string>();
+    if (!hover) return out;
+    for (const e of graph.edges) {
+      if (e.source === hover) out.add(e.target);
+      if (e.target === hover) out.add(e.source);
+    }
+    return out;
+  }, [hover, graph.edges]);
+
+  /** Client point → viewBox point. */
+  const toBox = (clientX: number, clientY: number) => {
+    const r = svg.current!.getBoundingClientRect();
+    return { x: ((clientX - r.left) / r.width) * W, y: ((clientY - r.top) / r.height) * H };
+  };
+  const zoomAt = (p: { x: number; y: number }, k: number, from: View = view): View => {
+    const nk = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
+    return {
+      k: nk,
+      x: p.x - ((p.x - from.x) / from.k) * nk,
+      y: p.y - ((p.y - from.y) / from.k) * nk,
+    };
+  };
+
+  // Wheel zoom needs a non-passive listener so the sheet doesn't scroll instead.
+  useEffect(() => {
+    const el = svg.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const p = toBox(e.clientX, e.clientY);
+      setView((v) => zoomAt(p, v.k * Math.exp(-e.deltaY * 0.0015), v));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as Element).closest('.node')) return;
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved.current = false;
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()] as [
+        { x: number; y: number },
+        { x: number; y: number },
+      ];
+      gesture.current = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        view,
+        mid: toBox((a.x + b.x) / 2, (a.y + b.y) / 2),
+      };
+    }
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const prev = pointers.current.get(e.pointerId);
+    if (!prev) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2 && gesture.current) {
+      const [a, b] = [...pointers.current.values()] as [
+        { x: number; y: number },
+        { x: number; y: number },
+      ];
+      const g = gesture.current;
+      setView(zoomAt(g.mid, g.view.k * (Math.hypot(a.x - b.x, a.y - b.y) / g.dist), g.view));
+      return;
+    }
+    const r = svg.current!.getBoundingClientRect();
+    const dx = ((e.clientX - prev.x) / r.width) * W;
+    const dy = ((e.clientY - prev.y) / r.height) * H;
+    if (Math.abs(dx) + Math.abs(dy) > 0.5) moved.current = true;
+    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) gesture.current = null;
+  };
+  const step = (f: number) => setView((v) => zoomAt({ x: W / 2, y: H / 2 }, v.k * f, v));
+
   if (graph.nodes.length < 2)
     return <p className="graph-note">No links to or from this page yet.</p>;
+
+  const lit = (id: string) => id === hover || nbrs.has(id);
+  const edgeLit = (s: string, t: string) => !!hover && (s === hover || t === hover);
+  // Later elements paint on top: plain first, then the hovered page's links and neighbours.
+  const edges = [...graph.edges].sort(
+    (a, b) => Number(edgeLit(a.source, a.target)) - Number(edgeLit(b.source, b.target)),
+  );
+  const rank = (id: string) => (id === hover ? 3 : nbrs.has(id) ? 2 : id === graph.center ? 1 : 0);
+  const nodes = [...graph.nodes].sort((a, b) => rank(a.id) - rank(b.id));
+
   return (
-    <div className="graph">
+    <div className={`graph${hover ? ' hovering' : ''}`}>
       <svg
+        ref={svg}
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="xMidYMid meet"
         role="group"
         aria-label={`Pages connected to this one: ${graph.nodes.length - 1}.`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       >
-        {graph.edges.map((e) => {
-          const a = pos.get(e.source);
-          const b = pos.get(e.target);
-          if (!a || !b) return null;
-          return (
-            <line
-              key={`${e.source}-${e.target}`}
-              className={`edge ${e.kind}`}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-            />
-          );
-        })}
-        {graph.nodes.map((n) => {
-          const p = pos.get(n.id)!;
-          const center = n.id === graph.center;
-          const label = clip(`${n.icon ? `${n.icon} ` : ''}${n.title}`);
-          return (
-            <g
-              key={n.id}
-              className={`node${center ? ' center' : ''}${n.depth >= 2 ? ' d2' : ''}`}
-              transform={`translate(${p.x},${p.y})`}
-              role="link"
-              tabIndex={0}
-              aria-label={n.title}
-              onClick={() => onOpen(n.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onOpen(n.id);
-                }
-              }}
-            >
-              <circle r={center ? 9 : n.depth === 1 ? 6 : 5} />
-              <text x={center ? 14 : 10} y={4}>
-                {label}
-              </text>
-              <title>{n.title}</title>
-            </g>
-          );
-        })}
+        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+          {edges.map((e) => {
+            const a = pos.get(e.source);
+            const b = pos.get(e.target);
+            if (!a || !b) return null;
+            const on = edgeLit(e.source, e.target);
+            return (
+              <line
+                key={`${e.source}-${e.target}`}
+                className={`edge ${e.kind}${on ? ' lit' : ''}`}
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+              />
+            );
+          })}
+          {nodes.map((n) => {
+            const p = pos.get(n.id)!;
+            const isCenter = n.id === graph.center;
+            const on = lit(n.id);
+            const name = `${n.icon ? `${n.icon} ` : ''}${n.title}`;
+            return (
+              <g
+                key={n.id}
+                className={`node${isCenter ? ' center' : ''}${n.depth >= 2 ? ' d2' : ''}${on ? ' lit' : ''}${n.id === hover ? ' hovered' : ''}`}
+                transform={`translate(${p.x},${p.y})`}
+                role="link"
+                tabIndex={0}
+                aria-label={n.title}
+                onPointerEnter={() => setHover(n.id)}
+                onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}
+                onFocus={() => setHover(n.id)}
+                onBlur={() => setHover((h) => (h === n.id ? null : h))}
+                onClick={() => !moved.current && onOpen(n.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpen(n.id);
+                  }
+                }}
+              >
+                <circle r={isCenter ? 9 : n.depth === 1 ? 6.5 : 5} />
+                <text x={isCenter ? 14 : 10} y={4}>
+                  {on || isCenter ? name : clip(name)}
+                </text>
+                <title>{n.title}</title>
+              </g>
+            );
+          })}
+        </g>
       </svg>
+      <div className="graph-zoom" role="group" aria-label="Zoom">
+        <button type="button" onClick={() => step(1.25)} aria-label="Zoom in">
+          +
+        </button>
+        <button type="button" onClick={() => step(0.8)} aria-label="Zoom out">
+          −
+        </button>
+        <button type="button" onClick={() => setView(initialView(center))} aria-label="Reset view">
+          ⟲
+        </button>
+      </div>
       <p className="graph-note">
-        Solid lines are links; dashed lines are the parent and subpages.
+        Scroll or pinch to zoom, drag to move. Solid lines are links; dashed lines are the parent
+        and subpages.
         {graph.truncated ? ' Showing the closest 60 pages.' : ''}
       </p>
     </div>

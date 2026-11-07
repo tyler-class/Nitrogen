@@ -34,6 +34,10 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     why: 'Keeps a growing wiki navigable.',
   },
   {
+    prompt: 'Add a diagram to <page> showing how <process> works, step by step.',
+    why: 'A Mermaid diagram the page renders.',
+  },
+  {
     prompt: 'Check <page> against newer pages and tell me what’s out of date.',
     why: 'Catches stale decisions and numbers.',
   },

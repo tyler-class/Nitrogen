@@ -713,6 +713,18 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         >
           <Icon name="check" size={15} />
         </button>
+        <button
+          onClick={() =>
+            editor.current?.wrap(
+              '\n```mermaid\nflowchart LR\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Do it]\n  B -->|No| D[Skip]\n',
+              '```\n',
+            )
+          }
+          title="Mermaid diagram (rendered when you’re done editing)"
+          aria-label="Insert a diagram"
+        >
+          <Icon name="graph" size={15} /> Diagram
+        </button>
         <span className="toolbar-sep" aria-hidden />
         <button
           onClick={() => editor.current?.wrap('\n- [ ] todo: ', '')}

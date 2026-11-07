@@ -27,6 +27,7 @@ import type {
 } from '@shared/types';
 import { app } from './app';
 import { ACTOR, INTERNAL } from './auth';
+import { requestActorName } from './client-name';
 import { getSetting } from './db';
 import { getPage } from './pages';
 import { touchSession } from './sessions';
@@ -101,6 +102,14 @@ How to work with it:
 Markdown conventions:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
 - Callouts: "> [!NOTE]", "> [!TIP]", "> [!WARNING]" as the first line of a blockquote.
+- Diagrams: Mermaid is supported. A fenced code block with the language "mermaid" renders as a diagram in the app. Use one when structure is clearer drawn than described: a process or decision flow (flowchart), who talks to whom over time (sequenceDiagram), states and transitions (stateDiagram-v2), a plan over time (gantt or timeline), data relationships (erDiagram), or a hierarchy (mindmap). Keep labels short, quote labels that contain punctuation, like A["Draft, review"], and put the diagram next to the text it illustrates. Example:
+    \`\`\`mermaid
+    flowchart LR
+      A[Request] --> B{Approved?}
+      B -->|Yes| C[Ship]
+      B -->|No| D[Revise] --> A
+    \`\`\`
+  If a diagram has a syntax error the page shows the error, so check the syntax and fix it with edit_page.
 - Typed items (to-dos, questions, reminders). One item per line, as a list item:
     - [ ] todo: <text> [@owner] [due:YYYY-MM-DD]
     - [ ] question: <text> [@owner]
@@ -1173,8 +1182,13 @@ export const mcpApiHandler = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const origin = new URL(request.url).origin;
     // The OAuth provider puts the grant's props here: the connected app's name (see consent.ts).
-    const props = (ctx as ExecutionContext & { props?: { client?: string } }).props;
-    const actor = agent(props?.client);
+    const c = ctx as ExecutionContext & {
+      props?: { client?: string };
+      auth?: { clientId?: string };
+    };
+    // Sign-ins made before names were read from Claude's metadata URL saved "An assistant";
+    // resolve from the client id on each request instead of waiting for a token refresh.
+    const actor = agent(await requestActorName(env, c.props?.client, c.auth?.clientId));
     const call = apiCaller(origin, env, ctx, actor);
     const guide = await guideText(env.DB).catch(() => '');
     const handler = createMcpHandler(() => buildServer(call, origin, env, ctx, actor, guide));

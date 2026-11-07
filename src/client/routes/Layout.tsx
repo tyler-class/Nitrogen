@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { readLocal, writeLocal } from '../lib/storage';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { useTree } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
 import { Tree } from '../components/Tree';
+
+const MIN_W = 200;
+const MAX_W = 460;
 
 export function Layout() {
   const tree = useTree();
@@ -31,25 +35,82 @@ export function Layout() {
     setNavPath(location.pathname);
     setNav(false);
   }
+  // Desktop: a resizable, collapsible sidebar, remembered on this device.
+  const [width, setWidth] = useState(() =>
+    Math.min(MAX_W, Math.max(MIN_W, Number(readLocal('n2.sidebar.w', 272)) || 272)),
+  );
+  const [collapsed, setCollapsed] = useState(() => readLocal('n2.sidebar.collapsed', false));
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      writeLocal('n2.sidebar.collapsed', !c);
+      return !c;
+    });
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    let w = startW;
+    const move = (ev: PointerEvent) => {
+      w = Math.min(MAX_W, Math.max(MIN_W, startW + ev.clientX - startX));
+      setWidth(w);
+    };
+    const up = () => {
+      writeLocal('n2.sidebar.w', w);
+      document.body.classList.remove('resizing');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    document.body.classList.add('resizing');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  // Phones: the menu covers the page, so the page behind it shouldn't scroll.
+  useEffect(() => {
+    document.body.classList.toggle('nav-locked', nav);
+  }, [nav]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPalette((p) => !p);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+      if (e.key === 'Escape') setNav(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   return (
-    <div className={`shell${nav ? ' nav-open' : ''}`}>
-      <aside className="sidebar">
+    <div
+      className={`shell${nav ? ' nav-open' : ''}${collapsed ? ' collapsed' : ''}`}
+      style={{ '--sidebar-w': `${width}px` } as React.CSSProperties}
+    >
+      <aside className="sidebar" aria-label="Navigation">
         <div className="brand">
           <Link to="/" className="brand-link">
             <img src="/favicon.svg" alt="" width={22} height={22} />
             <span>Nitrogen</span>
           </Link>
+          <button
+            className="side-toggle desktop-only"
+            onClick={toggleCollapsed}
+            aria-label="Hide sidebar"
+            title={'Hide sidebar (⌘\\)'}
+          >
+            <Icon name="panelLeft" size={17} />
+          </button>
+          <button
+            className="side-close mobile-only"
+            onClick={() => setNav(false)}
+            aria-label="Close menu"
+          >
+            <Icon name="close" size={20} />
+          </button>
         </div>
         <button className="search-button" onClick={() => setPalette(true)}>
           <Icon name="search" size={15} />
@@ -86,7 +147,28 @@ export function Layout() {
           </NavLink>
           <AboutButton className="foot-link about-side" onClick={() => setAbout(true)} />
         </div>
+        <div
+          className="side-resize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          onPointerDown={startResize}
+          onDoubleClick={() => {
+            setWidth(272);
+            writeLocal('n2.sidebar.w', 272);
+          }}
+        />
       </aside>
+      {collapsed && (
+        <button
+          className="side-open desktop-only"
+          onClick={toggleCollapsed}
+          aria-label="Show sidebar"
+          title={'Show sidebar (⌘\\)'}
+        >
+          <Icon name="panelLeft" size={17} />
+        </button>
+      )}
       <button
         className="nav-scrim"
         aria-label="Close menu"

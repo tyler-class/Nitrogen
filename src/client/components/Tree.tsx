@@ -165,7 +165,7 @@ export function Tree({
               aria-label={isOpen ? 'Collapse' : 'Expand'}
               tabIndex={hasKids ? 0 : -1}
             >
-              <Icon name="chevron" size={12} />
+              <Icon name="chevron" size={15} />
             </button>
             {renaming === p.id ? (
               <RenameField

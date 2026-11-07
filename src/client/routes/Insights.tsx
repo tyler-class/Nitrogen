@@ -62,8 +62,7 @@ export function Insights() {
   const [period, setPeriod] = useState<Period>('e30');
   const d = q.data;
   const layout = usePanelLayout('insights_layout');
-  // About nine months fills the card on a computer; phones get five.
-  const [weeks] = useState(() => (window.matchMedia('(max-width: 560px)').matches ? 20 : 39));
+  const [weeks, setWeeks] = useState(26);
 
   const m = useMemo(() => (d ? model(d) : null), [d]);
   if (!d || !m || !layout.ready) return <div className="page-loading" aria-busy="true" />;
@@ -163,7 +162,9 @@ export function Insights() {
       sub: `Last ${weeks} weeks. Darker days had more edits.`,
       size: 'full',
       actions: <Chips label="Whose edits" options={WHO} value={who} onChange={setWho} />,
-      body: <Heatmap counts={counts} weeks={weeks} tone={who === 'agents' ? 'agents' : 'you'} />,
+      body: (
+        <Heatmap counts={counts} tone={who === 'agents' ? 'agents' : 'you'} onWeeks={setWeeks} />
+      ),
     },
     {
       id: 'weekly',

@@ -1,6 +1,23 @@
 // Small hand-drawn SVG charts styled by CSS classes so they follow the theme (same pattern as
 // Ratio). Colours come from --viz-you / --viz-agents in graph.css.
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
+/** The element's content width, kept up to date (charts draw at real size, never scaled). */
+export function useWidth<T extends HTMLElement>(fallback = 600) {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      const w = Math.round(e!.contentRect.width);
+      if (w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
 
 export function Stat({ v, l, d }: { v: ReactNode; l: string; d?: ReactNode }) {
   return (
@@ -32,51 +49,59 @@ export function Columns({
   tones?: string[];
 }) {
   // Drawn about as wide as a half-width card, so labels stay readable.
-  const W = 380,
-    H = height,
-    pl = 4,
+  const [box, W] = useWidth<HTMLDivElement>(380);
+  const H = height,
+    pl = 2,
     pb = 22,
     pt = 18;
   const total = (d: Col) => d.values.reduce((a, b) => a + b, 0);
   const max = Math.max(1, ...data.map(total));
   const bw = (W - pl * 2) / Math.max(1, data.length);
+  // Narrow charts label every other bar.
+  const every = bw < 26 ? 2 : 1;
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} width="100%" role="img">
-      <line className="ax" x1={pl} x2={W - pl} y1={H - pb} y2={H - pb} />
-      {data.map((d, i) => {
-        const x = pl + i * bw + bw * 0.15;
-        let y = H - pb;
-        const t = total(d);
-        return (
-          <g key={i} className={d.current ? 'current' : undefined}>
-            <title>{d.title ?? `${d.label}: ${t}`}</title>
-            {d.values.map((v, j) => {
-              const h = ((H - pb - pt) * v) / max;
-              y -= h;
-              return v > 0 ? (
-                <rect
-                  key={j}
-                  className={`bar-${tones[j] ?? 'you'}`}
-                  x={x}
-                  y={y}
-                  width={bw * 0.7}
-                  height={Math.max(h, 2)}
-                  rx={3}
-                />
-              ) : null;
-            })}
-            {t > 0 && (
-              <text className="vl" x={x + bw * 0.35} y={y - 5} textAnchor="middle">
-                {t}
-              </text>
-            )}
-            <text x={x + bw * 0.35} y={H - 7} textAnchor="middle">
-              {d.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div ref={box} className="chart-box">
+      <svg className="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img">
+        <line className="ax" x1={pl} x2={W - pl} y1={H - pb} y2={H - pb} />
+        {data.map((d, i) => {
+          const barW = Math.min(bw * 0.7, 36);
+          const x = pl + i * bw + (bw - barW) / 2;
+          const mid = x + barW / 2;
+          let y = H - pb;
+          const t = total(d);
+          return (
+            <g key={i} className={d.current ? 'current' : undefined}>
+              <title>{d.title ?? `${d.label}: ${t}`}</title>
+              {d.values.map((v, j) => {
+                const h = ((H - pb - pt) * v) / max;
+                y -= h;
+                return v > 0 ? (
+                  <rect
+                    key={j}
+                    className={`bar-${tones[j] ?? 'you'}`}
+                    x={x}
+                    y={y}
+                    width={barW}
+                    height={Math.max(h, 2)}
+                    rx={4}
+                  />
+                ) : null;
+              })}
+              {t > 0 && (
+                <text className="vl" x={mid} y={y - 5} textAnchor="middle">
+                  {t}
+                </text>
+              )}
+              {(i % every === 0 || i === data.length - 1) && (
+                <text x={mid} y={H - 7} textAnchor="middle">
+                  {d.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -89,13 +114,19 @@ export const dayKey = (d: Date) =>
 /** Edits per day, GitHub-style. */
 export function Heatmap({
   counts,
-  weeks = 26,
+  weeks: fixed,
   tone = 'you',
+  onWeeks,
 }: {
   counts: Map<string, number>;
+  /** Omit to fit as many weeks as the panel has room for (up to a year). */
   weeks?: number;
   tone?: string;
+  onWeeks?: (n: number) => void;
 }) {
+  const [box, width] = useWidth<HTMLDivElement>(600);
+  const weeks = fixed ?? Math.max(8, Math.min(53, Math.floor((width - 24 - 18) / 16)));
+  useEffect(() => onWeeks?.(weeks), [weeks, onWeeks]);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const cell = 13,
@@ -129,38 +160,39 @@ export function Heatmap({
   const W = left + weeks * (cell + gap) + 18,
     H = top + 7 * (cell + gap);
   return (
-    <svg
-      className={`chart heat tone-${tone}`}
-      viewBox={`0 0 ${W} ${H}`}
-      width="100%"
-      role="img"
-      // Never wider than drawn: scaling up would blow up the labels.
-      style={{ maxWidth: W, display: 'block' }}
-    >
-      {months.map((m, i) => (
-        <text key={i} x={m.x} y={10}>
-          {m.t}
-        </text>
-      ))}
-      {[1, 3, 5].map((d) => (
-        <text key={d} x={0} y={top + d * (cell + gap) + 10}>
-          {'SMTWTFS'.charAt(d)}
-        </text>
-      ))}
-      {cells.map((c, i) => (
-        <rect
-          key={i}
-          className={`h${level(c.c)}`}
-          x={c.x}
-          y={c.y}
-          width={cell}
-          height={cell}
-          rx={3}
-        >
-          <title>{c.t}</title>
-        </rect>
-      ))}
-    </svg>
+    <div ref={box} className="chart-box">
+      <svg
+        className={`chart heat tone-${tone}`}
+        viewBox={`0 0 ${W} ${H}`}
+        width={W}
+        height={H}
+        role="img"
+      >
+        {months.map((m, i) => (
+          <text key={i} x={m.x} y={10}>
+            {m.t}
+          </text>
+        ))}
+        {[1, 3, 5].map((d) => (
+          <text key={d} x={0} y={top + d * (cell + gap) + 10}>
+            {'SMTWTFS'.charAt(d)}
+          </text>
+        ))}
+        {cells.map((c, i) => (
+          <rect
+            key={i}
+            className={`h${level(c.c)}`}
+            x={c.x}
+            y={c.y}
+            width={cell}
+            height={cell}
+            rx={3}
+          >
+            <title>{c.t}</title>
+          </rect>
+        ))}
+      </svg>
+    </div>
   );
 }
 

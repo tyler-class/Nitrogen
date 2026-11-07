@@ -267,16 +267,18 @@ function Panel({
       aria-label={def.title}
     >
       <header className="pn-h">
-        {grip ?? (
-          <span className="pn-grip">
-            <Icon name="grip" size={17} />
-          </span>
-        )}
         <div className="pn-t">
           <h3>{def.title}</h3>
           {def.sub ? <div className="pn-sub">{def.sub}</div> : null}
         </div>
-        {tools && <div className="pn-tools">{tools}</div>}
+        <div className="pn-tools">
+          {grip ?? (
+            <span className="pn-grip">
+              <Icon name="grip" size={17} />
+            </span>
+          )}
+          {tools}
+        </div>
       </header>
       {def.actions ? <div className="pn-actions">{def.actions}</div> : null}
       {children}
