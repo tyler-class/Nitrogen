@@ -6,6 +6,7 @@ import type {
   PageDetail,
   RevertResult,
   Session,
+  SessionEntry,
   TreeResponse,
 } from '@shared/types';
 import { ORIGIN, PASSWORD, session } from './helpers';
@@ -484,6 +485,13 @@ describe('MCP', () => {
     });
     expect(toggled.data.body.startsWith('- [x] todo: Ship it')).toBe(true);
     expect((await tool(token, 'open_items', { type: 'todo' })).text).not.toContain('Ship it');
+
+    const log = (await api.get<{ entries: SessionEntry[] }>('/sessions')).data.entries;
+    const listed = log.find((e) => e.id === mine.id)!;
+    expect(listed).toMatchObject({ title: 'Proved sessions', actor: 'agent:Test Assistant' });
+    expect(listed.summary).toContain('Checked auto logging.');
+    expect(listed.pages).toBeGreaterThan(0);
+    expect(listed.open_items).toBe(1);
 
     expect((await api.del(`/sessions/${mine.id}`)).status).toBe(200);
     expect((await api.get(`/pages/${mine.id}`)).status).toBe(404);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { useTree } from '../lib/queries';
@@ -13,6 +13,16 @@ export function Layout() {
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
   const [about, setAbout] = useState(false);
+  // Sessions live outside the page tree, behind their own button.
+  const sessionsId = tree.data?.sessions_id ?? null;
+  const pages = useMemo(
+    () =>
+      (tree.data?.pages ?? []).filter(
+        (p) => !sessionsId || (p.id !== sessionsId && p.parent_id !== sessionsId),
+      ),
+    [tree.data, sessionsId],
+  );
+  const sessionCount = (tree.data?.pages.length ?? 0) - pages.length - (sessionsId ? 1 : 0);
   const location = useLocation();
 
   // Close the mobile menu after navigating.
@@ -61,14 +71,14 @@ export function Layout() {
           ))}
         </nav>
         {tree.data ? (
-          <Tree
-            pages={tree.data.pages}
-            currentId={match?.params.id}
-            onNavigate={() => setNav(false)}
-            sessionsId={tree.data.sessions_id}
-          />
+          <Tree pages={pages} currentId={match?.params.id} onNavigate={() => setNav(false)} />
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
+        )}
+        {sessionCount > 0 && (
+          <NavLink to="/sessions" className="foot-link sessions-link">
+            <Icon name="sparkle" size={15} /> AI Sessions
+          </NavLink>
         )}
         <div className="sidebar-foot">
           <NavLink to="/settings" className="foot-link">
@@ -96,9 +106,7 @@ export function Layout() {
         <Outlet />
       </div>
       {about && <AboutSheet onClose={() => setAbout(false)} />}
-      {palette && tree.data && (
-        <Palette pages={tree.data.pages} onClose={() => setPalette(false)} />
-      )}
+      {palette && tree.data && <Palette pages={pages} onClose={() => setPalette(false)} />}
     </div>
   );
 }

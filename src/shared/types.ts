@@ -38,6 +38,20 @@ export interface TreeResponse {
   sessions_id: string | null;
 }
 
+/** One AI session in the Sessions log. */
+export interface SessionEntry {
+  id: string;
+  /** Without the leading date. */
+  title: string;
+  actor: string | null;
+  started_at: string;
+  ended_at: string;
+  /** Plain text, shortened. */
+  summary: string;
+  pages: number;
+  open_items: number;
+}
+
 export interface OpenItem {
   page_id: string;
   page_title: string;

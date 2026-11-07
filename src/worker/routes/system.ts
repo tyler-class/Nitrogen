@@ -1,9 +1,10 @@
 // Typed items (the open-items index and checking items off) and the protected Sessions section.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ITEM_TYPES, setItemDone } from '@shared/items';
+import { extractItems, ITEM_TYPES, setItemDone } from '@shared/items';
+import { plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
-import type { OpenItem } from '@shared/types';
+import type { OpenItem, SessionEntry } from '@shared/types';
 import { actorOf, isInternal } from '../auth';
 import { all } from '../db';
 import {
@@ -12,6 +13,7 @@ import {
   listSummaries,
   protection,
   requirePage,
+  sessionsRoot,
   subtreeIds,
   updatePage,
 } from '../pages';
@@ -91,6 +93,51 @@ system.post('/pages/:id/items/toggle', async (c) => {
       throw e;
     }
   }
+});
+
+/** The Sessions log, newest first. Entries from before v0.7 have no session row; their page stands in. */
+system.get('/sessions', async (c) => {
+  const db = c.env.DB;
+  const root = await sessionsRoot(db);
+  if (!root) return c.json({ root_id: null, entries: [] });
+  const rows = await all<{
+    id: string;
+    title: string;
+    body: string;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+    actor: string | null;
+    started_at: string | null;
+    last_at: string | null;
+    summary: string | null;
+  }>(
+    db,
+    `SELECT p.id, p.title, p.body, p.created_by, p.created_at, p.updated_at,
+            s.actor, s.started_at, s.last_at, s.summary
+     FROM pages p LEFT JOIN session_entries s ON s.page_id = p.id
+     WHERE p.parent_id = ? ORDER BY COALESCE(s.started_at, p.created_at) DESC LIMIT 500`,
+    root,
+  );
+  const entries: SessionEntry[] = rows.map((r) => {
+    const [head = '', touched = ''] = r.body.split(/^## Pages touched\s*$/m);
+    const summary = plainText(r.summary ?? head)
+      .replace(/_[^_]*hasn’t added a summary yet\._/, '')
+      .replace(/(^|\s)(?:[-*+]\s+)?(?:\[[ xX]\]\s+)?(?:todo|question|reminder):\s+/gi, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      id: r.id,
+      title: r.title.replace(/^\d{4}-\d{2}-\d{2}\s*·\s*/, ''),
+      actor: r.actor ?? r.created_by,
+      started_at: r.started_at ?? r.created_at,
+      ended_at: r.last_at ?? r.updated_at,
+      summary: summary.length > 240 ? `${summary.slice(0, 237)}…` : summary,
+      pages: (touched.match(/^- (?!\(no page)/gm) ?? []).length,
+      open_items: extractItems(r.body).filter((i) => !i.done).length,
+    };
+  });
+  return c.json({ root_id: root, entries });
 });
 
 /** log_session: an assistant's title and summary for its current session (MCP only). */

@@ -12,6 +12,7 @@ import { Layout } from './routes/Layout';
 import { Login, SetupNeeded } from './routes/Login';
 import { PageView } from './routes/PageView';
 import { SearchPage } from './routes/SearchPage';
+import { Sessions } from './routes/Sessions';
 import { Settings } from './routes/Settings';
 import { Tags } from './routes/Tags';
 
@@ -37,6 +38,8 @@ const router = createBrowserRouter([
       { path: '/dashboard', element: <Dashboard /> },
       { path: '/activity', element: <Activity /> },
       { path: '/insights', element: <Insights /> },
+      { path: '/sessions', element: <Sessions /> },
+      { path: '/sessions/:id', element: <Sessions /> },
       { path: '/tags', element: <Tags /> },
       { path: '/tags/:tag', element: <Tags /> },
       { path: '*', element: <Home /> },

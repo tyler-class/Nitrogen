@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
 import { ITEM_TYPES, extractItems, todayKey } from '@shared/items';
@@ -46,17 +46,27 @@ export function PageView() {
   const [params, setParams] = useSearchParams();
   const editing = params.get('edit') === '1';
   const q = usePage(id);
+  const tree = useTree();
   const navigate = useNavigate();
 
   // Keep the slug in the URL in step with the title.
   const detail = q.data;
   useEffect(() => {
     if (!detail) return;
+    const sid = tree.data?.sessions_id;
+    if (sid && (detail.page.id === sid || detail.page.parent_id === sid)) return;
     const want = pageHref(detail.page.id, detail.page.title);
     if (window.location.pathname !== want)
       navigate(`${want}${window.location.search}${window.location.hash}`, { replace: true });
-  }, [detail, navigate]);
+  }, [detail, navigate, tree.data]);
 
+  // Sessions have their own views, outside the wiki.
+  const sessionsId = tree.data?.sessions_id;
+  if (sessionsId && detail) {
+    if (detail.page.id === sessionsId) return <Navigate to="/sessions" replace />;
+    if (detail.page.parent_id === sessionsId)
+      return <Navigate to={`/sessions/${detail.page.id}`} replace />;
+  }
   if (q.isPending) return <div className="page-loading" aria-busy="true" />;
   if (q.error)
     return (
@@ -703,6 +713,32 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         >
           <Icon name="check" size={15} />
         </button>
+        <span className="toolbar-sep" aria-hidden />
+        <button
+          onClick={() => editor.current?.wrap('\n- [ ] todo: ', '')}
+          title="To do: - [ ] todo: … @owner due:YYYY-MM-DD"
+          aria-label="Insert a to-do"
+          className="tb-item item-todo"
+        >
+          To do
+        </button>
+        <button
+          onClick={() => editor.current?.wrap('\n- question: ', '')}
+          title="Question: - question: … (resolve with [x] and answer: …)"
+          aria-label="Insert a question"
+          className="tb-item item-question"
+        >
+          Question
+        </button>
+        <button
+          onClick={() => editor.current?.wrap(`\n- [ ] reminder: due:${inAWeek()} `, '')}
+          title="Reminder: - [ ] reminder: … due:YYYY-MM-DD"
+          aria-label="Insert a reminder"
+          className="tb-item item-reminder"
+        >
+          Reminder
+        </button>
+        <span className="toolbar-sep" aria-hidden />
         <button
           onClick={() => editor.current?.pickImages()}
           title="Insert image"
@@ -726,6 +762,12 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
       </Suspense>
     </article>
   );
+}
+
+/** A week from today (local), as YYYY-MM-DD: the default date for a new reminder. */
+function inAWeek(): string {
+  const d = new Date(Date.now() + 7 * 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
