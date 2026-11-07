@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { VERSION } from '@shared/version';
+import { checkForUpdate } from '../lib/pwa';
+import { useToast } from './Toast';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 
@@ -18,6 +21,8 @@ const LINKS = [
 ];
 
 export function AboutSheet({ onClose }: { onClose: () => void }) {
+  const [checking, setChecking] = useState(false);
+  const toast = useToast();
   return (
     <Sheet title="About Nitrogen" sub={`Version ${VERSION}`} onClose={onClose}>
       <div className="about">
@@ -27,6 +32,23 @@ export function AboutSheet({ onClose }: { onClose: () => void }) {
           account, so your data stays yours.
         </p>
         <p className="about-by">Built by Tyler Class.</p>
+        <button
+          type="button"
+          className="btn small about-update"
+          disabled={checking}
+          onClick={async () => {
+            setChecking(true);
+            try {
+              if ((await checkForUpdate()) === 'latest') toast('You’re on the latest version.');
+            } catch {
+              toast('Couldn’t check. Are you online?');
+            } finally {
+              setChecking(false);
+            }
+          }}
+        >
+          <Icon name="history" size={14} /> {checking ? 'Checking…' : 'Check for updates'}
+        </button>
         <div className="about-links">
           {LINKS.map((l) => (
             <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="about-link">

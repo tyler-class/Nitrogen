@@ -2720,3 +2720,7 @@ body.resizing {
 .page.editing {
   max-width: 1080px;
 }
+
+.about-update {
+  margin-top: 4px;
+}
