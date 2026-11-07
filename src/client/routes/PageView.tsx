@@ -877,7 +877,10 @@ function ItemSummary({ body }: { body: string }) {
   if (!open.length) return null;
   const today = todayKey();
   return (
-    <aside className="item-summary" aria-label="Open items on this page">
+    <aside className="item-summary" aria-label="Action items on this page">
+      <h2 className="item-summary-title">
+        Action items <span className="count">{open.length}</span>
+      </h2>
       {ITEM_TYPES.filter((t) => open.some((i) => i.type === t)).map((t) => (
         <div key={t} className={`item-group item-${t}`}>
           <h3>
@@ -900,6 +903,7 @@ function ItemSummary({ body }: { body: string }) {
                   >
                     {plainText(i.text)}
                   </a>
+                  {i.owner && <span className="muted"> · @{i.owner}</span>}
                   {i.due && (
                     <span className={i.due < today ? 'overdue' : 'muted'}>
                       {' '}
@@ -915,7 +919,7 @@ function ItemSummary({ body }: { body: string }) {
   );
 }
 
-const ITEM_PLURAL = { todo: 'To do', question: 'Open questions', reminder: 'Reminders' } as const;
+const ITEM_PLURAL = { todo: 'Todos', question: 'Questions', reminder: 'Reminders' } as const;
 
 /** Pages that name this one without linking to it, with a one-click "link it". */
 function Mentions({ page }: { page: Page }) {

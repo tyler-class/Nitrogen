@@ -312,10 +312,10 @@ function itemCard(Tag: 'li' | 'div', onToggle?: (line: number, done: boolean) =>
           onClick={() => onToggle?.(line, !done)}
         />
         <div className="item-main">
-          <span className="item-label">{label}</span>
+          <span className="item-label">{type}</span>
           <div className="item-text">{children}</div>
           {(props['data-owner'] || due || props['data-invalid']) && (
-            <div className="item-meta">
+            <span className="item-meta">
               {props['data-owner'] && <span>@{props['data-owner']}</span>}
               {due && (
                 <span className={overdue ? 'overdue' : undefined}>
@@ -324,7 +324,7 @@ function itemCard(Tag: 'li' | 'div', onToggle?: (line: number, done: boolean) =>
                 </span>
               )}
               {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
-            </div>
+            </span>
           )}
           {props['data-answer'] && (
             <div className="item-answer">
