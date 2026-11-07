@@ -1,4 +1,2 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-<rect width="64" height="64" rx="14.08" fill="#2b6e55"/>
-<text x="28.16" y="43.519999999999996" text-anchor="middle" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-weight="700" font-size="32" fill="#fff">N<tspan font-size="16" dy="5.76">2</tspan></text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14.08" fill="#1a9cf0"/><g transform="translate(32 32) scale(1) translate(-32 -32) translate(16.77 17.57)"><path d="M0 23V0h4.9l10 16V0h4.7v23h-4.9l-10-16v16z" fill="#fff"/>
+<path d="M21.9 20.4c0-1.8 1.4-3 3.3-3 1.9 0 3.3 1.2 3.3 2.9 0 1.2-.6 2.1-1.9 3.2l-4.8 4.1h7" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></g></svg>

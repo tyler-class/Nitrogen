@@ -34,8 +34,8 @@ function page(info: PageInfo, handle: string, error = ''): string {
 <title>Connect ${name} to Nitrogen</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
-:root{--bg:#ffffff;--surface:#f8f8f6;--ink:#17191c;--soft:#5f6672;--line:#e6e7e4;--accent:#2b6e55;--tint:#e8f2ed;--danger:#a33a32;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#15171a;--surface:#1b1e22;--ink:#e8e9e6;--soft:#a7adb6;--line:#2c3036;--accent:#6cc3a0;--tint:#1d3329;--danger:#f08a80;color-scheme:dark}}
+:root{--bg:#ffffff;--surface:#f8f8f6;--ink:#17191c;--soft:#5f6672;--line:#e6e7e4;--accent:#0a84e0;--tint:#e4f2fe;--danger:#a33a32;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#15171a;--surface:#1b1e22;--ink:#e8e9e6;--soft:#a7adb6;--line:#2c3036;--accent:#4cb3ff;--tint:#0f2a40;--danger:#f08a80;color-scheme:dark}}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:16px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;padding:24px max(16px,env(safe-area-inset-left)) 24px max(16px,env(safe-area-inset-right))}
 main{width:100%;max-width:380px;display:flex;flex-direction:column;gap:18px}
 .mark{width:48px;height:48px;border-radius:14px;background:var(--accent)}
