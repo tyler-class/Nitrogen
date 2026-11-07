@@ -18,6 +18,14 @@ straight into the page, search understands meaning, and Claude can read and writ
 - **A dashboard.** An inbox of what assistants changed since you last looked, pinned pages, recent
   activity and a few numbers. Drag panels to arrange them, make them half or full width, or hide
   them; or pick a page as home instead.
+- **To-dos, questions and reminders anywhere.** Write `- [ ] todo: … @owner due:2026-11-20`,
+  `- question: …` or `- [ ] reminder: … due:…` on any page. They show as cards you can check off, a
+  summary at the top of the page, and an Open items panel on the dashboard; assistants list them with
+  `open_items`.
+- **Sessions.** Every assistant session that changes the wiki is recorded automatically under a
+  protected, read-only Sessions section, with the pages it touched and the assistant's own summary.
+- **Exports.** A full backup that restores everything, and a Markdown export (per page or the whole
+  wiki as a .zip) that downgrades callouts and items to plain text for other apps and Google Docs.
 - **Tags and connections.** Tag pages (or write `#tag` in the text), see pages that mention this
   one without linking it and link them in one click, related pages found by meaning, and a local
   graph of everything within two links.
@@ -79,8 +87,8 @@ In Nitrogen, open **Settings → Connect an AI assistant** and copy your MCP URL
 Tools: `get_tree`, `read_page`, `search`, `create_page`, `create_pages` (a whole subtree at once),
 `edit_page` (find/replace, section edits, append), `update_page`, `move_page`, `delete_page`
 (confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, `list_tags`,
-`tag_page`, `log_session` (files a dated note under “Sessions” listing every page the assistant
-touched), `recent_changes` (what changed, grouped by who), `get_started` (the wiki’s state plus
+`tag_page`, `log_session` (adds a title and summary to the assistant’s automatic Sessions entry),
+`open_items` (to-dos, questions and reminders across the wiki), `recent_changes` (what changed, grouped by who), `get_started` (the wiki’s state plus
 example requests; assistants call it when you ask what they can do), and for images:
 
 - `add_image`: from a public URL or base64 bytes.

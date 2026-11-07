@@ -2012,3 +2012,167 @@ a.btn {
 .try-list button:hover {
   color: var(--accent-ink);
 }
+
+/* ------------------------------------------------------------ typed items */
+
+.prose li.item,
+.prose div.item {
+  list-style: none;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 8px 0 8px -1.4em;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--item-bg);
+  border: 1px solid color-mix(in srgb, var(--item-fg) 18%, transparent);
+}
+.prose div.item {
+  margin-left: 0;
+}
+.item-todo {
+  --item-bg: var(--accent-soft);
+  --item-fg: var(--accent);
+}
+.item-question {
+  --item-bg: var(--info-soft);
+  --item-fg: var(--info);
+}
+.item-reminder {
+  --item-bg: var(--warn-soft);
+  --item-fg: var(--warn);
+}
+.item-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  border-radius: 5px;
+  border: 1.5px solid var(--item-fg);
+  background: var(--paper);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.item-question .item-check {
+  border-radius: 50%;
+}
+.item-check[aria-checked='true'] {
+  background: var(--item-fg);
+}
+.item-check[aria-checked='true']::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid var(--paper);
+  border-width: 0 2px 2px 0;
+  transform: translate(0, -1px) rotate(45deg);
+}
+.item-check:disabled {
+  cursor: default;
+}
+.item-main {
+  flex: 1;
+  min-width: 0;
+}
+.item-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--item-fg);
+}
+.item-text > p {
+  margin: 1px 0 0;
+}
+.item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.overdue {
+  color: var(--danger);
+  font-weight: 550;
+}
+.item-answer {
+  margin-top: 6px;
+  font-size: 14px;
+}
+.item.done .item-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.item.done {
+  opacity: 0.75;
+}
+
+.item-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0 0 22px;
+}
+.item-group {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--item-bg);
+}
+.item-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--item-fg);
+}
+.item-group ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.item-group li {
+  margin: 3px 0;
+  font-size: 14px;
+}
+.item-group a {
+  color: var(--ink);
+  text-decoration: none;
+}
+.item-group a:hover {
+  text-decoration: underline;
+}
+.item-chip {
+  flex: none;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--item-fg);
+  background: var(--item-bg);
+}
+.open-items .dash-title {
+  font-weight: 500;
+}
+
+.locked-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.tree-lock {
+  display: inline-flex;
+  margin-left: auto;
+  padding-right: 6px;
+  color: var(--faint);
+}

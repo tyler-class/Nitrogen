@@ -38,12 +38,15 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     why: 'Catches stale decisions and numbers.',
   },
   {
-    prompt: 'Find every #open-question in my wiki and group them by project.',
-    why: 'Turns scattered notes into a to-do list.',
+    prompt:
+      'What’s due or overdue across my wiki, and which questions are still open on <project>?',
+    why: 'A start-of-day list from every page.',
   },
+
   {
-    prompt: 'Turn these meeting notes into a page under <project> and update its decisions log.',
-    why: 'Notes filed and linked, not pasted.',
+    prompt:
+      'Turn this meeting transcript into a page under <project>: summary, decisions, and todo and question items with owners and dates.',
+    why: 'Action items roll up on their own.',
   },
 ];
 

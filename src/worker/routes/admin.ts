@@ -7,7 +7,7 @@ import { panelLayoutInput, restoreInput, settingsInput } from '@shared/schemas';
 import type { Backup, PanelLayout, SearchHit, SearchResponse } from '@shared/types';
 import { actorOf, isInternal } from '../auth';
 import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
-import { hydrate, listSummaries } from '../pages';
+import { hydrate, itemStatements, listSummaries } from '../pages';
 import { indexSoon, resetIndex, search, searchStatus } from '../search';
 import { ApiError, body, type AppEnv } from './util';
 
@@ -151,6 +151,7 @@ admin.post('/restore', async (c) => {
   await db.batch([
     db.prepare('DELETE FROM links'),
     db.prepare('DELETE FROM page_tags'),
+    db.prepare('DELETE FROM page_items'),
     db.prepare('DELETE FROM page_revisions'),
     db.prepare('UPDATE files SET page_id = NULL'),
     // Children first for the self-referencing foreign key.
@@ -185,6 +186,8 @@ admin.post('/restore', async (c) => {
       ),
     );
   }
+  const itemRows = ordered.flatMap((p) => itemStatements(db, p.id, p.body).slice(1));
+  for (const part of chunks(itemRows, 80)) await db.batch(part);
   const tagRows = ordered.flatMap((p) =>
     [...new Set([...(p.tags ?? []), ...extractTags(p.body)])].map((t) => [p.id, t] as const),
   );

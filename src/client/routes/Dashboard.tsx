@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { actorLabel, isAgent } from '@shared/actor';
 import { pageHref } from '@shared/markdown';
-import type { Dashboard as DashboardData } from '@shared/types';
+import { ITEM_LABELS, todayKey } from '@shared/items';
+import { plainText } from '@shared/markdown';
+import type { Dashboard as DashboardData, OpenItem } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { eventLine } from '../lib/activity';
 import { usePanelLayout } from '../lib/queries';
-import { Stat } from '../components/charts';
+import { Chips, Stat } from '../components/charts';
+import { formatDue } from '../components/Markdown';
 import { PageGlyph } from '../components/Icon';
 import { PanelBoard, type PanelDef } from '../components/Panels';
 import { useToast } from '../components/Toast';
@@ -21,6 +25,12 @@ export function Dashboard() {
     refetchInterval: 60_000,
   });
   const layout = usePanelLayout('dashboard_layout');
+  const items = useQuery({
+    queryKey: ['items'],
+    queryFn: () => api.get<{ items: OpenItem[] }>('/items'),
+    refetchInterval: 60_000,
+  });
+  const [kind, setKind] = useState<'all' | OpenItem['type']>('all');
   const qc = useQueryClient();
   const toast = useToast();
   const d = q.data;
@@ -36,7 +46,60 @@ export function Dashboard() {
 
   if (!d || !layout.ready) return <div className="page-loading" aria-busy="true" />;
 
+  const today = todayKey();
+  const open = (items.data?.items ?? []).filter((i) => kind === 'all' || i.type === kind);
+  const dueNow = open.filter((i) => i.due && i.due <= today).length;
+
   const panels: PanelDef[] = [
+    {
+      id: 'items',
+      title: 'Open items',
+      sub: dueNow
+        ? `${dueNow} due today or overdue`
+        : 'To-dos, questions and reminders from every page',
+      size: 'full',
+      actions: (
+        <Chips
+          label="Type"
+          options={[
+            ['all', 'All'],
+            ['todo', 'To do'],
+            ['question', 'Questions'],
+            ['reminder', 'Reminders'],
+          ]}
+          value={kind}
+          onChange={setKind}
+        />
+      ),
+      body: open.length ? (
+        <ul className="dash-list open-items">
+          {open.slice(0, 12).map((i) => (
+            <li key={`${i.page_id}-${i.line}`}>
+              <span className={`item-chip item-${i.type}`}>{ITEM_LABELS[i.type]}</span>
+              <Link
+                to={`${pageHref(i.page_id, i.page_title)}#item-${i.line}`}
+                className="dash-title"
+              >
+                {plainText(i.text)}
+              </Link>
+              <span className="dash-meta">
+                {i.due && (
+                  <span className={i.due < today ? 'overdue' : undefined}>
+                    {i.due < today ? 'Overdue' : 'Due'} {formatDue(i.due)} ·{' '}
+                  </span>
+                )}
+                {i.page_title}
+              </span>
+            </li>
+          ))}
+          {open.length > 12 && <li className="muted">and {open.length - 12} more</li>}
+        </ul>
+      ) : (
+        <p className="pn-empty">
+          {items.isPending ? 'Loading…' : 'Nothing open. Write “- [ ] todo: …” on any page.'}
+        </p>
+      ),
+    },
     {
       id: 'stats',
       title: 'At a glance',

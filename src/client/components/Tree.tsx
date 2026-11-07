@@ -17,10 +17,13 @@ export function Tree({
   pages,
   currentId,
   onNavigate,
+  sessionsId,
 }: {
   pages: PageSummary[];
   currentId: string | undefined;
   onNavigate?: () => void;
+  /** The protected Sessions section: no drag, rename, delete or new pages in it. */
+  sessionsId?: string | null;
 }) {
   const roots = useMemo(() => buildTree(pages), [pages]);
   const byId = useMemo(() => new Map(pages.map((p) => [p.id, p])), [pages]);
@@ -131,6 +134,7 @@ export function Tree({
       const isOpen = open.has(p.id);
       const hasKids = node.children.length > 0;
       const dropCls = drop?.id === p.id ? ` drop-${drop.where}` : '';
+      const locked = !!sessionsId && (p.id === sessionsId || p.parent_id === sessionsId);
       return (
         <li
           key={p.id}
@@ -141,7 +145,7 @@ export function Tree({
           <div
             className={`tree-row${p.id === currentId ? ' current' : ''}${drag === p.id ? ' dragging' : ''}${dropCls}`}
             style={{ paddingLeft: 6 + depth * 14 }}
-            draggable={renaming !== p.id}
+            draggable={!locked && renaming !== p.id}
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = 'move';
               e.dataTransfer.setData('text/plain', p.title);
@@ -151,7 +155,7 @@ export function Tree({
               setDrag(null);
               setDrop(null);
             }}
-            onDragOver={(e) => onDragOver(e, node)}
+            onDragOver={(e) => (locked ? undefined : onDragOver(e, node))}
             onDragLeave={() => drop?.id === p.id && setDrop(null)}
             onDrop={onDrop}
           >
@@ -179,30 +183,38 @@ export function Tree({
                 to={pageHref(p.id, p.title)}
                 className="tree-link"
                 onClick={onNavigate}
-                onDoubleClick={() => setRenaming(p.id)}
+                onDoubleClick={() => !locked && setRenaming(p.id)}
               >
                 <PageGlyph icon={p.icon} folder={hasKids} />
                 <span className="tree-title">{p.title}</span>
               </NavLink>
             )}
-            <span className="row-actions">
-              <button
-                onClick={() => addChild(p.id)}
-                aria-label={`Add a page inside ${p.title}`}
-                title="Add subpage"
-              >
-                <Icon name="plus" size={14} />
-              </button>
-              <button
-                onClick={() => setMenu(menu === p.id ? null : p.id)}
-                aria-label={`More for ${p.title}`}
-                aria-haspopup="menu"
-                aria-expanded={menu === p.id}
-              >
-                <Icon name="more" size={14} />
-              </button>
-            </span>
-            {menu === p.id && (
+            {locked ? (
+              p.id === sessionsId && (
+                <span className="tree-lock" title="Written by assistants. Read-only.">
+                  <Icon name="lock" size={12} />
+                </span>
+              )
+            ) : (
+              <span className="row-actions">
+                <button
+                  onClick={() => addChild(p.id)}
+                  aria-label={`Add a page inside ${p.title}`}
+                  title="Add subpage"
+                >
+                  <Icon name="plus" size={14} />
+                </button>
+                <button
+                  onClick={() => setMenu(menu === p.id ? null : p.id)}
+                  aria-label={`More for ${p.title}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menu === p.id}
+                >
+                  <Icon name="more" size={14} />
+                </button>
+              </span>
+            )}
+            {menu === p.id && !locked && (
               <Menu onClose={() => setMenu(null)}>
                 <button role="menuitem" onClick={() => (setMenu(null), setRenaming(p.id))}>
                   Rename

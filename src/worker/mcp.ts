@@ -3,7 +3,7 @@
 // because OAuthProvider has already checked the assistant's token.
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { actorLabel, agent, encodeActor, type Actor } from '@shared/actor';
+import { actorLabel, agent, type Actor } from '@shared/actor';
 import { applyEdits, EditError, headings, type EditOp } from '@shared/edit';
 import { EXAMPLE_PROMPTS, MCP_PROMPTS } from '@shared/examples';
 import { pageHref } from '@shared/markdown';
@@ -20,6 +20,7 @@ import type {
   Session,
   RevisionDetail,
   SearchResponse,
+  OpenItem,
   TagCount,
   TreeResponse,
   UploadedFile,
@@ -28,7 +29,7 @@ import { app } from './app';
 import { ACTOR, INTERNAL } from './auth';
 import { getSetting } from './db';
 import { getPage } from './pages';
-import { pagesTouched } from './routes/explore';
+import { touchSession } from './sessions';
 import { createUploadLink, placeImage, UPLOAD_LINK_MINUTES, uploadStatus, withAlt } from './images';
 import { MAX_IMAGE_BYTES, storeImage } from './routes/files';
 import { indexSoon } from './search';
@@ -94,7 +95,10 @@ How to work with it:
 - To build a structure (a project with sub-pages, meeting notes series), use create_pages to create the whole subtree in one call.
 - Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their inbox and activity log, and can undo a whole session.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
-- At the end of a working session that changed the wiki, call log_session with a short summary; it files a dated note under "Sessions" and lists the pages you touched.
+- Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
+- Open items: write to-dos, questions and reminders inline, on their own line, anywhere they belong:
+  "- [ ] todo: Draft the brief @alex due:2026-11-20", "- question: Which vendor?", "- [ ] reminder: Renew the domain due:2026-12-01" (reminders need a due date).
+  Check one off with "[x]"; resolve a question by checking it and adding " answer: …". open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: line on the page it belongs to.
 
 Markdown conventions:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
@@ -742,6 +746,7 @@ function buildServer(
       const markdown = withAlt(file.markdown, file.url, alt);
       if (!target) return text(`Stored. Markdown:\n${markdown}`);
       const placed = await placeImage(env.DB, target.id, markdown, placement, actor);
+      await touchSession(env.DB, actor).catch(() => undefined);
       indexSoon(env, ctx);
       return text(
         `${placed.fallback ? `Couldn’t find the requested spot (${placed.fallback}), so the image went at the end of the page. ` : ''}Added to ${describe(placed.page)} ${placed.fallback ? '' : describePlacement(placement)} (version ${placed.page.version}).\nMarkdown: ${markdown}`,
@@ -956,65 +961,76 @@ function buildServer(
     {
       title: 'Log this session',
       description:
-        'File a dated note of what you did in this conversation under the top-level "Sessions" page (created if missing), with links to every page you created or changed in the last hours. Call it once, at the end of a session that changed the wiki.',
+        'Give your current session entry under Sessions a title and summary. Your changes are already recorded there automatically (every page you create, edit, move or delete in this session); this adds what was decided, done and left open. Call it at the end of a session that changed the wiki, and again later in the same session to update it.',
       inputSchema: z.object({
         title: z.string().min(1).max(120).describe('A few words, e.g. "Planned the Q3 roadmap".'),
         summary: z
           .string()
           .min(1)
-          .describe('Markdown: what was decided, done, and left open. Link pages with [[Title]].'),
-        hours: z
-          .number()
-          .min(0.25)
-          .max(48)
-          .optional()
-          .describe('How far back to look for pages you touched (default 6).'),
+          .describe(
+            'Markdown: what was decided, done, and left open. Link pages with [[Title]]. Write anything unresolved as "- question: …" and follow-ups as "- [ ] todo: …" so they show up in open_items.',
+          ),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    safe(async ({ title, summary, hours }) => {
-      const t = await loadTree();
-      let sessions = t.pages.find((p) => !p.parent_id && p.title.toLowerCase() === 'sessions');
-      if (!sessions) {
-        const created = await call<Page>('POST', '/pages', {
-          title: 'Sessions',
-          parent_id: null,
-          icon: '🗂️',
-          body: 'Notes assistants filed at the end of working sessions, newest first.',
-        });
-        sessions = created;
-      }
-      const since = new Date(Date.now() - (hours ?? 6) * 3_600_000).toISOString();
-      const touched = (await pagesTouched(env.DB, encodeActor(actor), since)).filter(
-        (p) => p.page_id !== sessions.id && t.byId.get(p.page_id)?.parent_id !== sessions.id,
+    safe(async ({ title, summary }) => {
+      const res = await call<{ id: string; title: string; open_items: number }>(
+        'POST',
+        '/sessions/log',
+        { title, summary },
       );
-      const verbs: Record<string, string> = {
-        create: 'created',
-        edit: 'edited',
-        move: 'moved',
-        delete: 'deleted',
-        restore: 'restored',
-      };
-      const list = touched.length
-        ? touched
-            .map(
-              (p) =>
-                `- ${t.byId.has(p.page_id) ? `[[${p.title}]]` : `${p.title} (deleted)`} — ${p.actions
-                  .split(',')
-                  .map((a) => verbs[a] ?? a)
-                  .join(', ')}`,
-            )
-            .join('\n')
-        : '- (no page changes recorded)';
-      const day = new Date().toISOString().slice(0, 10);
-      const page = await call<Page>('POST', '/pages', {
-        title: `${day} · ${title.trim()}`,
-        parent_id: sessions.id,
-        position: 0,
-        tags: ['session-log'],
-        body: `${summary.trim()}\n\n## Pages touched\n\n${list}\n\n_Logged by ${actor.name}._`,
+      return text(
+        `Logged as ${describe(res)}${res.open_items ? ` with ${res.open_items} open item(s)` : ''}.\nurl: ${urlOf(res)}`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    'open_items',
+    {
+      title: 'Open items',
+      description:
+        'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- [ ] reminder: … due:YYYY-MM-DD"), from an index kept up to date on every save. Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
+      inputSchema: z.object({
+        type: z.enum(['todo', 'question', 'reminder']).optional(),
+        due_before: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe(
+            'Only items due on or before this date (YYYY-MM-DD). Today for "due or overdue".',
+          ),
+        include_done: z.boolean().optional(),
+        under: z.string().optional().describe('Only items in this page’s subtree.'),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async ({ type, due_before, include_done, under }) => {
+      const t = under ? await loadTree() : null;
+      const q = new URLSearchParams({
+        ...(type ? { type } : {}),
+        ...(due_before ? { due_before } : {}),
+        ...(include_done ? { include_done: '1' } : {}),
+        ...(under && t ? { under: resolve(under, t).id } : {}),
       });
-      return text(`Logged as ${describe(page)}.\nurl: ${urlOf(page)}`);
+      const { items } = await call<{ items: OpenItem[] }>('GET', `/items?${q}`);
+      if (!items.length) return text('No matching items.');
+      const today = new Date().toISOString().slice(0, 10);
+      return text(
+        items
+          .map((i) => {
+            const bits = [
+              i.done ? '[done]' : i.due && i.due < today ? '[overdue]' : '',
+              `${i.type}: ${i.text}`,
+              i.owner ? `@${i.owner}` : '',
+              i.due ? `due ${i.due}` : '',
+              i.answer ? `answer: ${i.answer}` : '',
+              `— ${[...i.path, i.page_title].join(' / ')} (${i.page_id}, line ${i.line})`,
+            ];
+            return `- ${bits.filter(Boolean).join(' ')}`;
+          })
+          .join('\n'),
+      );
     }),
   );
 

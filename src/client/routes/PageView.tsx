@@ -2,7 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
-import { extractTags, pageHref } from '@shared/markdown';
+import { ITEM_TYPES, extractItems, todayKey } from '@shared/items';
+import { extractTags, pageHref, plainText } from '@shared/markdown';
 import type {
   Graph,
   Mention,
@@ -19,7 +20,8 @@ import { readLocal, writeLocal } from '../lib/storage';
 import type { EditorHandle } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
-import { Markdown, type TitleIndex } from '../components/Markdown';
+import { formatDue, Markdown, type TitleIndex } from '../components/Markdown';
+import { downloadPage } from '../lib/exportMarkdown';
 import { GraphView } from '../components/GraphView';
 import { Sheet } from '../components/Sheet';
 import { TagEditor, TagList } from '../components/Tags';
@@ -119,11 +121,36 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const toast = useToast();
+  // Sessions and its entries are written by the system only.
+  const sessionsId = tree.data?.sessions_id ?? null;
+  const locked: 'root' | 'entry' | null = !sessionsId
+    ? null
+    : page.id === sessionsId
+      ? 'root'
+      : ancestors.some((a) => a.id === sessionsId)
+        ? 'entry'
+        : null;
+
+  const toggleItem = useCallback(
+    async (line: number, done: boolean) => {
+      try {
+        const next = await api.post<Page>(`/pages/${page.id}/items/toggle`, { line, done });
+        qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
+          old ? { ...old, page: next } : old,
+        );
+        void qc.invalidateQueries({ queryKey: ['items'] });
+      } catch (e) {
+        toast(errorMessage(e));
+      }
+    },
+    [page.id, qc, toast],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (
+        !locked &&
         e.key === 'e' &&
         !e.metaKey &&
         !e.ctrlKey &&
@@ -135,7 +162,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onEdit]);
+  }, [onEdit, locked]);
 
   // Scroll to #h-… anchors after the body renders.
   useEffect(() => {
@@ -171,6 +198,20 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
     }
   }
 
+  async function purge() {
+    setMenu(false);
+    if (!window.confirm(`Purge “${page.title}”? The entry is removed for good.`)) return;
+    try {
+      await api.del(`/sessions/${page.id}`);
+      qc.removeQueries({ queryKey: keys.page(page.id) });
+      void qc.invalidateQueries({ queryKey: keys.tree });
+      const parent = ancestors[ancestors.length - 1];
+      navigate(parent ? pageHref(parent.id, parent.title) : '/', { replace: true });
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
+
   async function remove() {
     setMenu(false);
     const n = (tree.data?.pages ?? []).filter((p) => p.parent_id === page.id).length;
@@ -196,9 +237,11 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
       <div className="page-top">
         <Breadcrumbs ancestors={ancestors} page={page} />
         <div className="page-actions">
-          <button className="btn" onClick={onEdit} title="Edit (E)">
-            <Icon name="edit" size={15} /> Edit
-          </button>
+          {!locked && (
+            <button className="btn" onClick={onEdit} title="Edit (E)">
+              <Icon name="edit" size={15} /> Edit
+            </button>
+          )}
           <button
             className="btn icon-only"
             onClick={() => setGraph(true)}
@@ -227,9 +270,11 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
             </button>
             {menu && (
               <Menu onClose={() => setMenu(false)}>
-                <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
-                  Add subpage
-                </button>
+                {!locked && (
+                  <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
+                    Add subpage
+                  </button>
+                )}
                 <button role="menuitem" onClick={pin}>
                   {page.pinned_at ? 'Unpin from dashboard' : 'Pin to dashboard'}
                 </button>
@@ -258,9 +303,25 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
                 >
                   Copy review request
                 </button>
-                <button role="menuitem" className="danger" onClick={remove}>
-                  Delete
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(false);
+                    downloadPage(page);
+                  }}
+                >
+                  Download as Markdown
                 </button>
+                {!locked && (
+                  <button role="menuitem" className="danger" onClick={remove}>
+                    Delete
+                  </button>
+                )}
+                {locked === 'entry' && (
+                  <button role="menuitem" className="danger" onClick={purge}>
+                    Purge entry
+                  </button>
+                )}
               </Menu>
             )}
           </div>
@@ -278,36 +339,53 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
         </p>
         <TagList tags={detail.all_tags} />
       </header>
+      {locked && (
+        <p className="locked-note">
+          <Icon name="lock" size={14} />{' '}
+          {locked === 'root'
+            ? 'Assistants record their sessions here automatically. Read-only.'
+            : 'Recorded automatically from what the assistant did. Read-only.'}
+        </p>
+      )}
+      <ItemSummary body={page.body} />
       <div className="prose">
         {page.body.trim() ? (
-          <Markdown source={page.body} titles={index} />
-        ) : (
+          <Markdown
+            source={page.body}
+            titles={index}
+            onToggleItem={locked ? undefined : toggleItem}
+          />
+        ) : locked ? null : (
           <button className="empty-body" onClick={onEdit}>
             This page is empty. Click to start writing.
           </button>
         )}
       </div>
 
-      <section className="related" aria-label="Pages inside">
-        <div className="related-head">
-          <h2>Pages inside</h2>
-          <button className="btn small" onClick={addChild}>
-            <Icon name="plus" size={14} /> Add subpage
-          </button>
-        </div>
-        {children.length ? (
-          <div className="cards">
-            {children.map((c) => (
-              <Link key={c.id} to={pageHref(c.id, c.title)} className="card">
-                <PageGlyph icon={c.icon} folder={false} />
-                <span>{c.title}</span>
-              </Link>
-            ))}
+      {locked !== 'entry' && (
+        <section className="related" aria-label="Pages inside">
+          <div className="related-head">
+            <h2>{locked === 'root' ? 'Sessions' : 'Pages inside'}</h2>
+            {!locked && (
+              <button className="btn small" onClick={addChild}>
+                <Icon name="plus" size={14} /> Add subpage
+              </button>
+            )}
           </div>
-        ) : (
-          <p className="muted">None yet.</p>
-        )}
-      </section>
+          {children.length ? (
+            <div className="cards">
+              {children.map((c) => (
+                <Link key={c.id} to={pageHref(c.id, c.title)} className="card">
+                  <PageGlyph icon={c.icon} folder={false} />
+                  <span>{c.title}</span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">None yet.</p>
+          )}
+        </section>
+      )}
 
       {backlinks.length > 0 && (
         <section className="related" aria-label="Linked from">
@@ -738,6 +816,52 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
     </div>
   );
 }
+
+/** Open items on this page, grouped by type; generated from the markers, never edited. */
+function ItemSummary({ body }: { body: string }) {
+  const open = useMemo(() => extractItems(body).filter((i) => !i.done), [body]);
+  if (!open.length) return null;
+  const today = todayKey();
+  return (
+    <aside className="item-summary" aria-label="Open items on this page">
+      {ITEM_TYPES.filter((t) => open.some((i) => i.type === t)).map((t) => (
+        <div key={t} className={`item-group item-${t}`}>
+          <h3>
+            {ITEM_PLURAL[t]}{' '}
+            <span className="count">{open.filter((i) => i.type === t).length}</span>
+          </h3>
+          <ul>
+            {open
+              .filter((i) => i.type === t)
+              .map((i) => (
+                <li key={i.line}>
+                  <a
+                    href={`#item-${i.line}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document
+                        .getElementById(`item-${i.line}`)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}
+                  >
+                    {plainText(i.text)}
+                  </a>
+                  {i.due && (
+                    <span className={i.due < today ? 'overdue' : 'muted'}>
+                      {' '}
+                      · {i.due < today ? 'overdue' : 'due'} {formatDue(i.due)}
+                    </span>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      ))}
+    </aside>
+  );
+}
+
+const ITEM_PLURAL = { todo: 'To do', question: 'Open questions', reminder: 'Reminders' } as const;
 
 /** Pages that name this one without linking to it, with a one-click "link it". */
 function Mentions({ page }: { page: Page }) {

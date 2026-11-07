@@ -7,6 +7,7 @@
 //   /u/<token>      → one-time image upload link an assistant hands out (the token is the credential)
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
 import { app } from './app';
+import { clientDisplayName, UNKNOWN_ASSISTANT } from './client-name';
 import { handleAuthorize } from './consent';
 import { mcpApiHandler } from './mcp';
 import { handleUploadLink } from './images';
@@ -44,15 +45,13 @@ function providerFor(origin: string) {
       resourceMetadata: { resource: `${origin}/mcp`, authorization_servers: [origin] },
       clientIdMetadataDocumentEnabled: true,
       // Grants made before v0.5 have no client name in their props; add it on the next refresh.
+      // Grants whose props have no real client name (made before v0.5, or before CIMD names were
+      // read) get one on their next token refresh.
       tokenExchangeCallback: async ({ props, clientId, env }) => {
         const p = (props ?? {}) as { client?: string };
-        if (p.client) return;
-        // The provider stores registered clients in KV as client:<id>.
-        const info = await env.OAUTH_KV.get<{ clientName?: string }>(
-          `client:${clientId}`,
-          'json',
-        ).catch(() => null);
-        const client = info?.clientName?.trim() || 'An assistant';
+        if (p.client && p.client !== UNKNOWN_ASSISTANT) return;
+        const client = await clientDisplayName(env, clientId);
+        if (client === p.client) return;
         return { accessTokenProps: { ...p, client }, newProps: { ...p, client } };
       },
     });

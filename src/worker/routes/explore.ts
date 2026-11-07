@@ -102,6 +102,9 @@ explore.get('/dashboard', async (c) => {
       `SELECT ${summaryCols('p')}, (p.viewed_at IS NULL OR p.viewed_at < p.created_at) AS is_new
        FROM pages p WHERE p.updated_by LIKE 'agent:%'
          AND (p.viewed_at IS NULL OR p.viewed_at < p.updated_at)
+         -- Session entries are a log, not news.
+         AND p.id NOT IN (SELECT value FROM settings WHERE key = 'sessions_id')
+         AND (p.parent_id IS NULL OR p.parent_id NOT IN (SELECT value FROM settings WHERE key = 'sessions_id'))
        ORDER BY p.updated_at DESC LIMIT 30`,
     ),
     all<PageSummary>(
@@ -485,15 +488,3 @@ explore.get('/insights', async (c) => {
     links: links?.n ?? 0,
   });
 });
-
-/** Ids of every page an actor touched since a time; used by the MCP session log. */
-export async function pagesTouched(db: D1Database, actor: string, since: string) {
-  return all<{ page_id: string; title: string; actions: string }>(
-    db,
-    `SELECT e.page_id, COALESCE(p.title, e.title) AS title, GROUP_CONCAT(DISTINCT e.action) AS actions
-     FROM page_events e LEFT JOIN pages p ON p.id = e.page_id
-     WHERE e.actor = ? AND e.created_at >= ? GROUP BY e.page_id ORDER BY MIN(e.id)`,
-    actor,
-    since,
-  );
-}

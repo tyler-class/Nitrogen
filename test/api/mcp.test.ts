@@ -1,6 +1,13 @@
 import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import type { Dashboard, Insights, PageDetail, RevertResult, Session } from '@shared/types';
+import type {
+  Dashboard,
+  Insights,
+  PageDetail,
+  RevertResult,
+  Session,
+  TreeResponse,
+} from '@shared/types';
 import { ORIGIN, PASSWORD, session } from './helpers';
 
 const REDIRECT = 'https://client.example/callback';
@@ -163,6 +170,7 @@ describe('MCP', () => {
         'log_session',
         'tag_page',
         'move_page',
+        'open_items',
         'read_page',
         'read_revision',
         'recent_changes',
@@ -409,5 +417,73 @@ describe('MCP', () => {
     expect(start.text).toContain('capture_conversation');
     const recent = await tool(token, 'recent_changes', { days: 1, who: 'assistants' });
     expect(recent.text).toContain('Test Assistant');
+  });
+
+  it('records sessions automatically, protects them, and indexes open items', async () => {
+    const token = await connect();
+    const api = await session();
+
+    const made = await tool(token, 'create_page', {
+      title: 'Session Proof',
+      body: '- [ ] todo: Ship it @sam due:2026-01-02\n- question: Which colour?',
+    });
+    expect(made.isError).toBe(false);
+    const id = /id ([a-z0-9]+)/.exec(made.text)![1]!;
+    await tool(token, 'edit_page', { page: id, edits: [{ type: 'append', text: 'More.' }] });
+
+    // One entry for this session, written without log_session, listing the page.
+    const tree = (await api.get<TreeResponse>('/tree')).data;
+    const root = tree.sessions_id!;
+    expect(root).toBeTruthy();
+    // Same assistant within the hour: earlier writes in this file share the entry.
+    const mine = tree.pages
+      .filter((p) => p.parent_id === root && p.updated_by === 'agent:Test Assistant')
+      .sort((x, y) => y.updated_at.localeCompare(x.updated_at))[0]!;
+    const entry = (await api.get<PageDetail>(`/pages/${mine.id}`)).data;
+    expect(entry.page.body).toContain('[[Session Proof]] — created');
+
+    // log_session titles the same entry instead of making another.
+    const logged = await tool(token, 'log_session', {
+      title: 'Proved sessions',
+      summary: 'Checked auto logging.\n- question: Keep the gap at an hour?',
+    });
+    expect(logged.text).toContain('1 open item');
+    const after = (await api.get<PageDetail>(`/pages/${mine.id}`)).data.page;
+    expect(after.title).toMatch(/· Proved sessions$/);
+    expect(after.body).toContain('[[Session Proof]]');
+    expect(
+      (await api.get<TreeResponse>('/tree')).data.pages.filter((p) => p.parent_id === root).length,
+    ).toBe(tree.pages.filter((p) => p.parent_id === root).length);
+
+    // Nobody edits, moves or deletes Sessions or its entries; the owner can purge an entry.
+    expect((await api.patch(`/pages/${mine.id}`, { body: 'x' })).status).toBe(403);
+    expect((await api.del(`/pages/${mine.id}`)).status).toBe(403);
+    expect((await api.patch(`/pages/${root}`, { title: 'Logs' })).status).toBe(403);
+    expect((await api.post(`/pages/${root}/move`, { parent_id: id })).status).toBe(403);
+    expect((await api.post('/pages', { title: 'Sneaky', parent_id: root })).status).toBe(403);
+    const agentEdit = await tool(token, 'update_page', {
+      page: mine.id,
+      base_version: after.version,
+      body: 'rewritten',
+    });
+    expect(agentEdit.isError).toBe(true);
+    expect((await api.post('/sessions/log', { title: 'x', summary: 'y' })).status).toBe(403);
+
+    // Open items from page bodies and session summaries; check one off in place.
+    const items = await tool(token, 'open_items', { type: 'todo' });
+    expect(items.text).toContain('todo: Ship it @sam due 2026-01-02');
+    expect(items.text).toContain('[overdue]');
+    expect((await tool(token, 'open_items', { type: 'question' })).text).toContain(
+      'Keep the gap at an hour?',
+    );
+    const toggled = await api.post<{ body: string }>(`/pages/${id}/items/toggle`, {
+      line: 1,
+      done: true,
+    });
+    expect(toggled.data.body.startsWith('- [x] todo: Ship it')).toBe(true);
+    expect((await tool(token, 'open_items', { type: 'todo' })).text).not.toContain('Ship it');
+
+    expect((await api.del(`/sessions/${mine.id}`)).status).toBe(200);
+    expect((await api.get(`/pages/${mine.id}`)).status).toBe(404);
   });
 });

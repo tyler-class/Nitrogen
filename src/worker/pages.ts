@@ -1,6 +1,7 @@
 // Page storage: the tree, edits with optimistic concurrency, history, links and deletion.
 import type { z } from 'zod';
 import { encodeActor, type Actor } from '@shared/actor';
+import { extractItems } from '@shared/items';
 import { extractFileKeys, extractLinks, extractTags, wordCount } from '@shared/markdown';
 import {
   MAX_BULK_PAGES,
@@ -136,7 +137,7 @@ async function siblingIds(db: D1Database, parentId: string | null, except?: stri
 }
 
 /** Replace a page's outgoing links with those in `body`. */
-async function linkStatements(db: D1Database, id: string, body: string) {
+export async function linkStatements(db: D1Database, id: string, body: string) {
   const { titles, ids } = extractLinks(body);
   const targets = new Set<string>();
   for (const part of chunks(titles)) {
@@ -177,6 +178,61 @@ function claimFiles(db: D1Database, id: string, body: string): D1PreparedStateme
 }
 
 /** Replace a page's tag index with its own tags plus #tags in the body. */
+/** Replace a page's typed-item index with the markers in `body`. */
+export function itemStatements(db: D1Database, id: string, body: string) {
+  return [
+    db.prepare('DELETE FROM page_items WHERE page_id = ?').bind(id),
+    ...extractItems(body).map((i) =>
+      db
+        .prepare(
+          'INSERT OR REPLACE INTO page_items (page_id, line, type, text, owner, due, done, answer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .bind(id, i.line, i.type, i.text, i.owner, i.due, i.done ? 1 : 0, i.answer),
+    ),
+  ];
+}
+
+// ---------------------------------------------------------------- protected Sessions
+
+/** The system Sessions page, or null if there isn't one yet. */
+export async function sessionsRoot(db: D1Database): Promise<string | null> {
+  const row = await first<{ id: string }>(
+    db,
+    "SELECT p.id FROM settings s JOIN pages p ON p.id = s.value WHERE s.key = 'sessions_id'",
+  );
+  return row?.id ?? null;
+}
+
+/** 'root' for the Sessions page, 'entry' for anything inside it, else null. */
+export async function protection(
+  db: D1Database,
+  id: string | null,
+): Promise<'root' | 'entry' | null> {
+  if (!id) return null;
+  const root = await sessionsRoot(db);
+  if (!root) return null;
+  if (id === root) return 'root';
+  const hit = await first(
+    db,
+    `WITH RECURSIVE up (id, depth) AS (
+       SELECT parent_id, 1 FROM pages WHERE id = ?1
+       UNION ALL SELECT p.parent_id, up.depth + 1 FROM pages p JOIN up ON p.id = up.id WHERE up.depth < 64
+     ) SELECT 1 FROM up WHERE id = ?2 LIMIT 1`,
+    id,
+    root,
+  );
+  return hit ? 'entry' : null;
+}
+
+export const protectedError = (what: 'root' | 'entry') =>
+  new ApiError(
+    403,
+    'protected',
+    what === 'root'
+      ? 'Sessions is a system section: it can’t be edited, renamed, moved or deleted.'
+      : 'Session entries are written automatically from what assistants do and can’t be changed. Assistants add a title and summary to their own session with log_session.',
+  );
+
 function tagStatements(db: D1Database, id: string, own: string[], body: string) {
   const all = [...new Set([...own, ...extractTags(body)])];
   return [
@@ -236,8 +292,10 @@ export async function createPage(
   db: D1Database,
   input: z.output<typeof createPageInput>,
   actor: Actor,
+  opts: { system?: boolean } = {},
 ): Promise<Page> {
   await requireParent(db, input.parent_id);
+  if (!opts.system && (await protection(db, input.parent_id))) throw protectedError('entry');
   const id = newId();
   const now = nowIso();
   const siblings = await siblingIds(db, input.parent_id);
@@ -272,13 +330,17 @@ export async function createPage(
     ...(await linkStatements(db, id, input.body)),
     ...claimFiles(db, id, input.body),
     ...tagStatements(db, id, tags, input.body),
-    ...(await eventStatements(db, {
-      page_id: id,
-      title: input.title,
-      action: 'create',
-      actor,
-      words,
-    })),
+    ...itemStatements(db, id, input.body),
+    // System pages (Sessions entries) aren't part of the activity log they summarize.
+    ...(opts.system
+      ? []
+      : await eventStatements(db, {
+          page_id: id,
+          title: input.title,
+          action: 'create',
+          actor,
+          words,
+        })),
   ]);
   return (await getPage(db, id))!;
 }
@@ -301,6 +363,8 @@ export async function updatePage(
   opts: { actor: Actor; snapshot?: boolean; action?: 'edit' | 'restore' },
 ): Promise<Page> {
   const cur = await requirePage(db, id);
+  const prot = await protection(db, id);
+  if (prot) throw protectedError(prot);
   if (input.base_version !== undefined && input.base_version !== cur.version)
     throw new ConflictError(cur);
 
@@ -357,6 +421,7 @@ export async function updatePage(
   if (body !== cur.body)
     stmts.push(...(await linkStatements(db, id, body)), ...claimFiles(db, id, body));
   if (body !== cur.body || tagsChanged) stmts.push(...tagStatements(db, id, tags, body));
+  if (body !== cur.body) stmts.push(...itemStatements(db, id, body));
   stmts.push(
     ...(await eventStatements(db, {
       page_id: id,
@@ -380,6 +445,8 @@ export async function movePage(
 ): Promise<Page> {
   const cur = await requirePage(db, id);
   await requireParent(db, input.parent_id);
+  const prot = (await protection(db, id)) ?? (await protection(db, input.parent_id));
+  if (prot) throw protectedError(prot);
   if (input.parent_id && (await subtreeIds(db, id)).includes(input.parent_id))
     throw new ApiError(400, 'invalid', 'A page cannot move inside itself.');
 
@@ -413,8 +480,16 @@ export interface DeleteResult {
   orphanFiles: string[];
 }
 
-export async function deletePage(db: D1Database, id: string, actor: Actor): Promise<DeleteResult> {
+export async function deletePage(
+  db: D1Database,
+  id: string,
+  actor: Actor,
+  opts: { purge?: boolean } = {},
+): Promise<DeleteResult> {
   await requirePage(db, id);
+  const prot = await protection(db, id);
+  // Only the owner's "purge" (DELETE /sessions/:id) removes a session entry; nothing removes the root.
+  if (prot === 'root' || (prot === 'entry' && !opts.purge)) throw protectedError(prot);
   const ids = await subtreeIds(db, id);
   const searchItems: string[] = [];
   const fileKeys: string[] = [];
@@ -543,6 +618,7 @@ export async function createTree(
   actor: Actor,
 ): Promise<{ id: string; title: string; parent_id: string | null }[]> {
   await requireParent(db, input.parent_id);
+  if (await protection(db, input.parent_id)) throw protectedError('entry');
   type Flat = { id: string; parent_id: string | null; position: number; node: PageTreeInput };
   const flat: Flat[] = [];
   const walk = (nodes: PageTreeInput[], parent: string | null, depth: number) => {
@@ -614,6 +690,7 @@ export async function createTree(
     for (const d of dsts)
       stmts.push(db.prepare('INSERT OR IGNORE INTO links (src, dst) VALUES (?, ?)').bind(f.id, d));
     stmts.push(...claimFiles(db, f.id, f.node.body ?? ''));
+    stmts.push(...itemStatements(db, f.id, f.node.body ?? '').slice(1));
     for (const t of new Set([...(f.node.tags ?? []), ...extractTags(f.node.body ?? '')]))
       stmts.push(
         db.prepare('INSERT OR IGNORE INTO page_tags (page_id, tag) VALUES (?, ?)').bind(f.id, t),

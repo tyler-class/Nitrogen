@@ -2,11 +2,13 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { loginInput } from '@shared/schemas';
 import {
+  actorOf,
   clearFailures,
   clearSessionCookie,
   clientIp,
   getSalt,
   guard,
+  isInternal,
   isSignedIn,
   makeToken,
   passwordMatches,
@@ -18,6 +20,8 @@ import {
 import { admin } from './routes/admin';
 import { connections } from './routes/connections';
 import { explore } from './routes/explore';
+import { system } from './routes/system';
+import { touchSession } from './sessions';
 import { files } from './routes/files';
 import { pages } from './routes/pages';
 import { ApiError, body, type AppEnv } from './routes/util';
@@ -25,6 +29,17 @@ import { ApiError, body, type AppEnv } from './routes/util';
 export const app = new Hono<AppEnv>().basePath('/api');
 
 app.use('*', guard);
+
+// Every successful change an assistant makes extends its entry under Sessions, so the record is
+// complete without relying on the assistant to log it. /sessions/* manages entries itself.
+app.use('*', async (c, next) => {
+  await next();
+  if (!isInternal(c.env) || c.req.method === 'GET' || c.res.status >= 300) return;
+  if (c.req.path.startsWith('/api/sessions')) return;
+  await touchSession(c.env.DB, actorOf(c.env)).catch((e: unknown) =>
+    console.warn('session log failed:', e instanceof Error ? e.message : e),
+  );
+});
 
 app.get('/health', (c) => c.json({ ok: true }));
 
@@ -65,6 +80,7 @@ app.route('/', files);
 app.route('/', admin);
 app.route('/', connections);
 app.route('/', explore);
+app.route('/', system);
 
 app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));
 

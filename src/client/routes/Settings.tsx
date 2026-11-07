@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EXAMPLE_PROMPTS } from '@shared/examples';
+import { downloadAll } from '../lib/exportMarkdown';
 import { pageHref } from '@shared/markdown';
 import type { Backup, Page, SearchStatus } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
@@ -261,12 +262,24 @@ export function Settings() {
       <section>
         <h2>Backup</h2>
         <p>
-          Download every page as one JSON file, or replace everything with a backup. Images stay in
-          storage.
+          The backup keeps everything exactly as written and restores it. Markdown is for other apps
+          and Google Docs: callouts and items become plain text, links point between files.
         </p>
         <div className="row">
           <button className="btn" onClick={download}>
             Download backup
+          </button>
+          <button
+            className="btn"
+            onClick={async () => {
+              try {
+                downloadAll(await api.get<Backup>('/backup'));
+              } catch (e) {
+                toast(errorMessage(e));
+              }
+            }}
+          >
+            Download as Markdown (.zip)
           </button>
           <button className="btn" onClick={() => restoreInput.current?.click()}>
             Restore from backup…

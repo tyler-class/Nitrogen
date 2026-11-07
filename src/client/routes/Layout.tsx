@@ -65,6 +65,7 @@ export function Layout() {
             pages={tree.data.pages}
             currentId={match?.params.id}
             onNavigate={() => setNav(false)}
+            sessionsId={tree.data.sessions_id}
           />
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>

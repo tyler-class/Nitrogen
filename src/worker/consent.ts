@@ -11,6 +11,7 @@ import {
   tooManyFailures,
   WINDOW_MINUTES,
 } from './auth';
+import { clientDisplayName } from './client-name';
 import { MCP_USER } from './routes/connections';
 
 const esc = (v: string) => v.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
@@ -143,9 +144,7 @@ export async function handleAuthorize(request: Request, env: Cloudflare.Env): Pr
       // The client's registered name, so edits it makes are labelled with it.
       props: {
         owner: true,
-        client: approved.request.clientId
-          ? await clientName(env, approved.request.clientId, info.clientName)
-          : info.clientName,
+        client: await clientDisplayName(env, approved.request.clientId, info.clientName),
       },
     });
     approved.headers.set('Location', redirectTo);
@@ -158,10 +157,4 @@ export async function handleAuthorize(request: Request, env: Cloudflare.Env): Pr
     if (error instanceof CimdFetchError) return plainError('This app could not be verified.');
     throw error;
   }
-}
-
-/** The registered client name, falling back to what the consent page showed. */
-async function clientName(env: Cloudflare.Env, clientId: string, shown: string): Promise<string> {
-  const info = await (env.OAUTH_PROVIDER as OAuthHelpers).lookupClient(clientId).catch(() => null);
-  return info?.clientName || shown;
 }

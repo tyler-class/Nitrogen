@@ -2,7 +2,15 @@
 import { memo, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { Link } from 'react-router';
-import type { Blockquote, Link as MdLink, Paragraph, PhrasingContent, Root, Text } from 'mdast';
+import type {
+  Blockquote,
+  Link as MdLink,
+  ListItem,
+  Paragraph,
+  PhrasingContent,
+  Root,
+  Text,
+} from 'mdast';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmFromMarkdown } from 'mdast-util-gfm';
 import { toHast } from 'mdast-util-to-hast';
@@ -10,6 +18,7 @@ import { gfm } from 'micromark-extension-gfm';
 import { defaultSchema, sanitize, type Schema } from 'hast-util-sanitize';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit, SKIP } from 'unist-util-visit';
+import { ITEM_LABELS, ITEM_TYPES, parseItemLine, todayKey, type ItemType } from '@shared/items';
 import { pageHref, slugify, splitTags, WIKILINK_RE } from '@shared/markdown';
 
 const CALLOUTS = ['note', 'tip', 'important', 'warning', 'caution', 'info', 'question'];
@@ -25,7 +34,7 @@ function headingText(node: { children?: unknown[] }): string {
   return out;
 }
 
-function transform(tree: Root, titles: TitleIndex) {
+function transform(tree: Root, titles: TitleIndex, source: string) {
   // [[Wikilinks]] inside text nodes become links (or "missing" markers).
   visit(tree, 'text', (node: Text, index, parent) => {
     if (!parent || index === undefined || parent.type === 'link') return;
@@ -76,6 +85,53 @@ function transform(tree: Root, titles: TitleIndex) {
     return [SKIP, index + parts.length];
   });
 
+  // todo: / question: / reminder: lines become item cards. The item is parsed from the source line
+  // (so it matches the server's index); the marker, owner, due date and answer are moved out of the
+  // text into data attributes, and the rest of the line keeps its inline markdown.
+  const lines = source.split('\n');
+  const markItem = (node: ListItem | Paragraph, para: Paragraph) => {
+    const line = node.position?.start.line;
+    if (!line) return false;
+    const item = parseItemLine(lines[line - 1] ?? '', line);
+    if (!item) return false;
+    const lead = para.children[0];
+    if (lead?.type !== 'text') return false;
+    const re = new RegExp(`^\\s*(${ITEM_TYPES.join('|')}):\\s+`, 'i');
+    if (!re.test(lead.value)) return false;
+    lead.value = lead.value.replace(re, '');
+    visit(para, 'text', (t: Text) => {
+      t.value = t.value
+        .replace(/\s+answer:\s+.*$/i, '')
+        .replace(/(^|\s)due:\s?\d{4}-\d{2}-\d{2}\b/gi, '$1')
+        .replace(/(^|\s)@[\p{L}\p{N}._-]+/gu, '$1');
+    });
+    if (node.type === 'listItem') node.checked = null;
+    const props = {
+      className: ['item', `item-${item.type}`, ...(item.done ? ['done'] : [])],
+      dataLine: String(line),
+      dataType: item.type,
+      dataDone: item.done ? '1' : '0',
+      ...(item.due ? { dataDue: item.due } : {}),
+      ...(item.owner ? { dataOwner: item.owner } : {}),
+      ...(item.answer ? { dataAnswer: item.answer } : {}),
+      ...(item.invalid ? { dataInvalid: item.invalid } : {}),
+    };
+    node.data = {
+      ...node.data,
+      ...(node.type === 'paragraph' ? { hName: 'div' } : {}),
+      hProperties: props,
+    };
+    return true;
+  };
+  visit(tree, 'listItem', (node: ListItem) => {
+    const para = node.children[0];
+    if (para?.type === 'paragraph') markItem(node, para);
+  });
+  visit(tree, 'paragraph', (node: Paragraph, _i, parent) => {
+    if (parent?.type === 'listItem') return;
+    markItem(node, node);
+  });
+
   // > [!NOTE] Optional title  →  <aside class="callout callout-note">
   visit(tree, 'blockquote', (node: Blockquote) => {
     const first = node.children[0];
@@ -117,6 +173,17 @@ function transform(tree: Root, titles: TitleIndex) {
   });
 }
 
+const ITEM_CLASSES = ['item', 'done', ...ITEM_TYPES.map((t) => `item-${t}`)];
+const ITEM_DATA = [
+  'dataLine',
+  'dataType',
+  'dataDone',
+  'dataDue',
+  'dataOwner',
+  'dataAnswer',
+  'dataInvalid',
+];
+
 const schema: Schema = {
   ...defaultSchema,
   clobberPrefix: 'h-',
@@ -131,6 +198,8 @@ const schema: Schema = {
       ['className', 'wikilink', 'missing', 'tag', 'data-footnote-backref'],
     ],
     aside: [['className', 'callout', ...CALLOUTS.map((c) => `callout-${c}`)]],
+    li: [['className', 'task-list-item', ...ITEM_CLASSES], ...ITEM_DATA],
+    div: [['className', ...ITEM_CLASSES], ...ITEM_DATA],
     p: [['className', 'callout-title']],
     code: [['className', /^language-./]],
   },
@@ -185,25 +254,99 @@ function TableWrap(props: ComponentProps<'table'>) {
   );
 }
 
+type ItemProps = { className?: string; children?: ReactNode } & Record<
+  `data-${string}`,
+  string | undefined
+>;
+
+/** A typed item as a card: check it off (when the page allows), label, text, owner, due date. */
+function itemCard(Tag: 'li' | 'div', onToggle?: (line: number, done: boolean) => void) {
+  return function ItemOrPlain(props: ItemProps) {
+    const { className, children, ...rest } = props as ItemProps & Record<string, unknown>;
+    if (!className?.split(' ').includes('item'))
+      return (
+        <Tag className={className} {...rest}>
+          {children}
+        </Tag>
+      );
+    const type = props['data-type'] as ItemType;
+    const line = Number(props['data-line']);
+    const done = props['data-done'] === '1';
+    const due = props['data-due'];
+    const overdue = !done && !!due && due < todayKey();
+    const label = ITEM_LABELS[type] ?? type;
+    return (
+      <Tag className={className} id={`item-${line}`}>
+        <button
+          type="button"
+          className="item-check"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={`${done ? 'Reopen' : type === 'question' ? 'Resolve' : 'Complete'}: ${label}`}
+          disabled={!onToggle}
+          onClick={() => onToggle?.(line, !done)}
+        />
+        <div className="item-main">
+          <span className="item-label">{label}</span>
+          <div className="item-text">{children}</div>
+          {(props['data-owner'] || due || props['data-invalid']) && (
+            <div className="item-meta">
+              {props['data-owner'] && <span>@{props['data-owner']}</span>}
+              {due && (
+                <span className={overdue ? 'overdue' : undefined}>
+                  {overdue ? 'Overdue · ' : 'Due '}
+                  {formatDue(due)}
+                </span>
+              )}
+              {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
+            </div>
+          )}
+          {props['data-answer'] && (
+            <div className="item-answer">
+              <strong>Answer:</strong> {props['data-answer']}
+            </div>
+          )}
+        </div>
+      </Tag>
+    );
+  };
+}
+
+export const formatDue = (d: string) =>
+  new Date(`${d}T12:00:00`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(d.slice(0, 4) !== String(new Date().getFullYear()) ? { year: 'numeric' } : {}),
+  });
+
 export const Markdown = memo(function Markdown({
   source,
   titles,
+  onToggleItem,
 }: {
   source: string;
   titles: TitleIndex;
+  /** Lets readers check items off; without it the checkboxes are shown but disabled. */
+  onToggleItem?: (line: number, done: boolean) => void;
 }): ReactNode {
   return useMemo(() => {
     const tree = fromMarkdown(source, {
       extensions: [gfm()],
       mdastExtensions: [gfmFromMarkdown()],
     });
-    transform(tree, titles);
+    transform(tree, titles, source);
     const hast = sanitize(toHast(tree), schema);
     return toJsxRuntime(hast, {
       Fragment,
       jsx,
       jsxs,
-      components: { a: Anchor, img: Img, table: TableWrap },
+      components: {
+        a: Anchor,
+        img: Img,
+        table: TableWrap,
+        li: itemCard('li', onToggleItem),
+        div: itemCard('div', onToggleItem),
+      },
     });
-  }, [source, titles]);
+  }, [source, titles, onToggleItem]);
 });

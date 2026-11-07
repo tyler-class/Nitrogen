@@ -34,6 +34,22 @@ export interface PageDetail {
 export interface TreeResponse {
   pages: PageSummary[];
   home_id: string | null;
+  /** The protected Sessions section, if it exists. */
+  sessions_id: string | null;
+}
+
+export interface OpenItem {
+  page_id: string;
+  page_title: string;
+  page_icon: string | null;
+  path: string[];
+  line: number;
+  type: 'todo' | 'question' | 'reminder';
+  text: string;
+  owner: string | null;
+  due: string | null;
+  done: boolean;
+  answer: string | null;
 }
 
 export interface Revision {

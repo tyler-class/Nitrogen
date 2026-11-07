@@ -18,6 +18,7 @@ import {
   listSummaries,
   movePage,
   restoreRevision,
+  sessionsRoot,
   updatePage,
 } from '../pages';
 import { indexSoon } from '../search';
@@ -28,12 +29,13 @@ import { ApiError, body, type AppEnv } from './util';
 export const pages = new Hono<AppEnv>();
 
 pages.get('/tree', async (c) => {
-  const [list, home] = await Promise.all([
+  const [list, home, sessions] = await Promise.all([
     listSummaries(c.env.DB),
     getSetting(c.env.DB, 'home_id'),
+    sessionsRoot(c.env.DB),
   ]);
   const homeId = home && list.some((p) => p.id === home) ? home : null;
-  return c.json<TreeResponse>({ pages: list, home_id: homeId });
+  return c.json<TreeResponse>({ pages: list, home_id: homeId, sessions_id: sessions });
 });
 
 pages.get('/pages/:id', async (c) => {
