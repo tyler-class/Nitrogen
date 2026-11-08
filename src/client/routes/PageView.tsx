@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
+import { ancestorsOf } from '@shared/tree';
 import { ITEM_TYPES, extractItems, todayKey } from '@shared/items';
 import { extractTags, pageHref, plainText } from '@shared/markdown';
 import type {
@@ -16,7 +17,7 @@ import type {
 import { api, ApiError, errorMessage } from '../lib/api';
 import { keys, useCreatePage, useDeletePage, usePage, useTree } from '../lib/queries';
 import { readLocal, writeLocal } from '../lib/storage';
-import type { EditorHandle } from '../components/Editor';
+import type { EditorHandle, LinkTarget } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
 import { formatDue, Markdown, type TitleIndex } from '../components/Markdown';
@@ -27,6 +28,24 @@ import { useToast } from '../components/Toast';
 
 // CodeMirror is most of the bundle; load it only when someone edits.
 const Editor = lazy(() => import('../components/Editor').then((m) => ({ default: m.Editor })));
+
+/** Pages to offer after "[[" (not AI Sessions), most recently edited first, with their place in the tree. */
+function useLinkTargets(): LinkTarget[] {
+  const tree = useTree();
+  return useMemo(() => {
+    const pages = tree.data?.pages ?? [];
+    const sid = tree.data?.sessions_id;
+    const byId = new Map(pages.map((p) => [p.id, p]));
+    return pages
+      .filter((p) => !sid || (p.id !== sid && p.parent_id !== sid))
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map((p) => ({
+        title: p.title,
+        icon: p.icon,
+        path: ancestorsOf(p.id, byId).map((a) => a.title),
+      }));
+  }, [tree.data]);
+}
 
 export function useTitleIndex(): { index: TitleIndex; titles: string[] } {
   const tree = useTree();
@@ -440,7 +459,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
   const { page, ancestors } = detail;
   const qc = useQueryClient();
   const toast = useToast();
-  const { titles } = useTitleIndex();
+  const links = useLinkTargets();
   const editor = useRef<EditorHandle>(null);
   const draftKey = `n2.draft.${page.id}`;
   const [draft, setDraft] = useState<Draft>({
@@ -773,7 +792,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           ref={editor}
           value={draft.body}
           pageId={page.id}
-          titles={titles}
+          links={links}
           onChange={(body) => change({ body })}
           onSave={() => void save()}
           onError={toast}

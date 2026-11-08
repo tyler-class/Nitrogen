@@ -44,9 +44,51 @@ const theme = EditorView.theme({
     borderRadius: '8px',
     boxShadow: 'var(--shadow)',
   },
+  // Link suggestions read like breadcrumbs: app font, emoji, title, then where it lives.
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    borderRadius: '14px',
+    padding: '6px',
+    fontFamily: 'var(--font-ui)',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+    fontFamily: 'var(--font-ui)',
+    maxHeight: '320px',
+    minWidth: '320px',
+    maxWidth: 'min(560px, 90vw)',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '8px',
+    padding: '7px 10px',
+    borderRadius: '9px',
+    lineHeight: '1.3',
+  },
   '.cm-tooltip-autocomplete ul li[aria-selected]': {
     background: 'var(--accent-soft)',
     color: 'var(--ink)',
+  },
+  '.cm-link-icon': { flex: 'none', width: '1.3em', textAlign: 'center', fontSize: '15px' },
+  '.cm-link-icon.plain': { filter: 'grayscale(1)', opacity: '0.55', fontSize: '13px' },
+  '.cm-completionLabel': {
+    fontSize: '14.5px',
+    fontWeight: '550',
+    flex: 'none',
+    maxWidth: '60%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  '.cm-completionMatchedText': { textDecoration: 'none', color: 'var(--accent-ink)' },
+  '.cm-completionDetail': {
+    marginLeft: 'auto',
+    paddingLeft: '12px',
+    fontStyle: 'normal',
+    fontSize: '12.5px',
+    color: 'var(--muted)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    minWidth: '0',
   },
 });
 
@@ -60,10 +102,17 @@ export interface EditorHandle {
   heading(level: 1 | 2 | 3): void;
 }
 
+export interface LinkTarget {
+  title: string;
+  icon: string | null;
+  path: string[];
+}
+
 interface Props {
   value: string;
   pageId: string;
-  titles: string[];
+  /** Pages offered after "[[": title, emoji and where they sit in the tree. */
+  links: LinkTarget[];
   onChange(value: string): void;
   onSave(): void;
   onError(message: string): void;
@@ -123,7 +172,15 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
       if (!m) return null;
       return {
         from: m.from + 2,
-        options: latest.current.titles.map((t) => ({ label: t, apply: `${t}]]`, type: 'text' })),
+        options: latest.current.links.map((p, i) => ({
+          label: p.title,
+          apply: `${p.title}]]`,
+          detail: p.path.join(' › '),
+          type: 'page',
+          icon: p.icon,
+          // With nothing typed yet, recently edited pages come first.
+          boost: Math.max(-99, -i),
+        })),
         validFor: /^[^\]\n]*$/,
       };
     };
@@ -139,7 +196,24 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
           syntaxHighlighting(highlight),
           theme,
           placeholder('Write in markdown. Type [[ to link a page. Paste or drop images.'),
-          autocompletion({ override: [wikilinks], icons: false }),
+          autocompletion({
+            override: [wikilinks],
+            icons: false,
+            // An emoji (or page glyph) before each title, like the breadcrumbs.
+            addToOptions: [
+              {
+                position: 20,
+                render: (c) => {
+                  const el = document.createElement('span');
+                  el.className = 'cm-link-icon';
+                  const icon = (c as { icon?: string | null }).icon;
+                  el.textContent = icon || '📄';
+                  if (!icon) el.classList.add('plain');
+                  return el;
+                },
+              },
+            ],
+          }),
           keymap.of([
             {
               key: 'Mod-s',
