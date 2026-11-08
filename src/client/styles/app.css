@@ -2466,8 +2466,8 @@ body.resizing {
 /* --------------------------------------------------------------- diagrams */
 
 .mermaid-box {
-  margin: 16px 0;
-  padding: 16px;
+  margin: 18px 0;
+  padding: 22px 20px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
   background: var(--paper);
@@ -2723,4 +2723,52 @@ body.resizing {
 
 .about-update {
   margin-top: 4px;
+}
+
+/* ------------------------------------------------------- editing surface */
+
+/* Always outlined while editing (charcoal), blue when the cursor is in it. */
+.editor {
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-radius: 16px;
+  padding: 10px 18px;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.editor:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.editor .cm-content:focus-visible,
+.editor .cm-editor:focus-visible {
+  box-shadow: none;
+}
+.toolbar .tb-h {
+  font-weight: 650;
+  font-size: 13px;
+}
+.toolbar .tb-h sub {
+  font-size: 9px;
+  margin-left: 1px;
+}
+
+/* Three distinct heading sizes in pages. */
+.prose h1 {
+  font-size: 1.75em;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.prose h2 {
+  font-size: 1.38em;
+  font-weight: 700;
+}
+.prose h3 {
+  font-size: 1.14em;
+  font-weight: 650;
+}
+.prose h4 {
+  font-size: 1em;
+  font-weight: 650;
+  color: var(--muted);
 }

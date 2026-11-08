@@ -21,7 +21,7 @@ import { PageGlyph } from '../components/Icon';
 import { PanelBoard, type PanelDef } from '../components/Panels';
 import { usePanelLayout } from '../lib/queries';
 import { formatWhen } from './PageView';
-import '../styles/graph.css';
+import '../styles/viz.css';
 import '../styles/insights.css';
 
 type Who = 'all' | 'you' | 'agents';

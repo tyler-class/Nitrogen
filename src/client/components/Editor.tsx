@@ -13,8 +13,9 @@ import { uploadImage, errorMessage } from '../lib/api';
 
 const highlight = HighlightStyle.define([
   { tag: tags.heading, fontWeight: '650', color: 'var(--ink)' },
-  { tag: tags.heading1, fontSize: '1.25em' },
-  { tag: tags.heading2, fontSize: '1.12em' },
+  { tag: tags.heading1, fontSize: '1.4em' },
+  { tag: tags.heading2, fontSize: '1.22em' },
+  { tag: tags.heading3, fontSize: '1.08em' },
   { tag: tags.link, color: 'var(--accent-ink)' },
   { tag: tags.url, color: 'var(--muted)' },
   { tag: tags.emphasis, fontStyle: 'italic' },
@@ -55,6 +56,8 @@ export interface EditorHandle {
   pickImages(): void;
   /** Wraps the selection (or inserts at the cursor). */
   wrap(before: string, after?: string): void;
+  /** Make the current line(s) a heading of this level, or plain text if they already are. */
+  heading(level: 1 | 2 | 3): void;
 }
 
 interface Props {
@@ -186,6 +189,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
     focus: () => view.current?.focus(),
     pickImages: () => fileInput.current?.click(),
     wrap: (before, after) => view.current && wrapSel(view.current, before, after),
+    heading: (level) => view.current && setHeading(view.current, level),
   }));
 
   return (
@@ -207,6 +211,24 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
     </>
   );
 });
+
+function setHeading(v: EditorView, level: number) {
+  const { from, to } = v.state.selection.main;
+  const first = v.state.doc.lineAt(from);
+  const last = v.state.doc.lineAt(to);
+  const mark = `${'#'.repeat(level)} `;
+  const changes = [];
+  // Same level on every line → toggle off; otherwise set this level.
+  const lines = [];
+  for (let n = first.number; n <= last.number; n++) lines.push(v.state.doc.line(n));
+  const off = lines.every((l) => l.text.startsWith(mark) && !l.text.startsWith(`${mark}#`));
+  for (const l of lines) {
+    const existing = /^#{1,6}\s+/.exec(l.text)?.[0] ?? '';
+    changes.push({ from: l.from, to: l.from + existing.length, insert: off ? '' : mark });
+  }
+  v.dispatch({ changes });
+  v.focus();
+}
 
 function wrapSel(v: EditorView, before: string, after = before) {
   const { from, to } = v.state.selection.main;

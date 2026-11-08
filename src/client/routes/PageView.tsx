@@ -5,7 +5,6 @@ import { actorLabel } from '@shared/actor';
 import { ITEM_TYPES, extractItems, todayKey } from '@shared/items';
 import { extractTags, pageHref, plainText } from '@shared/markdown';
 import type {
-  Graph,
   Mention,
   Page,
   PageDetail,
@@ -22,9 +21,6 @@ import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
 import { formatDue, Markdown, type TitleIndex } from '../components/Markdown';
 import { downloadPage } from '../lib/exportMarkdown';
-import { Chips } from '../components/charts';
-import { GraphView } from '../components/GraphView';
-import { Sheet } from '../components/Sheet';
 import { TagEditor, TagList } from '../components/Tags';
 import { Menu } from '../components/Tree';
 import { useToast } from '../components/Toast';
@@ -125,7 +121,6 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
   const { index } = useTitleIndex();
   const [menu, setMenu] = useState(false);
   const [history, setHistory] = useState(false);
-  const [graph, setGraph] = useState(false);
   const create = useCreatePage();
   const del = useDeletePage();
   const tree = useTree();
@@ -268,14 +263,6 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
               <Icon name="edit" size={15} /> Edit
             </button>
           )}
-          <button
-            className="btn icon-only"
-            onClick={() => setGraph(true)}
-            aria-label="Graph"
-            title="Graph"
-          >
-            <Icon name="graph" size={15} />
-          </button>
           <button
             className="btn icon-only"
             onClick={() => setHistory(true)}
@@ -433,7 +420,6 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
       <Mentions page={page} />
       <Related page={page} />
       {history && <HistoryPanel page={page} onClose={() => setHistory(false)} />}
-      {graph && <GraphSheet page={page} onClose={() => setGraph(false)} />}
     </article>
   );
 }
@@ -695,13 +681,17 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         <button onClick={() => editor.current?.wrap('_')} title="Italic (⌘I)" aria-label="Italic">
           <i>I</i>
         </button>
-        <button
-          onClick={() => editor.current?.wrap('\n## ', '\n')}
-          title="Heading"
-          aria-label="Heading"
-        >
-          H
-        </button>
+        {([1, 2, 3] as const).map((n) => (
+          <button
+            key={n}
+            onClick={() => editor.current?.heading(n)}
+            title={`Heading ${n} (${'#'.repeat(n)})`}
+            aria-label={`Heading ${n}`}
+            className="tb-h"
+          >
+            H<sub>{n}</sub>
+          </button>
+        ))}
         <button
           onClick={() => editor.current?.wrap('[', '](https://)')}
           title="Link (⌘K)"
@@ -1018,164 +1008,6 @@ function Related({ page }: { page: Page }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-const AREA_COLORS = 7;
-
-/** A page's opening text for previews: no markdown, bullets or item markers. */
-function peekText(md: string): string {
-  return plainText(md)
-    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
-    .replace(/(^|\s)\[[ xX]\]\s+/g, '$1')
-    .replace(/\b(?:todo|question|reminder):\s+/gi, '')
-    .replace(/\s+(?:due:\S+|answer:)/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 360);
-}
-
-/** Explore the wiki's links: click to re-centre, open from the side card, step back along the trail. */
-function GraphSheet({ page, onClose }: { page: Page; onClose(): void }) {
-  const navigate = useNavigate();
-  const tree = useTree();
-  const [trail, setTrail] = useState<string[]>([page.id]);
-  const [depth, setDepth] = useState<'1' | '2' | '3'>('2');
-  const center = trail[trail.length - 1]!;
-  const q = useQuery({
-    queryKey: ['graph', center, depth],
-    queryFn: () => api.get<Graph>(`/pages/${center}/graph?depth=${depth}`),
-    placeholderData: (prev) => prev,
-  });
-  const peek = useQuery({
-    queryKey: ['peek', center],
-    queryFn: () => api.get<PageDetail>(`/pages/${center}?peek=1`),
-  });
-
-  // Colour by top-level area, so clusters read at a glance.
-  const { areaOf, areas } = useMemo(() => {
-    const pages = tree.data?.pages ?? [];
-    const byId = new Map(pages.map((p) => [p.id, p]));
-    const rootOf = (id: string) => {
-      let cur = byId.get(id);
-      const seen = new Set<string>();
-      while (cur?.parent_id && byId.has(cur.parent_id) && !seen.has(cur.id)) {
-        seen.add(cur.id);
-        cur = byId.get(cur.parent_id);
-      }
-      return cur;
-    };
-    const roots = pages.filter((p) => !p.parent_id).sort((a, b) => a.position - b.position);
-    const index = new Map(roots.map((r, i) => [r.id, i % AREA_COLORS]));
-    return {
-      areaOf: (id: string) => {
-        const r = rootOf(id);
-        return r
-          ? { id: r.id, title: r.title, color: `var(--area-${(index.get(r.id) ?? 0) + 1})` }
-          : null;
-      },
-      areas: roots,
-    };
-  }, [tree.data]);
-
-  const g = q.data;
-  const shownAreas = g ? areas.filter((a) => g.nodes.some((n) => areaOf(n.id)?.id === a.id)) : [];
-  const open = (id: string) => {
-    const t = tree.data?.pages.find((p) => p.id === id)?.title;
-    onClose();
-    navigate(pageHref(id, t));
-  };
-  const titleOf = (id: string) => tree.data?.pages.find((p) => p.id === id)?.title ?? '…';
-  const p = peek.data;
-  const links = g
-    ? g.edges.filter((e) => e.kind === 'link' && (e.source === center || e.target === center))
-        .length
-    : 0;
-
-  return (
-    <Sheet title="Graph" sub="Explore how pages connect" onClose={onClose} wide>
-      <div className="graph-bar">
-        <Chips
-          label="Depth"
-          options={[
-            ['1', '1 link'],
-            ['2', '2 links'],
-            ['3', '3 links'],
-          ]}
-          value={depth}
-          onChange={setDepth}
-        />
-        {trail.length > 1 && (
-          <nav className="graph-trail" aria-label="Pages you explored">
-            {trail.map((id, i) => (
-              <span key={`${id}-${i}`}>
-                {i > 0 && '› '}
-                {i < trail.length - 1 ? (
-                  <button type="button" onClick={() => setTrail(trail.slice(0, i + 1))}>
-                    {titleOf(id)}
-                  </button>
-                ) : (
-                  <strong>{titleOf(id)}</strong>
-                )}
-              </span>
-            ))}
-          </nav>
-        )}
-      </div>
-      {g ? (
-        <div className="graph-explorer">
-          <div>
-            <GraphView
-              key={center}
-              graph={g}
-              onOpen={open}
-              onSelect={(id) => id !== center && setTrail([...trail, id])}
-              colorOf={(id) => areaOf(id)?.color}
-            />
-            {shownAreas.length > 1 && (
-              <div className="graph-legend" aria-label="Areas">
-                {shownAreas.map((a) => (
-                  <span key={a.id}>
-                    <i style={{ background: areaOf(a.id)?.color }} /> {a.title}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          <aside className="graph-side" aria-label="Selected page">
-            {p ? (
-              <>
-                <div>
-                  <h3>
-                    {p.page.icon ? `${p.page.icon} ` : ''}
-                    {p.page.title}
-                  </h3>
-                  {p.ancestors.length > 0 && (
-                    <div className="path">{p.ancestors.map((a) => a.title).join(' › ')}</div>
-                  )}
-                </div>
-                {p.page.body.trim() && <p className="peek">{peekText(p.page.body)}</p>}
-                <div className="facts">
-                  <span>
-                    {links} link{links === 1 ? '' : 's'} here
-                  </span>
-                  <span>{p.backlinks.length} linking in</span>
-                  {p.children.length > 0 && <span>{p.children.length} inside</span>}
-                  <span>{formatWhen(p.page.updated_at)}</span>
-                </div>
-                <button className="btn primary" onClick={() => open(center)}>
-                  Open page
-                </button>
-              </>
-            ) : (
-              <p className="muted">{peek.isError ? errorMessage(peek.error) : 'Loading…'}</p>
-            )}
-          </aside>
-        </div>
-      ) : (
-        <p className="muted">{q.isError ? errorMessage(q.error) : 'Loading…'}</p>
-      )}
-    </Sheet>
   );
 }
 

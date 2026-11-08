@@ -1,0 +1,20 @@
+/* Chart colours for Insights. Validated pairs (dataviz validator):
+   "you" and "assistants" in light and dark, defined like tokens.css. */
+
+:root {
+  --viz-you: #0a84e0;
+  --viz-agents: #6a4fd1;
+  --viz-empty: #ececea;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --viz-you: #4cb3ff;
+    --viz-agents: #8c6cf7;
+    --viz-empty: #24272c;
+  }
+}
+:root[data-theme='dark'] {
+  --viz-you: #4cb3ff;
+  --viz-agents: #8c6cf7;
+  --viz-empty: #24272c;
+}

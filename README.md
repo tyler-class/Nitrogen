@@ -27,8 +27,7 @@ straight into the page, search understands meaning, and Claude can read and writ
 - **Exports.** A full backup that restores everything, and a Markdown export (per page or the whole
   wiki as a .zip) that downgrades callouts and items to plain text for other apps and Google Docs.
 - **Tags and connections.** Tag pages (or write `#tag` in the text), see pages that mention this
-  one without linking it and link them in one click, related pages found by meaning, and a local
-  graph of everything within two links.
+  one without linking it and link them in one click, and related pages found by meaning.
 - **Insights.** Arrangeable panels like the dashboard: a calendar of edits by you and by assistants, who writes the wiki, what's busiest, what
   needs attention, and what assistants searched for and couldn't find.
 - **Yours.** It runs on your Cloudflare account; the free plan is enough for a personal wiki.

@@ -8,9 +8,6 @@ import { revertInput } from '@shared/schemas';
 import { ancestorsOf } from '@shared/tree';
 import type {
   Dashboard,
-  Graph,
-  GraphEdge,
-  GraphNode,
   InboxItem,
   Insights,
   Mention,
@@ -350,78 +347,6 @@ explore.get('/pages/:id/related', async (c) => {
     if (related.length >= 6) break;
   }
   return c.json({ related });
-});
-
-const MAX_GRAPH_NODES = 60;
-
-/** The page, the pages it links with, and theirs (two hops). Parent and children are included. */
-explore.get('/pages/:id/graph', async (c) => {
-  const db = c.env.DB;
-  const center = await requirePage(db, c.req.param('id'));
-  const depthWanted = Math.min(3, Math.max(1, Number(c.req.query('depth') ?? 2) || 2));
-  const pages = await listSummaries(db);
-  const byId = new Map(pages.map((p) => [p.id, p]));
-  const links = await all<{ src: string; dst: string }>(
-    db,
-    'SELECT src, dst FROM links WHERE src != dst',
-  );
-  const adj = new Map<string, Set<string>>();
-  const connect = (a: string, b: string) => {
-    if (!adj.has(a)) adj.set(a, new Set());
-    adj.get(a)!.add(b);
-  };
-  for (const l of links) {
-    connect(l.src, l.dst);
-    connect(l.dst, l.src);
-  }
-  // Tree neighbours of the centre only, so the graph isn't just the outline again.
-  const treeNbrs = new Set(
-    [center.parent_id, ...pages.filter((p) => p.parent_id === center.id).map((p) => p.id)].filter(
-      (x): x is string => !!x,
-    ),
-  );
-
-  const depth = new Map<string, number>([[center.id, 0]]);
-  let frontier = [center.id];
-  let truncated = false;
-  for (let d = 1; d <= depthWanted && frontier.length; d++) {
-    const next: string[] = [];
-    for (const id of frontier) {
-      const nbrs = [...(adj.get(id) ?? []), ...(id === center.id ? treeNbrs : [])];
-      for (const n of nbrs) {
-        if (depth.has(n) || !byId.has(n)) continue;
-        if (depth.size >= MAX_GRAPH_NODES) {
-          truncated = true;
-          break;
-        }
-        depth.set(n, d);
-        next.push(n);
-      }
-    }
-    frontier = next;
-  }
-  const nodes: GraphNode[] = [...depth].map(([id, d]) => ({
-    id,
-    title: byId.get(id)?.title ?? id,
-    icon: byId.get(id)?.icon ?? null,
-    depth: d,
-  }));
-  const seen = new Set<string>();
-  const edges: GraphEdge[] = [];
-  for (const l of links) {
-    if (!depth.has(l.src) || !depth.has(l.dst)) continue;
-    const key = [l.src, l.dst].sort().join(' ');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    edges.push({ source: l.src, target: l.dst, kind: 'link' });
-  }
-  for (const n of treeNbrs) {
-    const key = [center.id, n].sort().join(' ');
-    if (!depth.has(n) || seen.has(key)) continue;
-    seen.add(key);
-    edges.push({ source: center.id, target: n, kind: 'tree' });
-  }
-  return c.json<Graph>({ center: center.id, nodes, edges, truncated });
 });
 
 // ---------------------------------------------------------------- insights

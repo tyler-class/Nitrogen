@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
   Dashboard,
-  Graph,
   Mention,
   Page,
   PageDetail,
@@ -60,14 +59,6 @@ describe('connections', () => {
     );
     const back = (await api.get<PageDetail>(`/pages/${target.id}`)).data.backlinks;
     expect(back.map((b) => b.title).sort()).toEqual(['Garden Log', 'Linked Already']);
-
-    const graph = (await api.get<Graph>(`/pages/${target.id}/graph`)).data;
-    expect(graph.nodes.map((n) => n.title).sort()).toEqual([
-      'Compost Bins',
-      'Garden Log',
-      'Linked Already',
-    ]);
-    expect(graph.edges.every((e) => e.kind === 'link')).toBe(true);
   });
 });
 

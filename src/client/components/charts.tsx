@@ -1,5 +1,5 @@
 // Small hand-drawn SVG charts styled by CSS classes so they follow the theme (same pattern as
-// Ratio). Colours come from --viz-you / --viz-agents in graph.css.
+// Ratio). Colours come from --viz-you / --viz-agents in viz.css.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 /** The element's content width, kept up to date (charts draw at real size, never scaled). */

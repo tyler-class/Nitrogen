@@ -204,25 +204,6 @@ export interface RelatedPage {
   snippet: string;
 }
 
-export interface GraphNode {
-  id: string;
-  title: string;
-  icon: string | null;
-  /** Hops from the centre page. */
-  depth: number;
-}
-export interface GraphEdge {
-  source: string;
-  target: string;
-  kind: 'link' | 'tree';
-}
-export interface Graph {
-  center: string;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  truncated: boolean;
-}
-
 export interface PageStat {
   id: string;
   title: string;
