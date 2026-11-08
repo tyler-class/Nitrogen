@@ -1014,7 +1014,8 @@ function Related({ page }: { page: Page }) {
   return (
     <section className="related" aria-label="Related pages">
       <div className="related-head">
-        <h2>Related</h2>
+        <h2>Similar pages</h2>
+        <span className="muted">Matched by meaning</span>
       </div>
       <ul className="backlinks related-list">
         {list.map((r) => (

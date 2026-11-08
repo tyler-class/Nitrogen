@@ -93,3 +93,15 @@ describe('dashboard', () => {
     expect(v.revisions.every((r) => r.actor === 'you' || r.actor === null)).toBe(true);
   });
 });
+
+describe('similar pages', () => {
+  it('shows nothing for pages with too little text to compare', async () => {
+    const api = await session();
+    const p = (await api.post<Page>('/pages', { title: 'Dummy', body: 'just a test' })).data;
+    const r = (
+      await api.get<{ related: unknown[]; unavailable?: string }>(`/pages/${p.id}/related`)
+    ).data;
+    expect(r.related).toEqual([]);
+    expect(r.unavailable).toBeUndefined();
+  });
+});

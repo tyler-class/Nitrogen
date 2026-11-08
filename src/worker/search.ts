@@ -154,15 +154,20 @@ export async function forgetItems(db: D1Database, itemIds: string[]): Promise<vo
     );
 }
 
-export async function semanticSearch(env: Cloudflare.Env, q: string, limit = 20) {
+export async function semanticSearch(
+  env: Cloudflare.Env,
+  q: string,
+  limit = 20,
+  opts: { retrieval?: 'hybrid' | 'vector'; threshold?: number } = {},
+) {
   const inst = await semanticInstance(env);
   const res = await inst.search({
     query: q,
     ai_search_options: {
       retrieval: {
-        retrieval_type: 'hybrid',
+        retrieval_type: opts.retrieval ?? 'hybrid',
         max_num_results: Math.min(50, limit * 2),
-        match_threshold: 0.3,
+        match_threshold: opts.threshold ?? 0.3,
         return_on_failure: false,
       },
     },

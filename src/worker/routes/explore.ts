@@ -28,6 +28,7 @@ import {
   listSummaries,
   requirePage,
   restoreRevision,
+  sessionsRoot,
   summaryCols,
   updatePage,
 } from '../pages';
@@ -307,10 +308,22 @@ explore.post('/pages/:id/mentions/link', async (c) => {
   }
 });
 
+/** Below this many words there's too little text to judge similarity, so nothing is shown. */
+export const RELATED_MIN_WORDS = 40;
+/**
+ * Meaning-only (vector) similarity a page needs to count as similar. Measured on a real wiki:
+ * unrelated pages score up to ~0.56, genuinely related ones 0.6-0.8. (Hybrid scores are rank-based,
+ * so the top hit always scores 1 and can't be used as a cut-off.)
+ */
+export const RELATED_MIN_SCORE = 0.6;
+
 /** Pages about similar things that aren't already connected (semantic search). */
 explore.get('/pages/:id/related', async (c) => {
   const db = c.env.DB;
   const page = await requirePage(db, c.req.param('id'));
+  const sessions = await sessionsRoot(db);
+  if (page.words < RELATED_MIN_WORDS || page.id === sessions || page.parent_id === sessions)
+    return c.json({ related: [] });
   const linked = new Set(
     (
       await all<{ id: string }>(
@@ -323,9 +336,12 @@ explore.get('/pages/:id/related', async (c) => {
   const pages = await listSummaries(db);
   const byId = new Map(pages.map((p) => [p.id, p]));
   const query = `${page.title}\n${plainText(page.body).slice(0, 600)}`;
-  let hits: { id: string; snippet: string }[];
+  let hits: { id: string; snippet: string; score: number }[];
   try {
-    hits = await semanticSearch(c.env, query, 16);
+    hits = await semanticSearch(c.env, query, 16, {
+      retrieval: 'vector',
+      threshold: RELATED_MIN_SCORE,
+    });
   } catch (e) {
     return c.json({
       related: [],
@@ -335,8 +351,10 @@ explore.get('/pages/:id/related', async (c) => {
   const related: RelatedPage[] = [];
   for (const h of hits) {
     const p = byId.get(h.id);
-    if (!p || p.id === page.id || linked.has(p.id) || p.parent_id === page.id) continue;
-    if (page.parent_id === p.id) continue;
+    if (!p || h.score < RELATED_MIN_SCORE) continue;
+    if (p.id === page.id || linked.has(p.id) || p.parent_id === page.id || page.parent_id === p.id)
+      continue;
+    if (sessions && (p.id === sessions || p.parent_id === sessions)) continue;
     related.push({
       id: p.id,
       title: p.title,
@@ -344,7 +362,7 @@ explore.get('/pages/:id/related', async (c) => {
       path: ancestorsOf(p.id, byId).map((a) => a.title),
       snippet: h.snippet,
     });
-    if (related.length >= 6) break;
+    if (related.length >= 5) break;
   }
   return c.json({ related });
 });
