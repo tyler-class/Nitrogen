@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
+import { sourceDefines } from './scripts/kit/source';
 
 const remote = process.env.N2_REMOTE === '1';
 
@@ -36,6 +37,8 @@ function emojiData(): Plugin {
 }
 
 export default defineConfig(({ command }) => ({
+  // Which GitHub repo this copy is built from, for Settings → Updates (Selfhost Kit).
+  define: sourceDefines(),
   plugins: [
     react(),
     emojiData(),

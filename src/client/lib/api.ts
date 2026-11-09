@@ -48,7 +48,10 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   const data: unknown = parseBody(text);
   if (!res.ok) {
     const err = (data ?? {}) as { error?: string; message?: string };
-    if (res.status === 401 && path !== '/login') unauthorizedListeners.forEach((fn) => fn());
+    // Logged out: tell the app, except when it's asking about the session itself (that
+    // would ask again, in a loop).
+    if (res.status === 401 && path !== '/login' && path !== '/session')
+      unauthorizedListeners.forEach((fn) => fn());
     throw new ApiError(
       res.status,
       err.error ?? 'error',

@@ -13,6 +13,20 @@ import { mcpApiHandler } from './mcp';
 import { handleUploadLink } from './images';
 import { serveFile } from './routes/files';
 import { drainIndex } from './search';
+import { checkIn } from './kit/telemetry';
+import { VERSION } from '@shared/version';
+
+/** Tables whose row counts go in the anonymous daily check-in (counts only, never contents). */
+export const USAGE_TABLES = [
+  'pages',
+  'page_revisions',
+  'page_items',
+  'page_tags',
+  'page_events',
+  'links',
+  'files',
+  'session_entries',
+];
 
 const defaultHandler = {
   fetch(
@@ -84,8 +98,19 @@ export default {
     return providerFor(url.origin).fetch(request, env, ctx);
   },
 
-  /** Catches up on semantic indexing that failed or was skipped during requests. */
-  async scheduled(_event: ScheduledController, env: Cloudflare.Env) {
+  /**
+   * Catches up on semantic indexing that failed or was skipped during requests, and sends the
+   * anonymous daily check-in (at most once a day; off switch in Settings → Updates).
+   */
+  async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      checkIn(env.DB, {
+        app: 'nitrogen',
+        version: VERSION,
+        tables: USAGE_TABLES,
+        buckets: [env.FILES],
+      }),
+    );
     try {
       let total = 0;
       for (let i = 0; i < 5; i++) {

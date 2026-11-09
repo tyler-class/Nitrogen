@@ -66,7 +66,7 @@ For a project whose `deploy` script is `wrangler deploy && wrangler d1 migration
 
 ### 3. The weekly update workflow
 
-`.github/workflows/update.yml` ships inside every copy. It:
+`.github/workflows/update.yml` is the updater. The Deploy button doesn't copy workflow files, so a new copy starts without it: **Settings → Updates → Set up automatic updates** opens GitHub's new-file page in the copy's repo with it filled in, and one commit adds it (that commit also runs it once). It:
 
 - runs **every Monday** on a schedule, and any time from **Actions → Update <App> → Run workflow**;
 - **skips itself in the source repo** (`if: github.repository != 'tyler-class/<App>'`);

@@ -11,6 +11,17 @@ import { PagePicker } from '../components/PagePicker';
 import { useToast } from '../components/Toast';
 import { useTheme, type Theme } from '../lib/theme';
 import { Link } from 'react-router';
+import { VERSION } from '@shared/version';
+import { InfoTip, Switch } from '../components/InfoTip';
+import { Icon } from '../components/Icon';
+import {
+  isNewer,
+  isSourceRepo,
+  runUrl,
+  setupUrl,
+  UPSTREAM,
+  useLatestVersion,
+} from '../lib/updates';
 
 export function Settings() {
   const qc = useQueryClient();
@@ -22,6 +33,8 @@ export function Settings() {
       api.get<{
         home_id: string | null;
         guide_id: string | null;
+        updates_set_up: boolean;
+        telemetry: boolean;
       }>('/settings'),
   });
   const search = useQuery({
@@ -313,6 +326,17 @@ export function Settings() {
         )}
       </section>
 
+      <UpdatesSection
+        setUp={settings.data?.updates_set_up ?? false}
+        onSetUp={() =>
+          void patch({ updates_set_up: true }, 'Finish on GitHub: click Commit changes.')
+        }
+        telemetry={settings.data?.telemetry ?? true}
+        onTelemetry={(telemetry) =>
+          void patch({ telemetry }, telemetry ? 'Sharing usage counts.' : 'Stopped sharing.')
+        }
+      />
+
       <section>
         <h2>Account</h2>
         <button
@@ -327,6 +351,126 @@ export function Settings() {
         </button>
       </section>
     </div>
+  );
+}
+
+/**
+ * Updates: is a newer Nitrogen out, and links into this copy's own GitHub repo to add the
+ * update workflow (once) or run it. Updates go Nitrogen → your repo → your Cloudflare.
+ */
+function UpdatesSection({
+  setUp,
+  onSetUp,
+  telemetry,
+  onTelemetry,
+}: {
+  setUp: boolean;
+  onSetUp: () => void;
+  telemetry: boolean;
+  onTelemetry: (on: boolean) => void;
+}) {
+  const latest = useLatestVersion();
+  const repo = __SOURCE_REPO__;
+  const isSource = isSourceRepo(repo, UPSTREAM);
+  const newer = latest.data && isNewer(latest.data, VERSION) ? latest.data : null;
+  const status = newer
+    ? `Nitrogen ${newer} is available. You have ${VERSION}.`
+    : latest.isError
+      ? `Nitrogen ${VERSION}. Couldn’t check for a newer version.`
+      : latest.data
+        ? `Nitrogen ${VERSION}, up to date.`
+        : `Nitrogen ${VERSION}.`;
+  return (
+    <section>
+      <h2>
+        Updates{' '}
+        {!isSource && (
+          <InfoTip label="How updates work">
+            <p>Updates take two steps, both in your own accounts:</p>
+            <ul>
+              <li>
+                An update workflow in your GitHub copy brings in the latest Nitrogen every Monday.
+                GitHub needs you to add it once: Set up opens it ready to commit.
+              </li>
+              <li>Cloudflare deploys your copy every time it changes. That part is already on.</li>
+            </ul>
+            <p>
+              Your pages and files live in your database and storage, so updates don’t touch them.
+              Changes you made to the code in your copy are replaced.
+            </p>
+          </InfoTip>
+        )}
+      </h2>
+      <p className={newer ? '' : 'muted'}>{status}</p>
+      {isSource ? null : !repo ? (
+        <p className="muted">Deployed by hand: git pull, then npm run deploy.</p>
+      ) : (
+        <>
+          <div className="updates-actions">
+            {setUp ? (
+              <a
+                className={newer ? 'btn primary' : 'btn'}
+                href={runUrl(repo)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="history" size={14} /> Update now
+              </a>
+            ) : (
+              <a
+                className="btn primary"
+                href={setupUrl(repo, __SOURCE_BRANCH__)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={onSetUp}
+              >
+                <Icon name="github" size={14} /> Set up automatic updates
+              </a>
+            )}
+            <a
+              className="muted"
+              href={`https://github.com/${repo}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {repo}
+            </a>
+          </div>
+          <p className="muted">
+            {setUp ? (
+              <>
+                Opens GitHub: click Run workflow.{' '}
+                <a href={setupUrl(repo, __SOURCE_BRANCH__)} target="_blank" rel="noreferrer">
+                  Set up again
+                </a>
+              </>
+            ) : (
+              'Opens GitHub: click Commit changes. It updates now, then every Monday.'
+            )}
+          </p>
+        </>
+      )}
+      <div className="share-row">
+        <span>
+          Share anonymous usage counts
+          <InfoTip label="What’s shared">
+            <p>Once a day this copy sends Nitrogen’s developer:</p>
+            <ul>
+              <li>a random id this copy made for itself</li>
+              <li>its version</li>
+              <li>how many pages, revisions, tags, links and so on it has (counts only)</li>
+              <li>how many files it stores (one total)</li>
+              <li>whether automatic updates are on</li>
+            </ul>
+            <p>
+              Never page titles, contents, file names or anything you write, and no IP address is
+              kept. It shows how many copies are in use, to decide what to work on next.
+            </p>
+          </InfoTip>
+        </span>
+        <Switch on={telemetry} onChange={onTelemetry} label="Share anonymous usage counts" />
+      </div>
+    </section>
   );
 }
 

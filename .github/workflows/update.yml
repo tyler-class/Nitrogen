@@ -1,13 +1,19 @@
+# Selfhost Kit: synced from tyler-class/selfhost-kit (kit/workflows/update.yml).
 # Keeps a copy made with the Deploy to Cloudflare button up to date with tyler-class/Nitrogen.
-# The button makes a plain copy, not a fork, so GitHub's "Sync fork" isn't available.
-# Each run replaces the app with the latest Nitrogen and pushes; Cloudflare then migrates and
-# redeploys. Your data lives in the database and file storage, not here, so it isn't touched.
+# The button makes a plain copy (not a fork) and leaves this file out, so Nitrogen's Settings →
+# Updates offers to add it. Each run brings the latest Nitrogen into this repo and pushes; that
+# push is what Cloudflare deploys from. Nitrogen never deploys to your Cloudflare directly.
+# Your data lives in the database and file storage, not here, so it isn't touched.
 name: Update Nitrogen
 
 on:
   schedule:
     - cron: '23 9 * * 1' # Mondays
+  # "Update now" in Nitrogen's Settings opens this workflow's Run button.
   workflow_dispatch:
+  # Adding (or changing) this file runs it once straight away.
+  push:
+    paths: ['.github/workflows/update.yml']
 
 permissions:
   contents: write

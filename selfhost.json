@@ -1,0 +1,6 @@
+{
+  "app": "nitrogen",
+  "title": "Nitrogen",
+  "upstream": "tyler-class/Nitrogen",
+  "dataNote": "Your data lives in the database and file storage, not here, so it isn't touched."
+}

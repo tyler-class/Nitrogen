@@ -67,6 +67,10 @@ export const settingsInput = z.object({
   /** Panel order, width and visibility; unknown or missing panels use defaults. */
   dashboard_layout: panelLayoutInput.optional(),
   insights_layout: panelLayoutInput.optional(),
+  /** Someone added the update workflow to this copy's GitHub repo (Settings → Updates). */
+  updates_set_up: z.boolean().optional(),
+  /** Send the anonymous daily check-in (counts only). */
+  telemetry: z.boolean().optional(),
 });
 
 export const pinInput = z.object({ pinned: z.boolean() });

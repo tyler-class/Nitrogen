@@ -10,6 +10,7 @@ import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
 import { hydrate, itemStatements, listSummaries } from '../pages';
 import { indexSoon, resetIndex, search, searchStatus } from '../search';
 import { ApiError, body, type AppEnv } from './util';
+import { kitState, setKitState } from '../kit/telemetry';
 
 export const admin = new Hono<AppEnv>();
 
@@ -24,13 +25,21 @@ export async function panelLayout(db: D1Database, key: string): Promise<PanelLay
 }
 
 admin.get('/settings', async (c) => {
-  const [home, guide, dashboard_layout, insights_layout] = await Promise.all([
+  const [home, guide, dashboard_layout, insights_layout, kit] = await Promise.all([
     getSetting(c.env.DB, 'home_id'),
     getSetting(c.env.DB, 'guide_id'),
     panelLayout(c.env.DB, 'dashboard_layout'),
     panelLayout(c.env.DB, 'insights_layout'),
+    kitState(c.env.DB),
   ]);
-  return c.json({ home_id: home, guide_id: guide, dashboard_layout, insights_layout });
+  return c.json({
+    home_id: home,
+    guide_id: guide,
+    dashboard_layout,
+    insights_layout,
+    updates_set_up: kit.updates_set_up,
+    telemetry: kit.telemetry,
+  });
 });
 
 admin.patch('/settings', async (c) => {
@@ -43,6 +52,11 @@ admin.patch('/settings', async (c) => {
     if (input[key] !== undefined)
       stmts.push(setSettingStmt(c.env.DB, key, JSON.stringify(input[key])));
   if (stmts.length) await c.env.DB.batch(stmts);
+  if (input.updates_set_up !== undefined || input.telemetry !== undefined)
+    await setKitState(c.env.DB, {
+      updates_set_up: input.updates_set_up,
+      telemetry: input.telemetry,
+    });
   return c.json({ ok: true });
 });
 

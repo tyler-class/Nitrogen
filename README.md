@@ -60,19 +60,23 @@ Wrangler creates the D1 database, R2 bucket and KV namespace on the first deploy
 
 ## Update your copy
 
-If you deployed with the button, your copy lives in your own GitHub account and updates itself:
-every Monday a GitHub Action takes the latest Nitrogen and pushes it to your copy, and Cloudflare
-migrates the database and redeploys. To update right away, open your copy on GitHub, go to
-**Actions → Update Nitrogen** and click **Run workflow**. Your pages and images are in the database
-and R2, not the repo, so updates don’t touch them.
+Updates come in two steps, both in your own accounts: Nitrogen’s latest code goes into **your GitHub copy**, and Cloudflare deploys **your copy** whenever it changes. Nitrogen never deploys to your Cloudflare account directly.
 
-The update replaces the app’s code, so changes you made to your copy’s code are overwritten. Your
-`.github/workflows` and a `wrangler.jsonc` with your database id are kept.
+- **Your copy → your Cloudflare** is already on. The Deploy button set Cloudflare to build and deploy every change to your copy’s `main` branch (migrating the database first).
+- **Nitrogen → your copy** needs one click to turn on. The Deploy button doesn’t copy GitHub workflow files, so open **Settings → Updates** and choose **Set up automatic updates**. GitHub opens with the update workflow filled in; click **Commit changes**. That brings in the latest Nitrogen straight away, then every Monday.
+
+To update before Monday, choose **Update now** in Settings and click **Run workflow** on GitHub. Settings also shows when a newer Nitrogen is out.
+
+Your pages and images are in the database and R2, not the repo, so updates don’t touch them. An update replaces the app’s code with Nitrogen’s, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let a workflow change them, so if Nitrogen’s change, copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
 
 If you deployed by hand, `git pull` and `npm run deploy`.
 
 How the button, Workers Builds and the update workflow fit together:
 [docs/deploy-and-updates.md](docs/deploy-and-updates.md).
+
+## Anonymous usage counts
+
+Once a day your copy tells Nitrogen’s developer that it exists: a random id it made for itself, its version, how many rows each table has (pages, revisions, tags, links, …), how many files it stores (one total) and whether automatic updates are on. Never page titles, contents, file names or anything you write, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
 
 ## Connect Claude
 

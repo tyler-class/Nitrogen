@@ -1,3 +1,4 @@
+// Selfhost Kit: synced from tyler-class/selfhost-kit (kit/scripts/release.ts).
 // Migrates the remote database, then deploys the Worker, so new code never runs against
 // missing columns. On a first install the database doesn't exist until `wrangler deploy`
 // provisions it, so migrations run once more after the deploy.

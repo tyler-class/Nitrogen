@@ -2772,3 +2772,114 @@ body.resizing {
   font-weight: 650;
   color: var(--muted);
 }
+
+/* --------------------------------------------------------- info tip, switch */
+
+.infotip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.infotip > button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.infotip > button:hover,
+.infotip > button.on {
+  color: var(--accent-ink);
+}
+.infotip-pop {
+  position: absolute;
+  top: 100%;
+  right: -8px;
+  z-index: 40;
+  padding-top: 6px;
+}
+.infotip-card {
+  display: block;
+  width: min(21rem, calc(100vw - 2.5rem));
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.infotip-card p {
+  margin: 0 0 8px;
+}
+.infotip-card ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.infotip-card > :last-child {
+  margin-bottom: 0;
+}
+.switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  transition: background 0.15s;
+}
+.switch.on {
+  background: var(--accent);
+}
+.switch > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 0.15s;
+}
+.switch.on > span {
+  transform: translateX(16px);
+}
+.updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 10px 0 6px;
+}
+.share-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+/* In a row, the popover lines up with the row's edges instead of the icon. */
+.share-row .infotip {
+  position: static;
+}
+.share-row .infotip-pop {
+  left: 0;
+  right: auto;
+}
+.settings h2 .infotip-pop {
+  left: -8px;
+  right: auto;
+}
+.share-row > span {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
