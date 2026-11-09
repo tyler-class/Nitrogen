@@ -5,6 +5,7 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { actorLabel, agent, type Actor } from '@shared/actor';
 import { applyEdits, EditError, headings, type EditOp } from '@shared/edit';
+import { CONVENTIONS_ICON, CONVENTIONS_TITLE } from '@shared/conventions';
 import { EXAMPLE_PROMPTS, MCP_PROMPTS } from '@shared/examples';
 import { pageHref } from '@shared/markdown';
 import { describePlacement, placementSchema } from '@shared/placement';
@@ -97,6 +98,7 @@ How to work with it:
 - Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their inbox and activity log, and can undo a whole session.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
+- Conventions: the owner keeps one page of house rules for the wiki (where things go, naming, tags, style). When there is one it's at the end of these instructions; follow it over the general advice here. get_conventions reads the current version; when the owner asks you to add or change a rule, use update_conventions.
 - Open items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
 
 Markdown conventions:
@@ -129,7 +131,7 @@ interface TreeCtx {
   home: string | null;
 }
 
-/** The owner's conventions page (Settings → Connect an AI assistant), if one is set. */
+/** The owner's conventions page (the app's Conventions view), if one is set. */
 async function guideText(db: D1Database): Promise<string> {
   const id = await getSetting(db, 'guide_id');
   const page = id ? await getPage(db, id).catch(() => null) : null;
@@ -568,6 +570,75 @@ function buildServer(
       });
       return text(
         `Saved ${describe(next)}, now version ${next.version}. The previous text is in the page history.`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    'get_conventions',
+    {
+      title: 'Read the conventions',
+      description:
+        'The owner’s house rules for this wiki (where things go, naming, tags, style), as markdown with its id and version. They are also in your instructions when you connect; read them again here before changing them, or if they may have changed during this session.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async () => {
+      const settings = await call<{ guide_id: string | null }>('GET', '/settings');
+      if (!settings.guide_id)
+        return text(
+          'There are no conventions yet. If the owner wants some, write them with update_conventions (it creates the page).',
+        );
+      const d = await call<PageDetail>('GET', `/pages/${settings.guide_id}`);
+      const p = d.page;
+      return text(
+        `# ${p.title}\nid: ${p.id} · version: ${p.version} · updated: ${p.updated_at} by ${actorLabel(p.updated_by)}\nurl: ${origin}/conventions\n\n---\n\n${p.body || '(empty)'}`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    'update_conventions',
+    {
+      title: 'Change the conventions',
+      description:
+        'Replace the whole conventions page with new markdown, for when the owner asks to add, change or remove a rule. Read it first with get_conventions and pass its version as base_version; keep the rules you weren’t asked to change. Creates the page if there isn’t one yet (then omit base_version). The previous text stays in the page history.',
+      inputSchema: z.object({
+        body: z.string().min(1).describe('The full conventions, as markdown.'),
+        base_version: z
+          .number()
+          .int()
+          .optional()
+          .describe('The version from get_conventions. Required when the page exists.'),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    safe(async ({ body, base_version }) => {
+      const settings = await call<{ guide_id: string | null }>('GET', '/settings');
+      if (!settings.guide_id) {
+        const created = await call<Page>('POST', '/pages', {
+          title: CONVENTIONS_TITLE,
+          parent_id: null,
+          icon: CONVENTIONS_ICON,
+          body,
+        });
+        await call('PATCH', '/settings', { guide_id: created.id });
+        return text(
+          `Created the conventions (id ${created.id}). The owner sees them under Conventions; assistants get them when they connect.`,
+        );
+      }
+      if (base_version === undefined)
+        throw new Error(
+          'Read the conventions with get_conventions first and pass its version as base_version.',
+        );
+      const next = await call<Page>('PATCH', `/pages/${settings.guide_id}`, { body, base_version });
+      return text(
+        `Saved the conventions, now version ${next.version}. The previous text is in the page history.`,
       );
     }),
   );

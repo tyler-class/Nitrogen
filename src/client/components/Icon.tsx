@@ -16,6 +16,10 @@ const PATHS: Record<string, string> = {
   graph:
     'M5 3.5a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM15 5.5a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM9 12.5a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM7 5.9l6 1.2M5.7 7.4l2.6 5.2M13.7 9.1l-3.4 3.8',
   history: 'M3 10a7 7 0 1 0 2-4.9M3 4v3h3M10 6v4l3 2',
+  // Two documents with +/− between them: compare versions.
+  diff: 'M4 3h5v14H4zM11 3h5v14h-5M6.5 7.5v3M5 9h3M12.5 9h2',
+  // A ruled page with a check: the wiki's conventions.
+  rules: 'M5 3h10v14H5zM8 7h5M8 10h5M7.5 13.5l1.2 1.2 2.3-2.4',
   sun: 'M10 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM10 1v2M10 17v2M1 10h2M17 10h2',
   table: 'M3 4h14v12H3zM3 8h14M3 12h14M8 4v12',
   plus: 'M10 4v12M4 10h12',

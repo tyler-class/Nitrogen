@@ -1,16 +1,14 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { EXAMPLE_PROMPTS } from '@shared/examples';
 import { downloadAll } from '../lib/exportMarkdown';
-import { pageHref } from '@shared/markdown';
-import type { Backup, Page, SearchStatus } from '@shared/types';
+import type { Backup, SearchStatus } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { keys, useTree } from '../lib/queries';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { PagePicker } from '../components/PagePicker';
 import { useToast } from '../components/Toast';
 import { useTheme, type Theme } from '../lib/theme';
-import { Link } from 'react-router';
+import { ConnectAISection } from './ConnectAI';
 import { VERSION } from '@shared/version';
 import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
@@ -38,21 +36,12 @@ export function Settings() {
     queryKey: ['search-status'],
     queryFn: () => api.get<SearchStatus>('/search/status'),
   });
-  const connections = useQuery({
-    queryKey: ['connections'],
-    queryFn: () =>
-      api.get<{ connections: { id: string; name: string; created_at: string | null }[] }>(
-        '/connections',
-      ),
-    retry: false,
-  });
   const unused = useQuery({
     queryKey: ['unused-files'],
     queryFn: () => api.get<{ count: number; bytes: number }>('/files/unused'),
   });
   const [theme, setTheme] = useTheme();
   const restoreInput = useRef<HTMLInputElement>(null);
-  const mcpUrl = `${window.location.origin}/mcp`;
 
   async function patch(body: Record<string, unknown>, done: string) {
     try {
@@ -101,23 +90,7 @@ export function Settings() {
 
   const [about, setAbout] = useState(false);
 
-  async function createGuide() {
-    try {
-      const p = await api.post<Page>('/pages', {
-        title: 'How to use this wiki',
-        parent_id: null,
-        icon: '🧭',
-        body: GUIDE_TEMPLATE,
-      });
-      await patch({ guide_id: p.id }, 'Created. Assistants will read it first.');
-      void qc.invalidateQueries({ queryKey: keys.tree });
-    } catch (e) {
-      toast(errorMessage(e));
-    }
-  }
-
   const pages = tree.data?.pages ?? [];
-  const guide = pages.find((p) => p.id === settings.data?.guide_id);
   return (
     <div className="page settings">
       <div className="settings-top">
@@ -162,98 +135,7 @@ export function Settings() {
         </div>
       </section>
 
-      <section>
-        <h2>Connect an AI assistant</h2>
-        <p>
-          Nitrogen has an MCP server, so Claude (or any MCP client) can search, read, create and
-          edit pages. Every edit an assistant makes is saved in the page history.
-        </p>
-        <div className="copy-row">
-          <code>{mcpUrl}</code>
-          <button
-            className="btn small"
-            onClick={() => navigator.clipboard?.writeText(mcpUrl).then(() => toast('Copied.'))}
-          >
-            Copy
-          </button>
-        </div>
-        <ul className="steps">
-          <li>
-            <strong>Claude (web, desktop, mobile):</strong> Settings → Connectors → Add custom
-            connector → paste the URL. Approve with your wiki password.
-          </li>
-          <li>
-            <strong>Claude Code:</strong>{' '}
-            <code>claude mcp add --transport http nitrogen {mcpUrl}</code>
-          </li>
-        </ul>
-        <h3 className="try-h">Try asking</h3>
-        <ul className="try-list">
-          {EXAMPLE_PROMPTS.slice(0, 6).map((e) => (
-            <li key={e.prompt}>
-              <button
-                type="button"
-                title="Copy"
-                onClick={() =>
-                  void navigator.clipboard?.writeText(e.prompt).then(() => toast('Copied.'))
-                }
-              >
-                “{e.prompt}”
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="muted">Claude also lists ready-made Nitrogen prompts in its + menu.</p>
-        <div className="field">
-          <span>Conventions page</span>
-          <PagePicker
-            aria-label="Conventions page"
-            pages={pages}
-            value={settings.data?.guide_id ?? null}
-            noneLabel="None"
-            onChange={(id) => void patch({ guide_id: id }, 'Saved.')}
-          />
-        </div>
-        <p className="muted">
-          {guide ? (
-            <>
-              Assistants read <Link to={pageHref(guide.id, guide.title)}>{guide.title}</Link> before
-              anything else.
-            </>
-          ) : (
-            <>
-              Tell assistants how you like the wiki organized.{' '}
-              <button className="link" onClick={() => void createGuide()}>
-                Create a starter page
-              </button>
-            </>
-          )}
-        </p>
-        {connections.data && (
-          <>
-            <p className="muted">
-              {connections.data.connections.length
-                ? `Connected: ${connections.data.connections.map((c) => c.name).join(', ')}`
-                : 'No assistants connected.'}
-            </p>
-            {connections.data.connections.length > 0 && (
-              <button
-                className="btn danger"
-                onClick={async () => {
-                  if (
-                    !window.confirm('Disconnect every assistant? They will need to sign in again.')
-                  )
-                    return;
-                  await api.post('/connections/revoke-all').catch((e) => toast(errorMessage(e)));
-                  void qc.invalidateQueries({ queryKey: ['connections'] });
-                }}
-              >
-                Disconnect all
-              </button>
-            )}
-          </>
-        )}
-      </section>
+      <ConnectAISection />
 
       <section>
         <h2>Search</h2>
@@ -455,22 +337,3 @@ function UpdatesSection({
     </section>
   );
 }
-
-const GUIDE_TEMPLATE = `Assistants read this page before working in the wiki. Edit it to match how you work.
-
-## Where things go
-- One top-level page per area of life or work; projects live under their area.
-- Meeting notes go under the project, titled "YYYY-MM-DD · Topic".
-- Session notes are filed under [[Sessions]] with log_session.
-
-## Before writing
-- Search first and add to an existing page rather than creating a near-duplicate.
-- Link related pages with [[Page title]] the first time they come up.
-
-## Tags
-- Reuse existing tags (list_tags). Common ones: #decision, #open-question, #idea, #reference.
-
-## Style
-- Short sections with "##" headings; lead with the conclusion.
-- Mark anything uncertain with a > [!NOTE] callout.
-`;

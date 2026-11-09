@@ -13,6 +13,7 @@ import { Login, SetupNeeded } from './routes/Login';
 import { PageView } from './routes/PageView';
 import { SearchPage } from './routes/SearchPage';
 import { Sessions } from './routes/Sessions';
+import { Conventions } from './routes/Conventions';
 import { Settings } from './routes/Settings';
 import { Tags } from './routes/Tags';
 
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
       { path: '/dashboard', element: <Dashboard /> },
       { path: '/activity', element: <Activity /> },
       { path: '/insights', element: <Insights /> },
+      { path: '/conventions', element: <Conventions /> },
       { path: '/sessions', element: <Sessions /> },
       { path: '/sessions/:id', element: <Sessions /> },
       { path: '/tags', element: <Tags /> },

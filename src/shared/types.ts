@@ -36,6 +36,8 @@ export interface TreeResponse {
   home_id: string | null;
   /** The protected Sessions section, if it exists. */
   sessions_id: string | null;
+  /** The conventions page (shown at /conventions, outside the tree), if there is one. */
+  conventions_id: string | null;
 }
 
 /** One AI session in the Sessions log. */

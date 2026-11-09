@@ -29,13 +29,20 @@ import { ApiError, body, type AppEnv } from './util';
 export const pages = new Hono<AppEnv>();
 
 pages.get('/tree', async (c) => {
-  const [list, home, sessions] = await Promise.all([
+  const [list, home, sessions, guide] = await Promise.all([
     listSummaries(c.env.DB),
     getSetting(c.env.DB, 'home_id'),
     sessionsRoot(c.env.DB),
+    getSetting(c.env.DB, 'guide_id'),
   ]);
   const homeId = home && list.some((p) => p.id === home) ? home : null;
-  return c.json<TreeResponse>({ pages: list, home_id: homeId, sessions_id: sessions });
+  const conventionsId = guide && list.some((p) => p.id === guide) ? guide : null;
+  return c.json<TreeResponse>({
+    pages: list,
+    home_id: homeId,
+    sessions_id: sessions,
+    conventions_id: conventionsId,
+  });
 });
 
 pages.get('/pages/:id', async (c) => {
