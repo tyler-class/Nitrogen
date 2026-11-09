@@ -724,6 +724,7 @@ export function pushRoutes(o: PushRoutesOptions) {
     if (fromB64url(p256dh).length !== 65 || fromB64url(auth).length !== 16)
       throw new Bad('Missing or bad subscription keys.');
     const db = c.env.DB;
+    await ensureTables(db); // a fresh copy may subscribe before anything else created them
     // The VAPID contact: this copy's own address, when it's on https.
     const origin = new URL(c.req.url);
     if (origin.protocol === 'https:' || !(await subjectSet(db)))
