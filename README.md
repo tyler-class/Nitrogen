@@ -41,9 +41,37 @@ straight into the page, search understands meaning, and Claude can read and writ
 
 ![A page with headings, inline to-dos, a timed reminder, a question and a budget table](docs/screenshots/page.png)
 
+**Editing:** markdown with a toolbar for headings, callouts, diagrams, items and images. Type `[[` to link a page.
+
+![The editor with its toolbar, and page suggestions open after typing two brackets](docs/screenshots/editor.png)
+
+**History:** every earlier version with who wrote it. Compare any two, or restore one.
+
+![The History panel comparing an October version with the current one, changes marked in red and green](docs/screenshots/history.png)
+
+**Connections:** pages inside this one, pages that link here, and pages that mention it without a link yet.
+
+![The bottom of a page with Pages inside, Linked from and Mentioned in, with a Link button](docs/screenshots/connections.png)
+
+**The page menu (⋯):** pin a page to Home, copy its wiki link, or download it as Markdown.
+
+![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy wiki link, Review prompt, Download as Markdown and Delete](docs/screenshots/page-menu.png)
+
 **Search (⌘K):** jump to any page by title or keyword, or press Enter to search by meaning.
 
 ![The command palette with results for “garden”](docs/screenshots/palette.png)
+
+**The Search page:** best match, by meaning, or exact words, with the matching text highlighted.
+
+![The Search page with results for “garden” and the matches highlighted](docs/screenshots/search.png)
+
+**Tags:** every tag, most used first or A–Z, and the pages under each.
+
+![Two phones: the Tags page with Most used selected, and the pages tagged #food](docs/screenshots/tags.png)
+
+**Activity:** every change, grouped by who made it. Show everyone, only you or only assistants, and undo an assistant's whole session.
+
+![Activity with sessions by you, Claude and ChatGPT, each assistant session with an Undo session button](docs/screenshots/activity.png)
 
 **Insights:** who writes the wiki, when, and what's busiest.
 
@@ -52,6 +80,14 @@ straight into the page, search understands meaning, and Claude can read and writ
 **AI Sessions:** every assistant session that changed the wiki, with its summary.
 
 ![AI Sessions listing sessions by Claude and ChatGPT](docs/screenshots/sessions.png)
+
+**Conventions:** how you like things filed. Every assistant reads it when it connects.
+
+![A Conventions page with sections for where things go, before writing, tags and style](docs/screenshots/conventions.png)
+
+**On your phone:** Home with open items (overdue and timed ones included), the page tree with its emoji, and a page.
+
+![Three phones: Home's open items, the menu with the page tree, and a page with its action items](docs/screenshots/phone.png)
 
 **Dark mode:** follows your device, or pick it in Settings.
 
@@ -194,6 +230,8 @@ Turn notifications on as described in [Notifications](#notifications), then pick
 
 Times are your phone's own clock. The app icon shows how many to-dos and reminders are due today or overdue.
 
+![Settings on a phone: Appearance, then Notifications with a switch for each kind and Send a test](docs/screenshots/notifications.png)
+
 ## Use it on your phone
 
 Open your Nitrogen link on the phone, then:
@@ -207,6 +245,8 @@ It opens full screen like a regular app.
 
 In Nitrogen, open **Settings → Connect an AI assistant** and copy your MCP URL
 (`https://<your-nitrogen>/mcp`).
+
+![Settings → Connect an AI assistant: the connector URL with Copy, the connected assistants and setup steps](docs/screenshots/connect-ai.png)
 
 - **Claude (web, desktop, mobile):** Settings → Connectors → Add custom connector → paste the URL.
   Approve with your wiki password.
@@ -249,6 +289,8 @@ search and says so. Set the `SEMANTIC_SEARCH` variable to `off` to use keyword s
 
 **Settings → Backup** downloads every page as one JSON file and can restore from one. Images stay in
 R2.
+
+![Settings → Backup with Download backup, Download as Markdown (.zip) and Restore from backup](docs/screenshots/backup.png)
 
 ## Deploy by hand
 
