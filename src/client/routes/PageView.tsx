@@ -21,6 +21,7 @@ import type { EditorHandle, LinkTarget } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { Icon, PageGlyph } from '../components/Icon';
 import { formatDue, Markdown, type TitleIndex } from '../components/Markdown';
+import { DiffView } from '../components/Diff';
 import { downloadPage } from '../lib/exportMarkdown';
 import { TagEditor, TagList } from '../components/Tags';
 import { Menu } from '../components/Tree';
@@ -57,8 +58,13 @@ export function useTitleIndex(): { index: TitleIndex; titles: string[] } {
   }, [tree.data]);
 }
 
-export function PageView() {
-  const { id } = useParams<{ id: string }>();
+/**
+ * A wiki page. `pageId` and `header` let another view show a page in its own frame (the
+ * Conventions view): `header` replaces the breadcrumbs, and the URL stays where it is.
+ */
+export function PageView({ pageId, header }: { pageId?: string; header?: React.ReactNode } = {}) {
+  const params0 = useParams<{ id: string }>();
+  const id = pageId ?? params0.id;
   const [params, setParams] = useSearchParams();
   const editing = params.get('edit') === '1';
   const q = usePage(id);
@@ -68,15 +74,18 @@ export function PageView() {
   // Keep the slug in the URL in step with the title.
   const detail = q.data;
   useEffect(() => {
-    if (!detail) return;
+    if (!detail || pageId) return;
+    if (detail.page.id === tree.data?.conventions_id) return;
     const sid = tree.data?.sessions_id;
     if (sid && (detail.page.id === sid || detail.page.parent_id === sid)) return;
     const want = pageHref(detail.page.id, detail.page.title);
     if (window.location.pathname !== want)
       navigate(`${want}${window.location.search}${window.location.hash}`, { replace: true });
-  }, [detail, navigate, tree.data]);
+  }, [detail, navigate, tree.data, pageId]);
 
-  // Sessions have their own views, outside the wiki.
+  // Sessions and Conventions have their own views, outside the wiki.
+  if (!pageId && detail && detail.page.id === tree.data?.conventions_id)
+    return <Navigate to={`/conventions${window.location.search}`} replace />;
   const sessionsId = tree.data?.sessions_id;
   if (sessionsId && detail) {
     if (detail.page.id === sessionsId) return <Navigate to="/sessions" replace />;
@@ -111,7 +120,7 @@ export function PageView() {
   return editing ? (
     <EditPage key={detail!.page.id} detail={detail!} onDone={() => setEditing(false)} />
   ) : (
-    <ReadPage detail={detail!} onEdit={() => setEditing(true)} />
+    <ReadPage detail={detail!} onEdit={() => setEditing(true)} header={header} />
   );
 }
 
@@ -135,7 +144,15 @@ function Breadcrumbs({ ancestors, page }: { ancestors: PageSummary[]; page: { ti
   );
 }
 
-function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
+function ReadPage({
+  detail,
+  onEdit,
+  header,
+}: {
+  detail: PageDetail;
+  onEdit(): void;
+  header?: React.ReactNode;
+}) {
   const { page, ancestors, children, backlinks } = detail;
   const { index } = useTitleIndex();
   const [menu, setMenu] = useState(false);
@@ -268,7 +285,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
   return (
     <article className="page">
       <div className="page-top">
-        <Breadcrumbs ancestors={ancestors} page={page} />
+        {header ?? <Breadcrumbs ancestors={ancestors} page={page} />}
         <div className="page-actions">
           {!locked && (
             <button className="btn" onClick={onEdit} title="Edit (E)">
@@ -295,7 +312,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
             </button>
             {menu && (
               <Menu onClose={() => setMenu(false)}>
-                {!locked && (
+                {!locked && !header && (
                   <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
                     Add subpage
                   </button>
@@ -387,7 +404,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
 
       {/* Everything about the page rather than in it: set apart from the writing. */}
       <footer className="page-foot">
-        {locked !== 'entry' && (
+        {locked !== 'entry' && (!header || children.length > 0) && (
           <section className="related" aria-label="Pages inside">
             <div className="related-head">
               <h2>{locked === 'root' ? 'Sessions' : 'Pages inside'}</h2>
@@ -801,6 +818,8 @@ function inAWeek(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+type VersionKey = number | 'current';
+
 function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
   const list = useQuery({
     queryKey: keys.revisions(page.id),
@@ -812,9 +831,25 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
     queryFn: () => api.get<RevisionDetail>(`/pages/${page.id}/revisions/${sel}`),
     enabled: sel !== null,
   });
+  // Compare: two versions picked from the list, the current one by default.
+  const [compare, setCompare] = useState<VersionKey[] | null>(null);
   const { index } = useTitleIndex();
   const qc = useQueryClient();
   const toast = useToast();
+
+  // Newest first: the current page, then earlier versions as listed.
+  const order: VersionKey[] = ['current', ...(list.data?.revisions.map((r) => r.id) ?? [])];
+  const pick = (k: VersionKey) =>
+    setCompare((cur) => {
+      if (!cur) return cur;
+      if (cur.includes(k)) return cur.filter((x) => x !== k);
+      // A third pick replaces the older of the two picked first.
+      return cur.length < 2 ? [...cur, k] : [cur[1]!, k];
+    });
+  const pair =
+    compare?.length === 2
+      ? [...compare].sort((a, b) => order.indexOf(b) - order.indexOf(a)) // older first
+      : null;
 
   async function restore() {
     if (sel === null) return;
@@ -830,6 +865,12 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
     }
   }
 
+  const label = (k: VersionKey) => {
+    if (k === 'current') return 'Current';
+    const r = list.data?.revisions.find((x) => x.id === k);
+    return r ? `${formatWhen(r.created_at)} (version ${r.version})` : 'Earlier version';
+  };
+
   return (
     <div className="scrim" onMouseDown={onClose}>
       <div
@@ -840,37 +881,67 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
       >
         <div className="drawer-head">
           <h2>History</h2>
-          <button className="btn icon-only" onClick={onClose} aria-label="Close">
-            <Icon name="close" />
-          </button>
+          <div className="drawer-actions">
+            {!!list.data?.revisions.length && (
+              <button
+                className={`btn small${compare ? ' primary' : ''}`}
+                aria-pressed={!!compare}
+                onClick={() => setCompare((c) => (c ? null : ['current']))}
+              >
+                <Icon name="diff" size={14} /> {compare ? 'Done comparing' : 'Compare'}
+              </button>
+            )}
+            <button className="btn icon-only" onClick={onClose} aria-label="Close">
+              <Icon name="close" />
+            </button>
+          </div>
         </div>
         <div className="history">
-          <ul className="history-list">
-            <li>
-              <button className={sel === null ? 'current' : ''} onClick={() => setSel(null)}>
-                <strong>Current</strong>
-                <span>
-                  {actorLabel(page.updated_by)} · {formatWhen(page.updated_at)}
-                </span>
-              </button>
-            </li>
-            {list.data?.revisions.map((r) => (
-              <li key={r.id}>
-                <button className={sel === r.id ? 'current' : ''} onClick={() => setSel(r.id)}>
-                  <strong>{formatWhen(r.created_at)}</strong>
-                  <span>
-                    {actorLabel(r.actor)} · version {r.version}
-                    {r.title !== page.title ? ` · “${r.title}”` : ''}
-                  </span>
-                </button>
+          <ul className={`history-list${compare ? ' comparing' : ''}`}>
+            {compare && (
+              <li className="history-hint muted">
+                Pick two versions. The newer one is shown against the older.
               </li>
-            ))}
+            )}
+            {order.map((k) => {
+              const r = k === 'current' ? null : list.data?.revisions.find((x) => x.id === k);
+              const on = compare ? compare.includes(k) : k === 'current' ? sel === null : sel === k;
+              return (
+                <li key={k}>
+                  <button
+                    className={on ? 'current' : ''}
+                    aria-pressed={compare ? on : undefined}
+                    onClick={() =>
+                      compare ? pick(k) : setSel(k === 'current' ? null : (k as number))
+                    }
+                  >
+                    {compare && <span className={`history-check${on ? ' on' : ''}`} aria-hidden />}
+                    <span className="history-what">
+                      <strong>{r ? formatWhen(r.created_at) : 'Current'}</strong>
+                      <span>
+                        {r
+                          ? `${actorLabel(r.actor)} · version ${r.version}${r.title !== page.title ? ` · “${r.title}”` : ''}`
+                          : `${actorLabel(page.updated_by)} · ${formatWhen(page.updated_at)}`}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
             {list.data && !list.data.revisions.length && (
               <li className="muted">No earlier versions yet.</li>
             )}
           </ul>
-          <div className="history-preview prose">
-            {sel === null ? (
+          <div className={`history-preview${compare ? '' : ' prose'}`}>
+            {compare ? (
+              pair ? (
+                <ComparePair page={page} older={pair[0]!} newer={pair[1]!} label={label} />
+              ) : (
+                <p className="muted">
+                  {compare.length ? 'Pick another version to compare with.' : 'Pick two versions.'}
+                </p>
+              )
+            ) : sel === null ? (
               <Markdown source={page.body} titles={index} />
             ) : rev.data ? (
               <>
@@ -888,6 +959,33 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
       </div>
     </div>
   );
+}
+
+/** Two versions' text side by side as one diff (fetched as needed). */
+function ComparePair({
+  page,
+  older,
+  newer,
+  label,
+}: {
+  page: Page;
+  older: VersionKey;
+  newer: VersionKey;
+  label: (k: VersionKey) => string;
+}) {
+  const fetchOne = (k: VersionKey) => ({
+    queryKey: ['revision', page.id, k],
+    queryFn: () => api.get<RevisionDetail>(`/pages/${page.id}/revisions/${k}`),
+    enabled: k !== 'current',
+  });
+  const a = useQuery(fetchOne(older));
+  const b = useQuery(fetchOne(newer));
+  const text = (k: VersionKey, q: typeof a) =>
+    k === 'current' ? { title: page.title, body: page.body } : q.data;
+  const o = text(older, a);
+  const n = text(newer, b);
+  if (!o || !n) return <p className="muted">Loading…</p>;
+  return <DiffView older={o} newer={n} olderLabel={label(older)} newerLabel={label(newer)} />;
 }
 
 /** Open items on this page, grouped by type; generated from the markers, never edited. */

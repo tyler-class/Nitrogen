@@ -59,16 +59,23 @@ export function Layout() {
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
   const [about, setAbout] = useState(false);
-  // Sessions live outside the page tree, behind their own button.
+  // Sessions and Conventions live outside the page tree, behind their own buttons.
   const sessionsId = tree.data?.sessions_id ?? null;
+  const conventionsId = tree.data?.conventions_id ?? null;
+  const sessionCount = useMemo(
+    () =>
+      sessionsId ? (tree.data?.pages ?? []).filter((p) => p.parent_id === sessionsId).length : 0,
+    [tree.data, sessionsId],
+  );
   const pages = useMemo(
     () =>
       (tree.data?.pages ?? []).filter(
-        (p) => !sessionsId || (p.id !== sessionsId && p.parent_id !== sessionsId),
+        (p) =>
+          p.id !== conventionsId &&
+          (!sessionsId || (p.id !== sessionsId && p.parent_id !== sessionsId)),
       ),
-    [tree.data, sessionsId],
+    [tree.data, sessionsId, conventionsId],
   );
-  const sessionCount = (tree.data?.pages.length ?? 0) - pages.length - (sessionsId ? 1 : 0);
   const location = useLocation();
 
   // Close the mobile menu after navigating.
@@ -181,8 +188,11 @@ export function Layout() {
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
         )}
-        {/* One rule above the footer links (AI sessions, when there are any, then Settings). */}
+        {/* One rule above the footer links (Conventions, AI sessions when there are any, then Settings). */}
         <div className="sidebar-foot">
+          <NavLink to="/conventions" className="foot-link conventions-link">
+            <Icon name="rules" size={15} /> Conventions
+          </NavLink>
           {sessionCount > 0 && (
             <NavLink to="/sessions" className="foot-link sessions-link">
               <Icon name="sparkle" size={15} /> AI Sessions

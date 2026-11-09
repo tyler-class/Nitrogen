@@ -3105,3 +3105,265 @@ body.resizing {
 .menu button {
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ history: compare */
+
+.drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.history-list .history-hint {
+  font-size: 12px;
+  padding: 4px 10px 8px;
+}
+.history-list.comparing button {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+.history-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.history-list button .history-what span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.history-check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+}
+.history-check.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+.diff {
+  font-size: 13px;
+}
+.diff-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+.diff-old {
+  color: var(--danger);
+}
+.diff-new {
+  color: var(--ok);
+}
+.diff-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.diff-plus {
+  color: var(--ok);
+}
+.diff-minus {
+  color: var(--danger);
+}
+.diff-title {
+  margin-bottom: 10px;
+}
+.diff-title del {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.diff-title ins {
+  background: var(--ok-soft);
+  color: var(--ok);
+  text-decoration: none;
+}
+.diff-lines {
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+  line-height: 1.55;
+}
+.diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 10px 0 0;
+}
+.diff-line.add {
+  background: var(--ok-soft);
+}
+.diff-line.del {
+  background: var(--danger-soft);
+}
+.diff-mark {
+  flex: none;
+  width: 22px;
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+}
+.diff-line.add .diff-mark {
+  color: var(--ok);
+}
+.diff-line.del .diff-mark {
+  color: var(--danger);
+}
+.diff-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-word {
+  border-radius: 3px;
+  color: inherit;
+}
+.diff-line.add .diff-word {
+  background: color-mix(in srgb, var(--ok) 28%, transparent);
+}
+.diff-line.del .diff-word {
+  background: color-mix(in srgb, var(--danger) 28%, transparent);
+}
+.diff-fold {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 3px 32px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--hairline);
+}
+.diff-fold:hover {
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------- Conventions */
+
+.conventions-link {
+  margin-top: 6px;
+}
+.conventions-link + .sessions-link {
+  margin-top: 0;
+}
+/* Sits where breadcrumbs go on a page, so it stays small. */
+.conv-head {
+  min-width: 0;
+}
+.conv-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.conv-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.conventions .conv-head {
+  margin-bottom: 18px;
+}
+.conventions .conv-title {
+  font-size: 24px;
+}
+.conv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  max-width: 560px;
+}
+.conv-empty p {
+  margin: 0;
+}
+.conv-empty .field {
+  width: 100%;
+}
+
+/* ------------------------------------------------------ Connect an assistant */
+
+.connect-ai .field-label {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.connect-ai .ai-h {
+  margin: 20px 0 8px;
+  font-size: 15px;
+}
+.ai-conns {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  max-width: 560px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.ai-conns li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+.ai-conns li + li {
+  border-top: 1px solid var(--hairline);
+}
+.ai-conn-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 550;
+}
+.ai-conns .muted {
+  font-size: 12.5px;
+}
+.ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.ai-chip:hover {
+  background: var(--accent-soft);
+}
+.ai-chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+}
+.ai-steps {
+  margin-top: 10px;
+  max-width: 600px;
+}
+.ai-steps .steps {
+  margin: 0 0 8px;
+}
+.ai-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ai-toggle-chev {
+  display: inline-flex;
+  transition: transform 0.15s;
+}
+.ai-toggle-chev.turned {
+  transform: rotate(90deg);
+}

@@ -167,6 +167,7 @@ describe('MCP', () => {
         'create_pages',
         'delete_page',
         'edit_page',
+        'get_conventions',
         'get_started',
         'get_tree',
         'list_revisions',
@@ -180,6 +181,7 @@ describe('MCP', () => {
         'recent_changes',
         'restore_revision',
         'search',
+        'update_conventions',
         'update_page',
       ].sort(),
     );
@@ -504,5 +506,52 @@ describe('MCP', () => {
 
     expect((await api.del(`/sessions/${mine.id}`)).status).toBe(200);
     expect((await api.get(`/pages/${mine.id}`)).status).toBe(404);
+  });
+
+  it('reads and writes the conventions, kept out of the page tree in the app', async () => {
+    const token = await connect();
+    const api = await session();
+
+    // Assistants are told how conventions work, and can create them.
+    const init = await rpc(token, 'initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1' },
+    });
+    expect(init.result?.instructions).toContain('update_conventions');
+    const none = await tool(token, 'get_conventions', {});
+    if (none.text.startsWith('There are no conventions')) {
+      const made = await tool(token, 'update_conventions', {
+        body: '- Meeting notes go under their project.',
+      });
+      expect(made.isError).toBe(false);
+      expect(made.text).toMatch(/Created the conventions/);
+    }
+
+    const tree = (await api.get<TreeResponse>('/tree')).data;
+    expect(tree.conventions_id).toBeTruthy();
+    const read = await tool(token, 'get_conventions', {});
+    expect(read.text).toContain('/conventions');
+    const version = Number(/version: (\d+)/.exec(read.text)![1]);
+
+    // Changing them needs the version that was read.
+    const stale = await tool(token, 'update_conventions', { body: 'x' });
+    expect(stale.isError).toBe(true);
+    const saved = await tool(token, 'update_conventions', {
+      body: '- Meeting notes go under their project.\n- Tag decisions #decision.',
+      base_version: version,
+    });
+    expect(saved.isError).toBe(false);
+    const page = (await api.get<PageDetail>(`/pages/${tree.conventions_id}`)).data.page;
+    expect(page.body).toContain('#decision');
+
+    // New connections get them in their instructions.
+    const token2 = await connect();
+    const init2 = await rpc(token2, 'initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1' },
+    });
+    expect(init2.result?.instructions).toContain('Tag decisions #decision.');
   });
 });

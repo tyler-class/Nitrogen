@@ -7,7 +7,7 @@ import {
   updatePageInput,
 } from '@shared/schemas';
 import type { TreeResponse } from '@shared/types';
-import { nowIso } from '../db';
+import { getSetting, nowIso } from '../db';
 import {
   createPage,
   createTree,
@@ -29,8 +29,17 @@ import { ApiError, body, type AppEnv } from './util';
 export const pages = new Hono<AppEnv>();
 
 pages.get('/tree', async (c) => {
-  const [list, sessions] = await Promise.all([listSummaries(c.env.DB), sessionsRoot(c.env.DB)]);
-  return c.json<TreeResponse>({ pages: list, sessions_id: sessions });
+  const [list, sessions, guide] = await Promise.all([
+    listSummaries(c.env.DB),
+    sessionsRoot(c.env.DB),
+    getSetting(c.env.DB, 'guide_id'),
+  ]);
+  const conventionsId = guide && list.some((p) => p.id === guide) ? guide : null;
+  return c.json<TreeResponse>({
+    pages: list,
+    sessions_id: sessions,
+    conventions_id: conventionsId,
+  });
 });
 
 pages.get('/pages/:id', async (c) => {
