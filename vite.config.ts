@@ -75,6 +75,8 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
+        // Push notifications and the app-icon badge (Selfhost Kit: public/kit-push-sw.js).
+        importScripts: ['kit-push-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // CodeMirror's language data splits into many small chunks; precache the app shell only.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

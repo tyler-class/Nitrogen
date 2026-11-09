@@ -8,6 +8,9 @@ import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { useToast } from '../components/Toast';
 import { useTheme, type Theme } from '../lib/theme';
 import { ConnectAISection } from './ConnectAI';
+import { NotificationsSection } from './NotificationsSection';
+import { InstallHint } from '../components/InstallHint';
+import { isStandalone } from '../kit/push';
 import { VERSION } from '@shared/version';
 import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
@@ -110,7 +113,17 @@ export function Settings() {
         />
       </section>
 
+      <NotificationsSection />
+
       <ConnectAISection />
+
+      {/* Already installed: nothing to do here, so no section. */}
+      {!isStandalone() && (
+        <section id="install">
+          <h2>Install on your phone</h2>
+          <InstallHint />
+        </section>
+      )}
 
       <section>
         <h2>Backup</h2>

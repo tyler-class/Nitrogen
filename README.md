@@ -107,6 +107,20 @@ That brings in the latest Nitrogen straight away, then every week. See [Updates]
 <!-- 📸 SCREENSHOT docs/screenshots/install-8-updates.png: Settings → Updates with the Set up automatic updates button -->
 <!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
 
+## Notifications
+
+Nitrogen can send notifications to your phone. They only work in the app installed on your phone (added to your Home Screen), not in a browser tab.
+
+**Install it on iPhone or iPad** (iOS 16.4 or later):
+
+1. Open Nitrogen in Safari and tap **Share**.
+2. Tap **Add to Home Screen**, then **Add**.
+3. Open Nitrogen from the new Home Screen icon.
+
+**Install it on Android:** open Nitrogen in Chrome, open the menu **⋮** and tap **Install app** (or **Add to Home screen**), then open it from the new icon.
+
+**Turn them on:** in the installed app, open **Settings → Notifications** and switch on **Notifications on this device**. Allow notifications when your phone asks. Each phone chooses its own, so everyone in the family can pick what they get. **Send a test** checks it's working.
+
 ## Updates
 
 Updates take two steps, both in your own accounts. Nitrogen never deploys to your Cloudflare directly.

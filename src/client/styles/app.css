@@ -3523,3 +3523,53 @@ body.resizing {
   margin-top: 20px;
   margin-bottom: 8px;
 }
+
+/* --- 0.16.10: Settings → Notifications (Selfhost Kit push) and Install on your phone. */
+.notify .share-row.notify-master {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+}
+.notify-kind {
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 2px !important;
+  min-width: 0;
+}
+.notify-kind .muted {
+  font-size: 13px;
+}
+.notify-test {
+  margin-top: 14px;
+}
+.notify-line {
+  margin: 0 0 10px;
+}
+.notify-line .infotip {
+  margin-left: 2px;
+}
+.notify-steps {
+  display: block;
+  margin-bottom: 10px;
+}
+.notify-steps strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.notify-steps ol {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.notify-wait {
+  min-height: 24px;
+  margin: 0;
+}
+.notify-error {
+  color: var(--danger);
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+/* The Notifications link scrolls here: clear the phone's top bar. */
+#install {
+  scroll-margin-top: 64px;
+}

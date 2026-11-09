@@ -21,6 +21,7 @@ import { admin } from './routes/admin';
 import { connections } from './routes/connections';
 import { explore } from './routes/explore';
 import { system } from './routes/system';
+import { push } from './notifications';
 import { touchSession } from './sessions';
 import { files } from './routes/files';
 import { pages } from './routes/pages';
@@ -81,6 +82,8 @@ app.route('/', admin);
 app.route('/', connections);
 app.route('/', explore);
 app.route('/', system);
+// Push notifications and the app-icon badge (Selfhost Kit), behind the sign-in above.
+app.route('/', push);
 
 app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));
 

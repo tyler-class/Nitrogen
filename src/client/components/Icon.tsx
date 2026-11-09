@@ -35,6 +35,10 @@ const PATHS: Record<string, string> = {
   sparkle:
     'M10 2.5l1.5 4.33L15.83 8.33l-4.33 1.5L10 14.17l-1.5-4.33L4.17 8.33l4.33-1.5zM15.83 13.33l.67 1.83L18.33 15.83l-1.83.67L15.83 18.33l-.67-1.83L13.33 15.83l1.83-.67z',
   bolt: 'M11 2L4 11h5l-1 7 7-9h-5z',
+  // Notifications.
+  bell: 'M5 14V9a5 5 0 0 1 10 0v5l1.5 1.5h-13zM8.5 17.5h3',
+  // Install on your phone.
+  phone: 'M6.5 2.5h7v15h-7zM9.5 15h1',
   info: 'M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM10 9v4.5M10 6.5h.01',
   panelLeft: 'M3 4h14v12H3zM8 4v12M5 7.5h1M5 10h1',
   lock: 'M5.5 9h9v8h-9zM7.5 9V6.5a2.5 2.5 0 0 1 5 0V9',

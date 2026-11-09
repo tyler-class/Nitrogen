@@ -50,6 +50,7 @@
     // "off" skips AI Search entirely (keyword search only). Local dev and tests set it to "off".
     "SEMANTIC_SEARCH": "on",
   },
-  // Retries semantic indexing for pages whose last attempt failed.
+  // Retries semantic indexing for pages whose last attempt failed, and sends notifications (each at
+  // most once a day per device; the kit's sent log dedupes the 15-minute runs).
   "triggers": { "crons": ["*/15 * * * *"] },
 }

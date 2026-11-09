@@ -13,6 +13,7 @@ import { mcpApiHandler } from './mcp';
 import { handleUploadLink } from './images';
 import { purgeUnusedFiles, serveFile } from './routes/files';
 import { drainIndex } from './search';
+import { runNotifications } from './notifications';
 import { checkIn, checkInOnRequest, type CheckInOptions } from './kit/telemetry';
 import { buildFlags } from '../shared/kit/build';
 import { VERSION } from '@shared/version';
@@ -111,11 +112,13 @@ export default {
   },
 
   /**
-   * Catches up on semantic indexing that failed or was skipped during requests, and sends the
-   * anonymous daily check-in (at most once a day; off switch in Settings → Updates).
+   * Catches up on semantic indexing that failed or was skipped during requests, sends the
+   * anonymous daily check-in (at most once a day; off switch in Settings → Updates) and the
+   * morning digest (each device at 8 a.m. its time, once a day; Settings → Notifications).
    */
   async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(checkIn(env.DB, usage(env)));
+    ctx.waitUntil(runNotifications(env.DB));
     // Images no page or saved version uses any more.
     ctx.waitUntil(purgeUnusedFiles(env));
     try {

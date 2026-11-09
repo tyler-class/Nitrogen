@@ -3,6 +3,7 @@ import { readLocal, writeLocal } from '../lib/storage';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
 import { useTree } from '../lib/queries';
+import { useNotifications } from '../lib/notifications';
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
 import { Tree } from '../components/Tree';
@@ -67,6 +68,8 @@ function useEdgeSwipe(open: boolean, setOpen: (v: boolean) => void) {
 
 export function Layout() {
   const tree = useTree();
+  // Notification taps open in-app; the app-icon badge follows what's due.
+  useNotifications();
   // The splat also matches /p/:id without a slug.
   const match = useMatch('/p/:id/*');
   const [nav, setNav] = useState(false);
