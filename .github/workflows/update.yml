@@ -32,16 +32,17 @@ jobs:
           git fetch --depth=1 https://github.com/tyler-class/Nitrogen.git main
           upstream=$(git rev-parse FETCH_HEAD)
 
-          # Kept from this copy: its workflows (GitHub doesn't let this job change them) and a
-          # wrangler.jsonc that has its own database id written in.
+          # Kept from this copy: its workflows (GitHub doesn't let this job change them) and its
+          # name, ids and resource names in wrangler.jsonc (merged into the new config below).
           keep=$(mktemp -d)
           cp -r .github/workflows "$keep/workflows"
-          if grep -q '"database_id"' wrangler.jsonc; then cp wrangler.jsonc "$keep/"; fi
+          cp wrangler.jsonc "$keep/"
 
           git rm -rq .
           git checkout "$upstream" -- .
           rm -rf .github/workflows && cp -r "$keep/workflows" .github/workflows
-          if [ -f "$keep/wrangler.jsonc" ]; then cp "$keep/wrangler.jsonc" .; fi
+          # The new config (crons, bindings) with this copy's name, ids and resource names kept.
+          node scripts/kit/merge-wrangler.mjs "$keep/wrangler.jsonc" wrangler.jsonc
           git add -A
 
           if git diff --cached --quiet; then
