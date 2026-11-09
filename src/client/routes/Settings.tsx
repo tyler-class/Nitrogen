@@ -274,8 +274,8 @@ function UpdatesSection({
             {setUp ? (
               <>
                 {UPDATE_TEXT.updateNowHint}{' '}
-                <a href={setupUrl(repo, __SOURCE_BRANCH__)} target="_blank" rel="noreferrer">
-                  {UPDATE_TEXT.setUpAgain}
+                <a href={workflowFileUrl(repo, __SOURCE_BRANCH__)} target="_blank" rel="noreferrer">
+                  {UPDATE_TEXT.updateFile}
                 </a>
               </>
             ) : (

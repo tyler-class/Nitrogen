@@ -1,5 +1,5 @@
 import { VERSION } from '@shared/version';
-import { aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
+import { ABOUT_ICONS, aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 
@@ -9,12 +9,24 @@ const LINKS = aboutLinks({
   email: 'nitrogen@tylerclass.net',
   coffee: 'Free as air. Buy me a coffee ☕',
 });
-const ICONS: Record<AboutLinkKind, string> = {
-  github: 'github',
-  email: 'mail',
-  coffee: 'coffee',
-  site: 'link',
-};
+/** An About link's icon: the kit's shared set, identical in every app. */
+function LinkIcon({ kind, className }: { kind: AboutLinkKind; className?: string }) {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: ABOUT_ICONS[kind] }}
+    />
+  );
+}
 
 /** About Nitrogen: version, what it is, who built it, and links (Selfhost Kit layout). */
 export function AboutSheet({ onClose }: { onClose: () => void }) {
@@ -36,7 +48,7 @@ export function AboutSheet({ onClose }: { onClose: () => void }) {
               className="about-link"
             >
               <span className="about-link-icon">
-                <Icon name={ICONS[l.kind]} size={18} />
+                <LinkIcon kind={l.kind} />
               </span>
               <span className="about-link-label">{l.label}</span>
               <span className="about-link-chev">

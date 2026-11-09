@@ -48,7 +48,8 @@ export const UPDATE_TEXT = {
   setUpHint: 'Opens GitHub: click Commit changes. It updates now, then every Monday.',
   updateNow: 'Update now',
   updateNowHint: 'Opens GitHub: click Run workflow.',
-  setUpAgain: 'Set up again',
+  /** Once set up, the only link: the update file itself, to see it or delete it (which turns updates off). */
+  updateFile: 'See or delete the update file',
   byHand: 'Deployed by hand: git pull, then npm run deploy.',
   telemetry: 'Share anonymous usage counts',
   howUpdatesWork: 'How updates work',
