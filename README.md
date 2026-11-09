@@ -5,7 +5,7 @@ straight into the page, search understands meaning, and Claude can read and writ
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
-<!-- 📸 SCREENSHOT docs/screenshots/hero.png: Nitrogen: a page with its tree in the sidebar and wiki links in the text -->
+![Nitrogen on a laptop and a phone: a page with its tree, tags and to-dos, and Home’s open items](docs/screenshots/hero.png)
 
 - **A page tree.** Every page can hold subpages. Drag pages in the sidebar to reorder or nest them.
 - **Markdown with wiki links.** `[[Page title]]` links pages and powers “Linked from” backlinks.
@@ -34,6 +34,28 @@ straight into the page, search understands meaning, and Claude can read and writ
 - **Insights.** Arrangeable panels like Home: a calendar of edits by you and by assistants, who writes the wiki, what's busiest, what
   needs attention, and what assistants searched for and couldn't find.
 - **Yours.** It runs on your Cloudflare account; the free plan is enough for a personal wiki.
+
+## A look around
+
+**A page:** headings, a table, and to-dos, questions and reminders right in the text.
+
+![A page with headings, inline to-dos, a timed reminder, a question and a budget table](docs/screenshots/page.png)
+
+**Search (⌘K):** jump to any page by title or keyword, or press Enter to search by meaning.
+
+![The command palette with results for “garden”](docs/screenshots/palette.png)
+
+**Insights:** who writes the wiki, when, and what's busiest.
+
+![Insights with stats, the edit calendar, edits per week and who writes the wiki](docs/screenshots/insights.png)
+
+**AI Sessions:** every assistant session that changed the wiki, with its summary.
+
+![AI Sessions listing sessions by Claude and ChatGPT](docs/screenshots/sessions.png)
+
+**Dark mode:** follows your device, or pick it in Settings.
+
+![A page in dark mode](docs/screenshots/dark.png)
 
 <!-- kit:readme:start -->
 <!-- Written by the Selfhost Kit (kit/docs/readme-install.md): edit it there. -->
@@ -94,7 +116,7 @@ Click **Create and deploy**. Cloudflare copies the code to your GitHub, creates 
 
 Open it, sign in with your password, and you're done. Bookmark it, or add it to your phone's home screen.
 
-<!-- 📸 SCREENSHOT docs/screenshots/install-7-signed-in.png: Nitrogen right after signing in -->
+![Nitrogen right after signing in](docs/screenshots/install-7-signed-in.png)
 
 ### 8. Set up automatic updates (recommended)
 
@@ -105,7 +127,7 @@ Your copy updates itself every Monday once you allow it. That takes one click, o
 
 That brings in the latest Nitrogen straight away, then every week. See [Updates](#updates) for how it works.
 
-<!-- 📸 SCREENSHOT docs/screenshots/install-8-updates.png: Settings → Updates with the Set up automatic updates button -->
+![Settings → Updates with the Set up automatic updates button](docs/screenshots/install-8-updates.png)
 <!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
 
 ## Notifications
