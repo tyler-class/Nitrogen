@@ -348,6 +348,33 @@ describe('the notification run', () => {
     expect(await badge(akl.d)).toBe(3);
     await api.del(`/pages/${plans.id}`);
   });
+
+  it('sends today’s digest to a device turned on late in the evening, but nothing before 8', async () => {
+    await clearDevices();
+    const api = await session();
+    const plans = (
+      await api.post<Page>('/pages', {
+        title: 'Late push plans',
+        parent_id: null,
+        body: '- [ ] todo: File the report due:2031-07-08',
+      })
+    ).data;
+    const svc = pushService();
+    const utc = await device('UTC');
+    // 7:41 local: too early.
+    await runNotifications(env.DB, { now: new Date('2031-07-08T07:41Z'), fetcher: svc.fetcher });
+    expect(svc.got).toHaveLength(0);
+    // Off all day; turned on at 22:00, it gets the 22:11 run's digest straight away.
+    await env.DB.prepare('DELETE FROM selfhost_push_devices WHERE id = ?').bind(utc.d.id).run();
+    const late = await device('UTC');
+    await runNotifications(env.DB, { now: new Date('2031-07-08T22:11Z'), fetcher: svc.fetcher });
+    expect(svc.got.map((r) => r.url)).toEqual([late.d.endpoint]);
+    expect(await decrypt(late.b, svc.got[0]!.body)).toMatchObject({
+      title: 'Due today',
+      body: '1 to-do: File the report',
+    });
+    await api.del(`/pages/${plans.id}`);
+  });
 });
 
 describe('/api/push', () => {

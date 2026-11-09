@@ -55,9 +55,13 @@ export function nitrogenPush(db: D1Database): Pick<PushJobOptions, 'build' | 'ba
   };
 }
 
-/** The cron's notification run (every 15 minutes; the kit sends each at most once a day). */
+/**
+ * The cron's notification run (every 15 minutes; the kit sends each at most once a day). Anything
+ * due that hasn't gone out yet is sent at any hour from 8:00 local to midnight (no 21:00 cutoff):
+ * a device turned on late in the evening still gets today's.
+ */
 export function runNotifications(db: D1Database, o: Partial<PushJobOptions> = {}) {
-  return runPushJob(db, { ...nitrogenPush(db), icon: ICON, ...o });
+  return runPushJob(db, { ...nitrogenPush(db), icon: ICON, until: 24, ...o });
 }
 
 /** /api/push/*: behind Nitrogen's sign-in (mounted after the guard in app.ts). */
