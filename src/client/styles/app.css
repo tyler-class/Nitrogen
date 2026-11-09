@@ -2872,18 +2872,6 @@ body.resizing {
   padding-top: 12px;
   border-top: 1px solid var(--hairline);
 }
-/* In a row, the popover lines up with the row's edges instead of the icon. */
-.share-row .infotip {
-  position: static;
-}
-.share-row .infotip-pop {
-  left: 0;
-  right: auto;
-}
-.settings h2 .infotip-pop {
-  left: -8px;
-  right: auto;
-}
 .share-row > span {
   flex: 1;
   display: inline-flex;
