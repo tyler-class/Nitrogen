@@ -8,6 +8,7 @@ import { api, errorMessage } from '../lib/api';
 import { eventVerb, formatDay, formatTime } from '../lib/activity';
 import { keys } from '../lib/queries';
 import { Icon } from '../components/Icon';
+import { WhoToggle } from '../components/charts';
 import { useToast } from '../components/Toast';
 
 type Filter = 'all' | 'you' | 'agents';
@@ -67,25 +68,7 @@ export function Activity() {
       <h1 className="page-title view-title">
         <Icon name="activity" size={26} /> Activity
       </h1>
-      <div className="seg" role="radiogroup" aria-label="Show">
-        {(
-          [
-            ['all', 'Everyone'],
-            ['you', 'You'],
-            ['agents', 'Assistants'],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            role="radio"
-            aria-checked={filter === k}
-            className={filter === k ? 'on' : ''}
-            onClick={() => setFilter(k)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <WhoToggle value={filter} onChange={setFilter} label="Show" />
       {q.isPending && <p className="muted">Loading…</p>}
       {q.data && !sessions.length && <p className="muted">Nothing yet.</p>}
       {sessions.map((s, i) => {

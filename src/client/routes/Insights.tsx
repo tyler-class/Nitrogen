@@ -16,6 +16,8 @@ import {
   Stat,
   type Col,
   type RankRow,
+  type Who,
+  WhoToggle,
 } from '../components/charts';
 import { PageGlyph, Icon } from '../components/Icon';
 import { PanelBoard, type PanelDef } from '../components/Panels';
@@ -23,13 +25,6 @@ import { usePanelLayout } from '../lib/queries';
 import { formatWhen } from './PageView';
 import '../styles/viz.css';
 import '../styles/insights.css';
-
-type Who = 'all' | 'you' | 'agents';
-const WHO = [
-  ['all', 'Everyone'],
-  ['you', 'You'],
-  ['agents', 'Assistants'],
-] as const;
 
 type Dim = 'edited' | 'linked' | 'biggest' | 'quiet' | 'orphans' | 'empty';
 const DIMS = [
@@ -163,7 +158,7 @@ export function Insights() {
       title: 'Your wiki calendar',
       sub: `Last ${weeks} weeks. Darker days had more edits.`,
       size: 'full',
-      actions: <Chips label="Whose edits" options={WHO} value={who} onChange={setWho} />,
+      actions: <WhoToggle value={who} onChange={setWho} />,
       body: (
         <Heatmap counts={counts} tone={who === 'agents' ? 'agents' : 'you'} onWeeks={setWeeks} />
       ),

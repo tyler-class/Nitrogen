@@ -1,6 +1,6 @@
 // Small hand-drawn SVG charts styled by CSS classes so they follow the theme (same pattern as
 // Ratio). Colours come from --viz-you / --viz-agents in viz.css.
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 /** The element's content width, kept up to date (charts draw at real size, never scaled). */
 export function useWidth<T extends HTMLElement>(fallback = 600) {
@@ -258,6 +258,51 @@ export function Chips<K extends string>({
   return (
     <div className="seg" role="radiogroup" aria-label={label}>
       {options.map(([k, l]) => (
+        <button
+          key={k}
+          type="button"
+          role="radio"
+          aria-checked={value === k}
+          className={value === k ? 'on' : ''}
+          onClick={() => onChange(k)}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export type Who = 'all' | 'you' | 'agents';
+const WHO_OPTIONS = [
+  ['all', 'Everyone'],
+  ['you', 'You'],
+  ['agents', 'Assistants'],
+] as const;
+
+/**
+ * Everyone / You / Assistants as one sliding toggle: the thumb slides to the choice, white for
+ * Everyone, blue for You, purple (the assistants' colour) for Assistants.
+ */
+export function WhoToggle({
+  value,
+  onChange,
+  label = 'Whose edits',
+}: {
+  value: Who;
+  onChange: (w: Who) => void;
+  label?: string;
+}) {
+  const i = WHO_OPTIONS.findIndex(([k]) => k === value);
+  return (
+    <div
+      className={`who-toggle who-${value}`}
+      role="radiogroup"
+      aria-label={label}
+      style={{ '--i': i } as CSSProperties}
+    >
+      <span className="who-thumb" aria-hidden="true" />
+      {WHO_OPTIONS.map(([k, l]) => (
         <button
           key={k}
           type="button"

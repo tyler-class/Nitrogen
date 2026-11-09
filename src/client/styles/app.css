@@ -3372,3 +3372,95 @@ body.resizing {
     display: none;
   }
 }
+
+/* --- Everyone / You / Assistants: one sliding toggle. The thumb is white for Everyone, the
+   accent blue for You, and the assistants' purple for Assistants. */
+.who-toggle {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  isolation: isolate;
+}
+.who-thumb {
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 3);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, #000 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--ink) 7%, transparent);
+  transform: translateX(calc(var(--i, 0) * 100%));
+  transition:
+    transform 0.22s cubic-bezier(0.3, 0.7, 0.2, 1),
+    background 0.2s;
+}
+.who-you .who-thumb {
+  background: var(--accent);
+}
+.who-agents .who-thumb {
+  background: var(--claude);
+}
+.who-toggle button {
+  padding: 6px 14px;
+  border: 0;
+  background: none;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+.who-toggle button:hover {
+  color: var(--ink);
+}
+.who-toggle button.on {
+  color: var(--ink);
+}
+.who-you button.on,
+.who-agents button.on {
+  color: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .who-all .who-thumb {
+    background: color-mix(in srgb, var(--ink) 16%, var(--paper));
+  }
+}
+:root[data-theme='dark'] .who-all .who-thumb {
+  background: color-mix(in srgb, var(--ink) 16%, var(--paper));
+}
+
+/* --- A tag's page: a clear way back to all tags. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 6px -6px;
+  padding: 6px 12px 6px 4px;
+  border-radius: 999px;
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+}
+.back-link:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+/* Dark mode's blue and purple are light: dark text reads better on them. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .who-you button.on,
+  :root:not([data-theme='light']) .who-agents button.on {
+    color: #0d0b16;
+  }
+}
+:root[data-theme='dark'] .who-you button.on,
+:root[data-theme='dark'] .who-agents button.on {
+  color: #0d0b16;
+}

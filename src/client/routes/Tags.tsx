@@ -73,9 +73,9 @@ function TagPages({ tag }: { tag: string }) {
   );
   return (
     <div className="page tags-page">
-      <p className="crumbs">
-        <Link to="/tags">Tags</Link>
-      </p>
+      <Link to="/tags" className="back-link">
+        <Icon name="back" size={18} /> Tags
+      </Link>
       <h1 className="page-title">#{tag}</h1>
       {(q.data?.hits.length ?? 0) > 8 && (
         <input
