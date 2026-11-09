@@ -480,16 +480,11 @@ export interface DeleteResult {
   orphanFiles: string[];
 }
 
-export async function deletePage(
-  db: D1Database,
-  id: string,
-  actor: Actor,
-  opts: { purge?: boolean } = {},
-): Promise<DeleteResult> {
+export async function deletePage(db: D1Database, id: string, actor: Actor): Promise<DeleteResult> {
   await requirePage(db, id);
   const prot = await protection(db, id);
-  // Only the owner's "purge" (DELETE /sessions/:id) removes a session entry; nothing removes the root.
-  if (prot === 'root' || (prot === 'entry' && !opts.purge)) throw protectedError(prot);
+  // AI Sessions and its entries are permanent: nobody deletes them, not even the owner.
+  if (prot) throw protectedError(prot);
   const ids = await subtreeIds(db, id);
   const searchItems: string[] = [];
   const fileKeys: string[] = [];

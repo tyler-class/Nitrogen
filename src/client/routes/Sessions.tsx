@@ -1,17 +1,16 @@
 // AI Sessions: the log of what assistants did, outside the page tree. Entries are written by the
-// server (see worker/sessions.ts) and are read-only here; the owner can purge one.
+// server (see worker/sessions.ts) and are read-only and permanent: nobody can delete one.
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useParams } from 'react-router';
 import { actorLabel } from '@shared/actor';
 import type { PageDetail, SessionEntry } from '@shared/types';
-import { api, ApiError, errorMessage } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { formatDay, formatTime } from '../lib/activity';
 import { keys } from '../lib/queries';
 import { Chips } from '../components/charts';
 import { Icon } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
-import { useToast } from '../components/Toast';
 import { useTitleIndex } from './PageView';
 
 export function useSessions() {
@@ -45,7 +44,15 @@ function SessionLog() {
 
   return (
     <div className="page sessions">
-      <h1 className="page-title">AI Sessions</h1>
+      <div className="sessions-head">
+        <h1 className="page-title view-title">
+          <Icon name="sparkle" size={26} /> AI Sessions
+        </h1>
+        {/* Conventions live here: the house rules assistants read first. */}
+        <Link to="/conventions" className="btn small conv-link">
+          <Icon name="rules" size={15} /> Conventions
+        </Link>
+      </div>
       <p className="sessions-sub">What assistants did in your wiki, recorded automatically.</p>
       {actors.length > 1 && (
         <Chips
@@ -93,24 +100,7 @@ function SessionView({ id }: { id: string }) {
     queryFn: () => api.get<PageDetail>(`/pages/${id}`),
   });
   const { index } = useTitleIndex();
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const toast = useToast();
   const entry = list.data?.entries.find((e) => e.id === id);
-
-  async function purge() {
-    if (!window.confirm(`Purge “${entry?.title ?? 'this session'}”? It’s removed for good.`))
-      return;
-    try {
-      await api.del(`/sessions/${id}`);
-      qc.removeQueries({ queryKey: keys.page(id) });
-      await qc.invalidateQueries({ queryKey: ['sessions'] });
-      void qc.invalidateQueries({ queryKey: keys.tree });
-      navigate('/sessions', { replace: true });
-    } catch (e) {
-      toast(errorMessage(e));
-    }
-  }
 
   if (page.error)
     return (
@@ -129,16 +119,9 @@ function SessionView({ id }: { id: string }) {
   return (
     <article className="page sessions">
       <div className="page-top">
-        <nav className="crumbs" aria-label="Breadcrumb">
-          <Link to="/sessions">
-            <Icon name="sparkle" size={13} /> AI Sessions
-          </Link>
-        </nav>
-        <div className="page-actions">
-          <button className="btn" onClick={purge}>
-            <Icon name="trash" size={15} /> Purge
-          </button>
-        </div>
+        <Link to="/sessions" className="back-link">
+          <Icon name="back" size={18} /> AI sessions
+        </Link>
       </div>
       <header className="page-head">
         <h1 className="page-title">

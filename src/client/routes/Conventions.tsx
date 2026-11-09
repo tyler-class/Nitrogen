@@ -2,6 +2,7 @@
 // page underneath (the "guide_id" setting points to it), shown here in its own frame.
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { CONVENTIONS_ICON, CONVENTIONS_TEMPLATE, CONVENTIONS_TITLE } from '@shared/conventions';
 import type { Page } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
@@ -36,20 +37,21 @@ function About() {
 export function Conventions() {
   const tree = useTree();
   const id = tree.data?.conventions_id ?? null;
-  const header = (
-    <div className="conv-head">
-      <h1 className="conv-title">
-        <Icon name="rules" size={20} /> Conventions <About />
-      </h1>
-      <p className="conv-sub">How assistants should organize and write in this wiki.</p>
-    </div>
+  // Conventions live inside AI Sessions: a clear way back there.
+  const back = (
+    <Link to="/sessions" className="back-link">
+      <Icon name="back" size={18} /> AI sessions
+    </Link>
   );
 
   if (tree.isPending) return <div className="page-loading" aria-busy="true" />;
-  if (id) return <PageView key={id} pageId={id} header={header} />;
+  if (id) return <PageView key={id} pageId={id} header={back} titleAddon={<About />} />;
   return (
     <div className="page conventions">
-      {header}
+      {back}
+      <h1 className="page-title view-title">
+        <Icon name="rules" size={26} /> Conventions <About />
+      </h1>
       <Empty />
     </div>
   );

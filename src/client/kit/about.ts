@@ -18,7 +18,13 @@ export interface AboutLink {
 }
 
 /** The About links for an app, e.g. aboutLinks({ title: 'Duffel', repo: 'tyler-class/Duffel', email: 'duffel@tylerclass.net' }). */
-export function aboutLinks(o: { title: string; repo: string; email?: string }): AboutLink[] {
+export function aboutLinks(o: {
+  title: string;
+  repo: string;
+  email?: string;
+  /** The app's own short, witty coffee line (one line on desktop), instead of the standard one. */
+  coffee?: string;
+}): AboutLink[] {
   const links: AboutLink[] = [
     {
       kind: 'github',
@@ -39,7 +45,7 @@ export function aboutLinks(o: { title: string; repo: string; email?: string }): 
       kind: 'coffee',
       href: 'https://ko-fi.com/tylerclass',
       // Short enough for one line in the sheet on a desktop.
-      label: `${o.title} is free. Buy me a coffee ☕`,
+      label: o.coffee ?? `${o.title} is free. Buy me a coffee ☕`,
       external: true,
     },
     { kind: 'site', href: 'https://tylerclass.net', label: 'tylerclass.net', external: true },

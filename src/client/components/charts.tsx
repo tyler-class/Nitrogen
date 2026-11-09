@@ -273,36 +273,36 @@ export function Chips<K extends string>({
   );
 }
 
-export type Who = 'all' | 'you' | 'agents';
-const WHO_OPTIONS = [
-  ['all', 'Everyone'],
-  ['you', 'You'],
-  ['agents', 'Assistants'],
-] as const;
-
 /**
- * Everyone / You / Assistants as one sliding toggle: the thumb slides to the choice, white for
- * Everyone, blue for You, purple (the assistants' colour) for Assistants.
+ * One sliding toggle for a few choices: a thumb slides to the chosen one. With `tones`, the
+ * thumb takes the chosen option's colour class (`tone-<key>`).
  */
-export function WhoToggle({
+export function SlideToggle<K extends string>({
+  options,
   value,
   onChange,
-  label = 'Whose edits',
+  label,
+  tones = false,
 }: {
-  value: Who;
-  onChange: (w: Who) => void;
-  label?: string;
+  options: readonly (readonly [K, string])[];
+  value: K;
+  onChange: (k: K) => void;
+  label: string;
+  tones?: boolean;
 }) {
-  const i = WHO_OPTIONS.findIndex(([k]) => k === value);
+  const i = Math.max(
+    0,
+    options.findIndex(([k]) => k === value),
+  );
   return (
     <div
-      className={`who-toggle who-${value}`}
+      className={`slide-toggle${tones ? ` tone-${value}` : ''}`}
       role="radiogroup"
       aria-label={label}
-      style={{ '--i': i } as CSSProperties}
+      style={{ '--i': i, '--n': options.length } as CSSProperties}
     >
-      <span className="who-thumb" aria-hidden="true" />
-      {WHO_OPTIONS.map(([k, l]) => (
+      <span className="slide-thumb" aria-hidden="true" />
+      {options.map(([k, l]) => (
         <button
           key={k}
           type="button"
@@ -315,5 +315,30 @@ export function WhoToggle({
         </button>
       ))}
     </div>
+  );
+}
+
+export type Who = 'all' | 'you' | 'agents';
+const WHO_OPTIONS = [
+  ['all', 'Everyone'],
+  ['you', 'You'],
+  ['agents', 'Assistants'],
+] as const;
+
+/**
+ * Everyone / You / Assistants: the thumb is white for Everyone, blue for You, and purple (the
+ * assistants' colour) for Assistants.
+ */
+export function WhoToggle({
+  value,
+  onChange,
+  label = 'Whose edits',
+}: {
+  value: Who;
+  onChange: (w: Who) => void;
+  label?: string;
+}) {
+  return (
+    <SlideToggle options={WHO_OPTIONS} value={value} onChange={onChange} label={label} tones />
   );
 }

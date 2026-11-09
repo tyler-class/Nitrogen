@@ -461,7 +461,7 @@ describe('MCP', () => {
       (await api.get<TreeResponse>('/tree')).data.pages.filter((p) => p.parent_id === root).length,
     ).toBe(tree.pages.filter((p) => p.parent_id === root).length);
 
-    // Nobody edits, moves or deletes Sessions or its entries; the owner can purge an entry.
+    // Nobody edits, moves or deletes Sessions or its entries, ever: entries are permanent.
     expect((await api.patch(`/pages/${mine.id}`, { body: 'x' })).status).toBe(403);
     expect((await api.del(`/pages/${mine.id}`)).status).toBe(403);
     expect((await api.patch(`/pages/${root}`, { title: 'Logs' })).status).toBe(403);
@@ -504,8 +504,10 @@ describe('MCP', () => {
     expect(listed.pages).toBeGreaterThan(0);
     expect(listed.open_items).toBe(1);
 
-    expect((await api.del(`/sessions/${mine.id}`)).status).toBe(200);
-    expect((await api.get(`/pages/${mine.id}`)).status).toBe(404);
+    // There is no way to delete an entry, not even for the owner.
+    expect((await api.del(`/sessions/${mine.id}`)).status).not.toBe(200);
+    expect((await api.del(`/pages/${mine.id}`)).status).toBe(403);
+    expect((await api.get(`/pages/${mine.id}`)).status).toBe(200);
   });
 
   it('reads and writes the conventions, kept out of the page tree in the app', async () => {

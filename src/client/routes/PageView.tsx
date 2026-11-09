@@ -60,9 +60,14 @@ export function useTitleIndex(): { index: TitleIndex; titles: string[] } {
 
 /**
  * A wiki page. `pageId` and `header` let another view show a page in its own frame (the
- * Conventions view): `header` replaces the breadcrumbs, and the URL stays where it is.
+ * Conventions view): `header` replaces the breadcrumbs (and the ⋯ menu: only Edit and
+ * History), `titleAddon` sits after the title, and the URL stays where it is.
  */
-export function PageView({ pageId, header }: { pageId?: string; header?: React.ReactNode } = {}) {
+export function PageView({
+  pageId,
+  header,
+  titleAddon,
+}: { pageId?: string; header?: React.ReactNode; titleAddon?: React.ReactNode } = {}) {
   const params0 = useParams<{ id: string }>();
   const id = pageId ?? params0.id;
   const [params, setParams] = useSearchParams();
@@ -120,7 +125,12 @@ export function PageView({ pageId, header }: { pageId?: string; header?: React.R
   return editing ? (
     <EditPage key={detail!.page.id} detail={detail!} onDone={() => setEditing(false)} />
   ) : (
-    <ReadPage detail={detail!} onEdit={() => setEditing(true)} header={header} />
+    <ReadPage
+      detail={detail!}
+      onEdit={() => setEditing(true)}
+      header={header}
+      titleAddon={titleAddon}
+    />
   );
 }
 
@@ -148,10 +158,12 @@ function ReadPage({
   detail,
   onEdit,
   header,
+  titleAddon,
 }: {
   detail: PageDetail;
   onEdit(): void;
   header?: React.ReactNode;
+  titleAddon?: React.ReactNode;
 }) {
   const { page, ancestors, children, backlinks } = detail;
   const { index } = useTitleIndex();
@@ -248,20 +260,6 @@ function ReadPage({
     }
   }
 
-  async function purge() {
-    setMenu(false);
-    if (!window.confirm(`Purge “${page.title}”? The entry is removed for good.`)) return;
-    try {
-      await api.del(`/sessions/${page.id}`);
-      qc.removeQueries({ queryKey: keys.page(page.id) });
-      void qc.invalidateQueries({ queryKey: keys.tree });
-      const parent = ancestors[ancestors.length - 1];
-      navigate(parent ? pageHref(parent.id, parent.title) : '/', { replace: true });
-    } catch (e) {
-      toast(errorMessage(e));
-    }
-  }
-
   async function remove() {
     setMenu(false);
     const n = (tree.data?.pages ?? []).filter((p) => p.parent_id === page.id).length;
@@ -300,75 +298,78 @@ function ReadPage({
           >
             <Icon name="history" size={15} />
           </button>
-          <div className="menu-anchor">
-            <button
-              className="btn icon-only"
-              onClick={() => setMenu((m) => !m)}
-              aria-label="More"
-              aria-haspopup="menu"
-              aria-expanded={menu}
-            >
-              <Icon name="more" size={15} />
-            </button>
-            {menu && (
-              <Menu onClose={() => setMenu(false)}>
-                {!locked && !header && (
-                  <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
-                    Add subpage
+          {!header && (
+            <div className="menu-anchor">
+              <button
+                className="btn icon-only"
+                onClick={() => setMenu((m) => !m)}
+                aria-label="More"
+                aria-haspopup="menu"
+                aria-expanded={menu}
+              >
+                <Icon name="more" size={15} />
+              </button>
+              {menu && (
+                <Menu onClose={() => setMenu(false)}>
+                  {!locked && !header && (
+                    <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
+                      Add subpage
+                    </button>
+                  )}
+                  <button role="menuitem" onClick={pin}>
+                    {page.pinned_at ? 'Unpin from Home' : 'Pin to Home'}
                   </button>
-                )}
-                <button role="menuitem" onClick={pin}>
-                  {page.pinned_at ? 'Unpin from Home' : 'Pin to Home'}
-                </button>
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setMenu(false);
-                    void navigator.clipboard?.writeText(`[[${page.title}]]`);
-                    toast('Link copied. Paste it into another page.');
-                  }}
-                >
-                  Copy wiki link
-                </button>
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setMenu(false);
-                    void navigator.clipboard?.writeText(
-                      `Use the Nitrogen review_page prompt on “${page.title}” (id ${page.id}): check it against newer pages and list anything stale or contradicted.`,
-                    );
-                    toast('Copied. Paste it into Claude to check this page.');
-                  }}
-                >
-                  Review prompt
-                </button>
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setMenu(false);
-                    downloadPage(page);
-                  }}
-                >
-                  Download as Markdown
-                </button>
-                {!locked && (
-                  <button role="menuitem" className="danger" onClick={remove}>
-                    Delete
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(false);
+                      void navigator.clipboard?.writeText(`[[${page.title}]]`);
+                      toast('Link copied. Paste it into another page.');
+                    }}
+                  >
+                    Copy wiki link
                   </button>
-                )}
-                {locked === 'entry' && (
-                  <button role="menuitem" className="danger" onClick={purge}>
-                    Purge entry
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(false);
+                      void navigator.clipboard?.writeText(
+                        `Use the Nitrogen review_page prompt on “${page.title}” (id ${page.id}): check it against newer pages and list anything stale or contradicted.`,
+                      );
+                      toast('Copied. Paste it into Claude to check this page.');
+                    }}
+                  >
+                    Review prompt
                   </button>
-                )}
-              </Menu>
-            )}
-          </div>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(false);
+                      downloadPage(page);
+                    }}
+                  >
+                    Download as Markdown
+                  </button>
+                  {!locked && (
+                    <button role="menuitem" className="danger" onClick={remove}>
+                      Delete
+                    </button>
+                  )}
+                </Menu>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <header className="page-head">
-        {page.icon && <div className="page-icon">{page.icon}</div>}
-        <h1 className="page-title">{page.title}</h1>
+        {/* Desktop: the emoji above the title. Phones: just left of it, on the same line. */}
+        <div className="page-title-row">
+          {page.icon && <div className="page-icon">{page.icon}</div>}
+          <h1 className="page-title">
+            {page.title}
+            {titleAddon && <span className="title-addon">{titleAddon}</span>}
+          </h1>
+        </div>
         <p className="page-meta">
           Updated {formatWhen(page.updated_at)}
           {page.updated_by && ` by ${actorLabel(page.updated_by)}`}

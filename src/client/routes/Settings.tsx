@@ -11,6 +11,7 @@ import { ConnectAISection } from './ConnectAI';
 import { VERSION } from '@shared/version';
 import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
+import { SlideToggle } from '../components/charts';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
 import { buildFlags } from '@shared/kit/build';
 import {
@@ -97,25 +98,16 @@ export function Settings() {
 
       <section>
         <h2>Appearance</h2>
-        <div className="seg" role="radiogroup" aria-label="Appearance">
-          {(
-            [
-              ['light', 'Light'],
-              ['dark', 'Dark'],
-              ['system', 'System'],
-            ] as const satisfies readonly (readonly [Theme, string])[]
-          ).map(([t, label]) => (
-            <button
-              key={t}
-              role="radio"
-              aria-checked={theme === t}
-              className={theme === t ? 'on' : ''}
-              onClick={() => setTheme(t)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <SlideToggle<Theme>
+          label="Appearance"
+          value={theme}
+          onChange={setTheme}
+          options={[
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+            ['system', 'System'],
+          ]}
+        />
       </section>
 
       <ConnectAISection />

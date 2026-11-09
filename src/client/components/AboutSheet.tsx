@@ -7,6 +7,7 @@ const LINKS = aboutLinks({
   title: 'Nitrogen',
   repo: 'tyler-class/Nitrogen',
   email: 'nitrogen@tylerclass.net',
+  coffee: 'Free like 78% of the air. Buy me a coffee ☕',
 });
 const ICONS: Record<AboutLinkKind, string> = {
   github: 'github',

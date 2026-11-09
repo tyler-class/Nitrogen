@@ -437,7 +437,7 @@ button.link {
   text-wrap: balance;
 }
 .page-meta {
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   color: var(--faint);
   font-size: 13px;
 }
@@ -2230,7 +2230,7 @@ a.btn {
   margin-top: 6px;
 }
 .sessions-sub {
-  margin: -6px 0 14px;
+  margin: 10px 0 16px;
   color: var(--muted);
 }
 .session-card {
@@ -3248,29 +3248,6 @@ body.resizing {
 .conventions-link + .sessions-link {
   margin-top: 0;
 }
-/* Sits where breadcrumbs go on a page, so it stays small. */
-.conv-head {
-  min-width: 0;
-}
-.conv-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 15px;
-  font-weight: 650;
-}
-.conv-sub {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-.conventions .conv-head {
-  margin-bottom: 18px;
-}
-.conventions .conv-title {
-  font-size: 24px;
-}
 .conv-empty {
   display: flex;
   flex-direction: column;
@@ -3373,24 +3350,24 @@ body.resizing {
   }
 }
 
-/* --- Everyone / You / Assistants: one sliding toggle. The thumb is white for Everyone, the
+/* --- Sliding toggles (Appearance; Everyone / You / Assistants). With tones, the thumb is white for Everyone, the
    accent blue for You, and the assistants' purple for Assistants. */
-.who-toggle {
+.slide-toggle {
   position: relative;
   display: inline-grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
   padding: 3px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ink) 7%, transparent);
   isolation: isolate;
 }
-.who-thumb {
+.slide-thumb {
   position: absolute;
   z-index: -1;
   top: 3px;
   bottom: 3px;
   left: 3px;
-  width: calc((100% - 6px) / 3);
+  width: calc((100% - 6px) / var(--n, 3));
   border-radius: 999px;
   background: var(--paper);
   box-shadow:
@@ -3401,13 +3378,13 @@ body.resizing {
     transform 0.22s cubic-bezier(0.3, 0.7, 0.2, 1),
     background 0.2s;
 }
-.who-you .who-thumb {
+.tone-you .slide-thumb {
   background: var(--accent);
 }
-.who-agents .who-thumb {
+.tone-agents .slide-thumb {
   background: var(--claude);
 }
-.who-toggle button {
+.slide-toggle button {
   padding: 6px 14px;
   border: 0;
   background: none;
@@ -3418,22 +3395,22 @@ body.resizing {
   white-space: nowrap;
   transition: color 0.2s;
 }
-.who-toggle button:hover {
+.slide-toggle button:hover {
   color: var(--ink);
 }
-.who-toggle button.on {
+.slide-toggle button.on {
   color: var(--ink);
 }
-.who-you button.on,
-.who-agents button.on {
+.tone-you button.on,
+.tone-agents button.on {
   color: #fff;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .who-all .who-thumb {
+  :root:not([data-theme='light']) .slide-toggle:not(.tone-you):not(.tone-agents) .slide-thumb {
     background: color-mix(in srgb, var(--ink) 16%, var(--paper));
   }
 }
-:root[data-theme='dark'] .who-all .who-thumb {
+:root[data-theme='dark'] .slide-toggle:not(.tone-you):not(.tone-agents) .slide-thumb {
   background: color-mix(in srgb, var(--ink) 16%, var(--paper));
 }
 
@@ -3455,13 +3432,13 @@ body.resizing {
 }
 /* Dark mode's blue and purple are light: dark text reads better on them. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .who-you button.on,
-  :root:not([data-theme='light']) .who-agents button.on {
+  :root:not([data-theme='light']) .tone-you button.on,
+  :root:not([data-theme='light']) .tone-agents button.on {
     color: #0d0b16;
   }
 }
-:root[data-theme='dark'] .who-you button.on,
-:root[data-theme='dark'] .who-agents button.on {
+:root[data-theme='dark'] .tone-you button.on,
+:root[data-theme='dark'] .tone-agents button.on {
   color: #0d0b16;
 }
 
@@ -3478,4 +3455,66 @@ body.resizing {
 }
 .auto-on .infotip-card a {
   color: var(--accent-ink);
+}
+
+/* --- 0.16: headings. */
+/* A document's emoji and title: the emoji above it on wide screens, beside it on phones. */
+.page-title-row {
+  display: block;
+}
+.title-addon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.title-addon .infotip-card {
+  font-weight: 400;
+}
+/* AI Sessions: its title, with Conventions (which lives inside it) on the right. */
+.sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.conv-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+.page-top .back-link {
+  margin-bottom: 0;
+}
+@media (max-width: 860px) {
+  .page-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .page-title-row .page-icon {
+    flex: none;
+    font-size: 28px;
+    line-height: 1.15;
+    margin: 0;
+  }
+  .page-title-row .page-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* The menu button: a bigger target and icon. */
+  .mobile-bar .menu-btn {
+    padding: 9px;
+    margin-left: -2px;
+  }
+}
+.page-head .locked-note {
+  margin-top: 10px;
+}
+.conventions > .page-title {
+  margin-bottom: 16px;
 }

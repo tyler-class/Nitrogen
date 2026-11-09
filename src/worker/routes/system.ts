@@ -9,9 +9,7 @@ import { actorOf, isInternal } from '../auth';
 import { all } from '../db';
 import {
   ConflictError,
-  deletePage,
   listSummaries,
-  protection,
   requirePage,
   sessionsRoot,
   subtreeIds,
@@ -19,7 +17,6 @@ import {
 } from '../pages';
 import { indexSoon } from '../search';
 import { ensureItemsIndexed, logSession } from '../sessions';
-import { deleteFiles } from './files';
 import { ApiError, body, type AppEnv } from './util';
 
 export const system = new Hono<AppEnv>();
@@ -183,18 +180,4 @@ system.post('/sessions/log', async (c) => {
   const res = await logSession(c.env.DB, actorOf(c.env), input.title, input.summary);
   indexSoon(c.env, c.executionCtx);
   return c.json(res);
-});
-
-/** The owner's maintenance action: remove a bad or sensitive session entry. */
-system.delete('/sessions/:id', async (c) => {
-  if (isInternal(c.env))
-    throw new ApiError(403, 'forbidden', 'Only the owner can purge a session entry.');
-  const db = c.env.DB;
-  const id = c.req.param('id');
-  if ((await protection(db, id)) !== 'entry')
-    throw new ApiError(400, 'invalid', 'That page isn’t a session entry.');
-  const res = await deletePage(db, id, actorOf(c.env), { purge: true });
-  await deleteFiles(c.env, res.orphanFiles);
-  indexSoon(c.env, c.executionCtx);
-  return c.json({ ok: true });
 });

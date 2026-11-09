@@ -4,7 +4,7 @@
 // an hour without writes), so the record is complete without the assistant having to remember to
 // log anything. log_session adds a title and summary to that same entry. Entries list the pages
 // touched in that session only, are regenerated from the activity log, and can't be edited by
-// anyone; the owner can purge one (DELETE /api/sessions/:id).
+// anyone. Entries are permanent: nothing deletes one.
 import { encodeActor, type Actor } from '@shared/actor';
 import { extractItems } from '@shared/items';
 import { wordCount } from '@shared/markdown';
@@ -15,7 +15,7 @@ export const SESSION_GAP_MS = 60 * 60_000;
 
 const ROOT_BODY = `Assistants record what they do here automatically: every session that changes the wiki gets an entry listing the pages it touched, with the assistant's own summary when it adds one.
 
-Entries are read-only. To remove a bad one, open it and choose **Purge entry**.`;
+Entries are read-only and permanent.`;
 
 /** The Sessions page, created (and registered as the system section) if it doesn't exist. */
 export async function ensureSessionsRoot(db: D1Database): Promise<string> {

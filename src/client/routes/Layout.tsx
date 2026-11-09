@@ -72,14 +72,11 @@ export function Layout() {
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
   const [about, setAbout] = useState(false);
-  // Sessions and Conventions live outside the page tree, behind their own buttons.
+  // Sessions and Conventions live outside the page tree (Conventions inside AI Sessions).
   const sessionsId = tree.data?.sessions_id ?? null;
   const conventionsId = tree.data?.conventions_id ?? null;
-  const sessionCount = useMemo(
-    () =>
-      sessionsId ? (tree.data?.pages ?? []).filter((p) => p.parent_id === sessionsId).length : 0,
-    [tree.data, sessionsId],
-  );
+  // Conventions sit inside AI Sessions, so AI Sessions stays lit there.
+  const conventionsOpen = !!useMatch('/conventions');
   const pages = useMemo(
     () =>
       (tree.data?.pages ?? []).filter(
@@ -201,16 +198,16 @@ export function Layout() {
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
         )}
-        {/* One rule above the footer links (Conventions, AI sessions when there are any, then Settings). */}
+        {/* One rule above the footer links: AI Sessions (with Conventions inside it), Settings. */}
         <div className="sidebar-foot">
-          <NavLink to="/conventions" className="foot-link conventions-link">
-            <Icon name="rules" size={15} /> Conventions
+          <NavLink
+            to="/sessions"
+            className={({ isActive }) =>
+              `foot-link sessions-link${isActive || conventionsOpen ? ' active' : ''}`
+            }
+          >
+            <Icon name="sparkle" size={15} /> AI Sessions
           </NavLink>
-          {sessionCount > 0 && (
-            <NavLink to="/sessions" className="foot-link sessions-link">
-              <Icon name="sparkle" size={15} /> AI Sessions
-            </NavLink>
-          )}
           <NavLink to="/settings" className="foot-link">
             <Icon name="settings" size={15} /> Settings
           </NavLink>
@@ -246,8 +243,8 @@ export function Layout() {
       />
       <div className="main">
         <header className="mobile-bar">
-          <button onClick={() => setNav(true)} aria-label="Open menu">
-            <Icon name="menu" />
+          <button onClick={() => setNav(true)} aria-label="Open menu" className="menu-btn">
+            <Icon name="menu" size={24} />
           </button>
           <Link to="/" className="mobile-title">
             <img src="/favicon.svg" alt="" width={22} height={22} />

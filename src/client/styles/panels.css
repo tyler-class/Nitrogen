@@ -262,7 +262,7 @@
   color: var(--ink);
 }
 .pn-sub {
-  margin-top: 1px;
+  margin-top: 4px;
 }
 /* Width and hide sit on the right and appear on hover (always on touch screens). */
 .pn-tools {
