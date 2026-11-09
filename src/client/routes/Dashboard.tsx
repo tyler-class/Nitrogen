@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { actorLabel, isAgent } from '@shared/actor';
 import { pageHref } from '@shared/markdown';
 import { ITEM_LABELS, todayKey } from '@shared/items';
@@ -30,7 +30,17 @@ export function Dashboard() {
     queryFn: () => api.get<{ items: OpenItem[] }>('/items'),
     refetchInterval: 60_000,
   });
-  const [kind, setKind] = useState<'all' | OpenItem['type']>('all');
+  // "/?items=question" (the weekly open-questions notification) opens on one type.
+  const [params] = useSearchParams();
+  const asked = params.get('items');
+  const pick = (v: string | null): 'all' | OpenItem['type'] =>
+    v === 'todo' || v === 'question' || v === 'reminder' ? v : 'all';
+  const [kind, setKind] = useState(() => pick(asked));
+  const [seen, setSeen] = useState(asked);
+  if (seen !== asked) {
+    setSeen(asked);
+    if (asked) setKind(pick(asked));
+  }
   const qc = useQueryClient();
   const toast = useToast();
   const d = q.data;
@@ -85,7 +95,7 @@ export function Dashboard() {
               <span className="dash-meta">
                 {i.due && (
                   <span className={i.due < today ? 'overdue' : undefined}>
-                    {i.due < today ? 'Overdue' : 'Due'} {formatDue(i.due)} ·{' '}
+                    {i.due < today ? 'Overdue' : 'Due'} {formatDue(i.due, i.due_time)} ·{' '}
                   </span>
                 )}
                 {i.page_title}

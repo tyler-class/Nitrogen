@@ -23,4 +23,14 @@ describe('Markdown', () => {
     expect(html).toContain('class="wikilink missing"');
     expect(html).toContain('<a class="tag" href="/tags/ideas"');
   });
+
+  it('shows an item’s due time and takes "due:…" out of its text', () => {
+    const html = render(
+      '- [ ] reminder: Call the dentist due:2026-11-12 14:00\n- [ ] todo: Plain due:2026-11-12',
+    );
+    expect(html).not.toContain('due:2026');
+    expect(html).not.toContain('14:00</');
+    expect(html).toMatch(/Nov 12(, 2026)?, 2:00\s?PM/);
+    expect(html).toMatch(/Due Nov 12(, 2026)?<\/span>/);
+  });
 });

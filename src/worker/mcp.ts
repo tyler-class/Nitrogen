@@ -115,9 +115,9 @@ Markdown conventions:
 - Typed items (to-dos, questions, reminders). One item per line, as a list item:
     - [ ] todo: <text> [@owner] [due:YYYY-MM-DD]
     - [ ] question: <text> [@owner]
-    - [ ] reminder: <text> due:YYYY-MM-DD        (reminders must have a due date)
-  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon. Done: change "[ ]" to "[x]". A question is resolved by checking it and ending the line with " answer: <the answer>". Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
-  Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- [ ] reminder: Renew the domain due:2026-12-01".
+    - [ ] reminder: <text> due:YYYY-MM-DD [HH:MM]        (reminders must have a due date)
+  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. Done: change "[ ]" to "[x]". A question is resolved by checking it and ending the line with " answer: <the answer>". Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
+  Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- [ ] reminder: Renew the domain due:2026-12-01", "- [ ] reminder: Call the dentist due:2026-11-12 14:00".
 - Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
 - Headings: "#" (largest), "##" and "###" render at three distinct sizes. Don't repeat the page title as a heading at the top of the body; the title is shown separately. Use "##" for sections and "###" for subsections; "#" is for a page split into a few major parts.
 
@@ -344,7 +344,7 @@ function buildServer(
           .string()
           .optional()
           .describe(
-            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD") are in the server instructions.',
+            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD", with an optional " HH:MM") are in the server instructions.',
           ),
         icon: z.string().max(16).optional().describe('An emoji, e.g. "📘".'),
         tags: z
@@ -542,7 +542,7 @@ function buildServer(
           .string()
           .optional()
           .describe(
-            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD") are in the server instructions.',
+            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD", with an optional " HH:MM") are in the server instructions.',
           ),
         title: z.string().min(1).max(200).optional(),
         icon: z.string().max(16).nullable().optional(),
@@ -1081,7 +1081,7 @@ function buildServer(
     {
       title: 'Open items',
       description:
-        'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- [ ] reminder: … due:YYYY-MM-DD"), from an index kept up to date on every save. Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
+        'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- [ ] reminder: … due:YYYY-MM-DD [HH:MM]"), from an index kept up to date on every save, soonest due first. Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
       inputSchema: z.object({
         type: z.enum(['todo', 'question', 'reminder']).optional(),
         due_before: z
@@ -1114,7 +1114,7 @@ function buildServer(
               i.done ? '[done]' : i.due && i.due < today ? '[overdue]' : '',
               `${i.type}: ${i.text}`,
               i.owner ? `@${i.owner}` : '',
-              i.due ? `due ${i.due}` : '',
+              i.due ? `due ${i.due}${i.due_time ? ` ${i.due_time}` : ''}` : '',
               i.answer ? `answer: ${i.answer}` : '',
               `— ${[...i.path, i.page_title].join(' / ')} (${i.page_id}, line ${i.line})`,
             ];

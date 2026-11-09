@@ -26,7 +26,17 @@ import { gfm } from 'micromark-extension-gfm';
 import { defaultSchema, sanitize, type Schema } from 'hast-util-sanitize';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit, SKIP } from 'unist-util-visit';
-import { ITEM_LABELS, ITEM_TYPES, parseItemLine, todayKey, type ItemType } from '@shared/items';
+import {
+  DUE_RE,
+  ITEM_LABELS,
+  ITEM_TYPES,
+  parseItemLine,
+  todayKey,
+  type ItemType,
+} from '@shared/items';
+
+/** Every "due:…" (with its time) in a text node, to move it out of the item's text. */
+const DUE_ALL = new RegExp(DUE_RE.source, 'gi');
 import { pageHref, slugify, splitTags, WIKILINK_RE } from '@shared/markdown';
 
 const CALLOUTS = ['note', 'tip', 'important', 'warning', 'caution', 'info', 'question'];
@@ -110,7 +120,7 @@ function transform(tree: Root, titles: TitleIndex, source: string) {
     visit(para, 'text', (t: Text) => {
       t.value = t.value
         .replace(/\s+answer:\s+.*$/i, '')
-        .replace(/(^|\s)due:\s?\d{4}-\d{2}-\d{2}\b/gi, '$1')
+        .replace(DUE_ALL, (m) => (/^\s/.test(m) ? m[0]! : ''))
         .replace(/(^|\s)@[\p{L}\p{N}._-]+/gu, '$1');
     });
     if (node.type === 'listItem') node.checked = null;
@@ -120,6 +130,7 @@ function transform(tree: Root, titles: TitleIndex, source: string) {
       dataType: item.type,
       dataDone: item.done ? '1' : '0',
       ...(item.due ? { dataDue: item.due } : {}),
+      ...(item.due_time ? { dataDueTime: item.due_time } : {}),
       ...(item.owner ? { dataOwner: item.owner } : {}),
       ...(item.answer ? { dataAnswer: item.answer } : {}),
       ...(item.invalid ? { dataInvalid: item.invalid } : {}),
@@ -187,6 +198,7 @@ const ITEM_DATA = [
   'dataType',
   'dataDone',
   'dataDue',
+  'dataDueTime',
   'dataOwner',
   'dataAnswer',
   'dataInvalid',
@@ -371,7 +383,7 @@ function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer }: Handlers) {
               {due && (
                 <span className={overdue ? 'overdue' : undefined}>
                   {overdue ? 'Overdue · ' : 'Due '}
-                  {formatDue(due)}
+                  {formatDue(due, props['data-due-time'])}
                 </span>
               )}
               {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
@@ -386,12 +398,17 @@ function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer }: Handlers) {
   };
 }
 
-export const formatDue = (d: string) =>
-  new Date(`${d}T12:00:00`).toLocaleDateString(undefined, {
+/** "Nov 12", or "Nov 12, 2:00 PM" with a time (in this device's own format). */
+export const formatDue = (d: string, time?: string | null) => {
+  const day = new Date(`${d}T12:00:00`).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     ...(d.slice(0, 4) !== String(new Date().getFullYear()) ? { year: 'numeric' } : {}),
   });
+  if (!time) return day;
+  const at = new Date(`${d}T${time}:00`);
+  return `${day}, ${at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+};
 
 export const Markdown = memo(function Markdown({
   source,

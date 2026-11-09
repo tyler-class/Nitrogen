@@ -21,7 +21,7 @@ import { ApiError, body, type AppEnv } from './util';
 
 export const system = new Hono<AppEnv>();
 
-/** Open items across the wiki (or with done ones), soonest due first. */
+/** Open items across the wiki (or with done ones), soonest due first (by date, then time). */
 system.get('/items', async (c) => {
   const db = c.env.DB;
   await ensureItemsIndexed(db);
@@ -45,10 +45,11 @@ system.get('/items', async (c) => {
   const rows = await all<Omit<OpenItem, 'path' | 'done'> & { done: number }>(
     db,
     `SELECT i.page_id, p.title AS page_title, p.icon AS page_icon, i.line, i.type, i.text, i.owner,
-            i.due, i.done, i.answer
+            i.due, i.due_time, i.done, i.answer
      FROM page_items i JOIN pages p ON p.id = i.page_id
      WHERE ${where.join(' AND ')}
-     ORDER BY i.done, i.due IS NULL, i.due, p.updated_at DESC, i.line LIMIT 500`,
+     ORDER BY i.done, i.due IS NULL, i.due, i.due_time IS NOT NULL, i.due_time, p.updated_at DESC,
+       i.line LIMIT 500`,
     ...binds,
   );
   let scope: Set<string> | null = null;

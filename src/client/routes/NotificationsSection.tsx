@@ -121,7 +121,12 @@ export function NotificationsSection() {
             NOTIFY_KINDS.map((k) => (
               <div key={k.id} className="share-row">
                 <span className="notify-kind">
-                  <span>{k.label}</span>
+                  <span>
+                    {k.label}
+                    <InfoTip label={`About ${k.label.toLowerCase()}`}>
+                      <p>{k.detail}</p>
+                    </InfoTip>
+                  </span>
                   <span className="muted">{k.description}</span>
                 </span>
                 <Switch

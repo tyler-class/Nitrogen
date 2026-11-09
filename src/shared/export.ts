@@ -25,7 +25,10 @@ export function toPlainMarkdown(md: string, opts: PlainOptions = {}): string {
     }
     const item = ITEM_LINE_RE.test(line) ? parseItemLine(line, 0) : null;
     if (item) {
-      const meta = [item.owner && `@${item.owner}`, item.due && `due ${item.due}`]
+      const meta = [
+        item.owner && `@${item.owner}`,
+        item.due && `due ${item.due}${item.due_time ? ` ${item.due_time}` : ''}`,
+      ]
         .filter(Boolean)
         .join(', ');
       const label = `${ITEM_LABELS[item.type]}${item.done ? ' (done)' : ''}`;

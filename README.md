@@ -21,9 +21,10 @@ straight into the page, search understands meaning, and Claude can read and writ
   (from a page's ⋯ menu), recent activity and a few numbers. Drag panels to arrange them, make them
   half or full width, or hide them.
 - **To-dos, questions and reminders anywhere.** Write `- [ ] todo: … @owner due:2026-11-20`,
-  `- question: …` or `- [ ] reminder: … due:…` on any page. They show as cards you can check off, a
-  summary at the top of the page, and an Open items panel on Home; assistants list them with
-  `open_items`.
+  `- question: …` or `- [ ] reminder: … due:…` on any page. Add a 24-hour time to be notified then:
+  `due:2026-11-20 14:00` (or `due:2026-11-20T14:00`), on your phone's own clock. They show as cards
+  you can check off, a summary at the top of the page, and an Open items panel on Home; assistants
+  list them with `open_items`.
 - **Sessions.** Every assistant session that changes the wiki is recorded automatically under a
   protected, read-only Sessions section, with the pages it touched and the assistant's own summary.
 - **Exports.** A full backup that restores everything, and a Markdown export (per page or the whole
@@ -158,6 +159,18 @@ If you connected an AI assistant, connect it again with the new address.
 Once a day your copy tells Nitrogen's developer that it exists: a random id it made for itself, its version, how many pages, revisions, tags and links it has (counts only), how many files it stores, and whether automatic updates are on. Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**: your copy sends one last message saying it's off, then nothing.
 
 <!-- kit:readme:end -->
+
+## Which notifications
+
+Turn notifications on as described in [Notifications](#notifications), then pick what this phone gets in **Settings → Notifications**. Each kind has its own switch, all on to start.
+
+- **Morning digest:** at 8 a.m., the to-dos and reminders due that day.
+- **Overdue:** at 8 a.m. on the first day a to-do or reminder is overdue, once per item ("Overdue: Renew the domain (due Nov 10)").
+- **Timed reminders:** at the time on an item written with one, like `- [ ] reminder: Call the dentist due:2026-11-12 14:00`, within about 15 minutes ("Reminder: Call the dentist (2:00 PM)"). Items without a time are only in the morning digest.
+- **Assistant changes:** when an assistant creates or edits pages over MCP, at most once an hour ("Claude updated 3 pages: Trip ideas, Garden, …"). Your own edits never notify, and nothing comes between midnight and 8 a.m.
+- **Open questions:** Monday at 8 a.m., the `question:` items still unanswered. Skipped in weeks with none.
+
+Times are your phone's own clock. The app icon shows how many to-dos and reminders are due today or overdue.
 
 ## Use it on your phone
 

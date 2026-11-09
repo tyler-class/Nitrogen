@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractItems, parseItemLine, setItemDone } from '@shared/items';
+import { dueTime, extractItems, parseItemLine, setItemDone } from '@shared/items';
 
 describe('typed items', () => {
   it('parses type, done, owner, due and answer', () => {
@@ -23,6 +23,48 @@ describe('typed items', () => {
     expect(parseItemLine('Question: plain line works too', 1)?.type).toBe('question');
     expect(parseItemLine('- [ ] reminder: Renew', 1)?.invalid).toMatch(/due date/);
     expect(parseItemLine('- a todo: not at the start', 1)).toBeNull();
+  });
+
+  it('reads an optional time on a due date', () => {
+    const p = (l: string) => parseItemLine(l, 1)!;
+    expect(p('- [ ] reminder: Call the dentist due:2026-11-12 14:00')).toMatchObject({
+      text: 'Call the dentist',
+      due: '2026-11-12',
+      due_time: '14:00',
+    });
+    expect(p('- [ ] reminder: Call due:2026-11-12T14:00 @sam')).toMatchObject({
+      text: 'Call',
+      due: '2026-11-12',
+      due_time: '14:00',
+      owner: 'sam',
+    });
+    // One-digit hours are padded; the time can sit mid-line.
+    expect(p('- [ ] todo: Stand-up due:2026-11-12 9:05 in room 4')).toMatchObject({
+      text: 'Stand-up in room 4',
+      due_time: '09:05',
+    });
+    // No time: as before.
+    expect(p('- [ ] todo: Draft due:2026-11-12')).toMatchObject({
+      due: '2026-11-12',
+      due_time: null,
+    });
+    expect(p('- [ ] todo: Draft due:2026-11-12 at noon').due_time).toBeNull();
+    expect(p('- [ ] todo: Draft due:2026-11-12 at noon').text).toBe('Draft at noon');
+    // A bad time keeps the date, drops the time and says why.
+    const bad = p('- [ ] reminder: Call due:2026-11-12 25:00');
+    expect(bad).toMatchObject({ text: 'Call', due: '2026-11-12', due_time: null });
+    expect(bad.invalid).toMatch(/isn’t a time/);
+    expect(p('- [ ] reminder: Call due:2026-11-12T14:75').invalid).toMatch(/24-hour/);
+    // Not a time at all (seconds, a clock-ish number) stays in the text.
+    expect(p('- [ ] todo: Call due:2026-11-12 14:00:30')).toMatchObject({ due_time: null });
+    expect(p('- question: Which? due:2026-11-12 10:30').due_time).toBe('10:30');
+    expect([
+      dueTime('23:59'),
+      dueTime('0:00'),
+      dueTime('24:00'),
+      dueTime('7'),
+      dueTime(null),
+    ]).toEqual(['23:59', '00:00', null, null, null]);
   });
 
   it('ignores code and keeps line numbers', () => {

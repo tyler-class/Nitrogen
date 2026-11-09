@@ -106,6 +106,9 @@ async function device(tz: string, prefs: Record<string, boolean> = {}) {
   return { b, d };
 }
 
+/** Only the morning digest, for the digest tests. */
+const DIGEST_ONLY = { overdue: false, timed: false, assistant: false, questions: false };
+
 async function clearDevices() {
   for (const d of await listDevices(env.DB))
     await env.DB.prepare('DELETE FROM selfhost_push_devices WHERE id = ?').bind(d.id).run();
@@ -305,8 +308,8 @@ describe('the notification run', () => {
       })
     ).data;
     // Auckland reaches 8 a.m. on the 3rd while Los Angeles is still on the 2nd.
-    const akl = await device('Pacific/Auckland');
-    const la = await device('America/Los_Angeles');
+    const akl = await device('Pacific/Auckland', DIGEST_ONLY);
+    const la = await device('America/Los_Angeles', DIGEST_ONLY);
     const svc = pushService();
     // 7:41 in Auckland (NZST), 12:41 the day before in Los Angeles.
     await runNotifications(env.DB, { now: new Date('2031-06-02T19:41Z'), fetcher: svc.fetcher });
@@ -360,13 +363,13 @@ describe('the notification run', () => {
       })
     ).data;
     const svc = pushService();
-    const utc = await device('UTC');
+    const utc = await device('UTC', DIGEST_ONLY);
     // 7:41 local: too early.
     await runNotifications(env.DB, { now: new Date('2031-07-08T07:41Z'), fetcher: svc.fetcher });
     expect(svc.got).toHaveLength(0);
     // Off all day; turned on at 22:00, it gets the 22:11 run's digest straight away.
     await env.DB.prepare('DELETE FROM selfhost_push_devices WHERE id = ?').bind(utc.d.id).run();
-    const late = await device('UTC');
+    const late = await device('UTC', DIGEST_ONLY);
     await runNotifications(env.DB, { now: new Date('2031-07-08T22:11Z'), fetcher: svc.fetcher });
     expect(svc.got.map((r) => r.url)).toEqual([late.d.endpoint]);
     expect(await decrypt(late.b, svc.got[0]!.body)).toMatchObject({
@@ -374,6 +377,82 @@ describe('the notification run', () => {
       body: '1 to-do: File the report',
     });
     await api.del(`/pages/${plans.id}`);
+  });
+
+  it('sends overdue, timed, open-question and assistant notifications, each once', async () => {
+    await clearDevices();
+    const api = await session();
+    // Monday 2031-09-08 in New York (EDT, UTC−4).
+    const plans = (
+      await api.post<Page>('/pages', {
+        title: 'Kinds plans',
+        parent_id: null,
+        body: [
+          '- [ ] reminder: Renew the domain due:2031-09-07',
+          '- [ ] todo: Call the dentist due:2031-09-08 14:00',
+          '- [ ] question: Which hosting plan?',
+          '- [x] question: Which colour? answer: Blue',
+        ].join('\n'),
+      })
+    ).data;
+    const ny = await device('America/New_York', { digest: false });
+    const svc = pushService();
+    const run = async (iso: string) => {
+      await runNotifications(env.DB, { now: new Date(iso), fetcher: svc.fetcher });
+      return Promise.all(svc.got.splice(0).map((r) => decrypt(ny.b, r.body)));
+    };
+    // 7:50 a.m.: nothing yet.
+    expect(await run('2031-09-08T11:50Z')).toEqual([]);
+    // 8:05 a.m.: the overdue reminder and the week's open questions.
+    const morning = await run('2031-09-08T12:05Z');
+    expect(morning.map((m) => [m.title, m.body, m.url])).toEqual([
+      ['Overdue', 'Renew the domain (due Sep 7)', `/p/${plans.id}/kinds-plans#item-1`],
+      ['Open questions', '1 open question: Which hosting plan?', '/?items=question'],
+    ]);
+    expect(await run('2031-09-08T12:20Z')).toEqual([]);
+    // 1:50 p.m.: still 10 minutes early. 1:53: the run nearest 2:00 sends it, once.
+    expect(await run('2031-09-08T17:50Z')).toEqual([]);
+    const timed = await run('2031-09-08T17:53Z');
+    expect(timed).toMatchObject([
+      {
+        title: 'To-do',
+        body: 'Call the dentist (2:00 PM)',
+        url: `/p/${plans.id}/kinds-plans#item-2`,
+      },
+    ]);
+    expect(await run('2031-09-08T18:05Z')).toEqual([]);
+    // Tuesday: the dentist is overdue now (the domain was only new yesterday); no questions.
+    expect((await run('2031-09-09T12:05Z')).map((m) => [m.title, m.body])).toEqual([
+      ['Overdue', 'Call the dentist (due Sep 8)'],
+    ]);
+    expect(await run('2031-09-10T12:05Z')).toEqual([]);
+
+    // An assistant's edits at 3:10 p.m., and the owner's own: one notification at 4, the
+    // assistant's only.
+    const { createPage, updatePage } = await import('../../src/worker/pages');
+    const { agent, YOU } = await import('../../src/shared/actor');
+    vi.useFakeTimers({ now: new Date('2031-09-09T19:10Z'), toFake: ['Date'] });
+    const garden = await createPage(
+      env.DB,
+      { title: 'Garden', parent_id: null, body: 'Tomatoes.' },
+      agent('Claude'),
+    );
+    await updatePage(
+      env.DB,
+      plans.id,
+      { body: `${plans.body}\nMore.` },
+      { actor: agent('Claude') },
+    );
+    await updatePage(env.DB, garden.id, { title: 'Garden' }, { actor: YOU });
+    vi.useRealTimers();
+    expect(await run('2031-09-09T19:50Z')).toEqual([]);
+    const hourly = await run('2031-09-09T20:02Z');
+    expect(hourly.map((m) => [m.title, m.body, m.url])).toEqual([
+      ['Assistant changes', 'Claude updated 2 pages: Kinds plans, Garden', '/activity'],
+    ]);
+    expect(await run('2031-09-09T20:17Z')).toEqual([]);
+    await api.del(`/pages/${plans.id}`);
+    await api.del(`/pages/${garden.id}`);
   });
 });
 

@@ -1,4 +1,6 @@
-import { SELF } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
+import type { PushDevice } from '../../src/worker/kit/push';
+import { nitrogenPush } from '../../src/worker/notifications';
 import { describe, expect, it } from 'vitest';
 import type {
   Dashboard,
@@ -431,11 +433,26 @@ describe('MCP', () => {
 
     const made = await tool(token, 'create_page', {
       title: 'Session Proof',
-      body: '- [ ] todo: Ship it @sam due:2026-01-02\n- question: Which colour?',
+      body: '- [ ] todo: Ship it @sam due:2026-01-02\n- question: Which colour?\n- [ ] todo: Call the vendor due:2026-01-03T09:30',
     });
     expect(made.isError).toBe(false);
     const id = /id ([a-z0-9]+)/.exec(made.text)![1]!;
     await tool(token, 'edit_page', { page: id, edits: [{ type: 'append', text: 'More.' }] });
+
+    // The next hour's assistant-changes notification names the assistant and the page (and not
+    // its Sessions entry). A zone where that hour is noon, so it's never in the quiet hours.
+    const next = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000 + 3_600_000 + 60_000);
+    const offset = 12 - next.getUTCHours();
+    const tz = offset >= 0 ? `Etc/GMT-${offset}` : `Etc/GMT+${-offset}`;
+    const notices = await nitrogenPush(env.DB).build(
+      { id: 'x', tz, prefs: { enabled: true } } as PushDevice,
+      next,
+    );
+    const changed = notices.find((n) => n.kind === 'assistant')!;
+    expect(changed.message.title).toBe('Assistant changes');
+    expect(changed.message.body).toMatch(/^Test Assistant (updated|created) /);
+    expect(changed.message.body).toContain('Session Proof');
+    expect(changed.message.body).not.toMatch(/session$|session,/);
 
     // One entry for this session, written without log_session, listing the page.
     const tree = (await api.get<TreeResponse>('/tree')).data;
@@ -478,6 +495,8 @@ describe('MCP', () => {
     // Open items from page bodies and session summaries; check one off in place.
     const items = await tool(token, 'open_items', { type: 'todo' });
     expect(items.text).toContain('todo: Ship it @sam due 2026-01-02');
+    expect(items.text).toContain('todo: Call the vendor due 2026-01-03 09:30');
+    expect(items.text.indexOf('Ship it')).toBeLessThan(items.text.indexOf('Call the vendor'));
     expect(items.text).toContain('[overdue]');
     expect((await tool(token, 'open_items', { type: 'question' })).text).toContain(
       'Keep the gap at an hour?',

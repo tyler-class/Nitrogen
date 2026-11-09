@@ -185,9 +185,9 @@ export function itemStatements(db: D1Database, id: string, body: string) {
     ...extractItems(body).map((i) =>
       db
         .prepare(
-          'INSERT OR REPLACE INTO page_items (page_id, line, type, text, owner, due, done, answer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR REPLACE INTO page_items (page_id, line, type, text, owner, due, due_time, done, answer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .bind(id, i.line, i.type, i.text, i.owner, i.due, i.done ? 1 : 0, i.answer),
+        .bind(id, i.line, i.type, i.text, i.owner, i.due, i.due_time, i.done ? 1 : 0, i.answer),
     ),
   ];
 }

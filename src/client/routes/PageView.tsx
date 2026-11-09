@@ -765,7 +765,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         <span className="toolbar-sep" aria-hidden />
         <button
           onClick={() => editor.current?.wrap('\n- [ ] todo: ', '')}
-          title="To do: - [ ] todo: … @owner due:YYYY-MM-DD"
+          title="To do: - [ ] todo: … @owner due:YYYY-MM-DD (add HH:MM for a timed reminder)"
           aria-label="Insert a to-do"
           className="tb-item item-todo"
         >
@@ -781,7 +781,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         </button>
         <button
           onClick={() => editor.current?.wrap(`\n- [ ] reminder: due:${inAWeek()} `, '')}
-          title="Reminder: - [ ] reminder: … due:YYYY-MM-DD"
+          title="Reminder: - [ ] reminder: … due:YYYY-MM-DD (add HH:MM to be notified then)"
           aria-label="Insert a reminder"
           className="tb-item item-reminder"
         >
@@ -1025,7 +1025,7 @@ function ItemSummary({ body }: { body: string }) {
                   {i.due && (
                     <span className={i.due < today ? 'overdue' : 'muted'}>
                       {' '}
-                      · {i.due < today ? 'overdue' : 'due'} {formatDue(i.due)}
+                      · {i.due < today ? 'overdue' : 'due'} {formatDue(i.due, i.due_time)}
                     </span>
                   )}
                 </li>

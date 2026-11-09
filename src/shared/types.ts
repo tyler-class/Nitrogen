@@ -63,6 +63,8 @@ export interface OpenItem {
   text: string;
   owner: string | null;
   due: string | null;
+  /** HH:MM when the due date has a time. */
+  due_time: string | null;
   done: boolean;
   answer: string | null;
 }
