@@ -80,6 +80,7 @@ export function ConnectAISection() {
               ))}
             </ol>
           )}
+          {shown.commandIntro && <p className="muted">{shown.commandIntro}</p>}
           {shown.command && <CopyRow text={shown.command} label={`${shown.name} command`} />}
           {shown.after && <p className="muted">{shown.after}</p>}
         </div>

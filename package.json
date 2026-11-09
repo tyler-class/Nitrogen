@@ -1,6 +1,6 @@
 {
   "name": "nitrogen",
-  "version": "0.16.7",
+  "version": "0.16.8",
   "private": true,
   "description": "A personal wiki you host yourself on Cloudflare: a page tree, markdown, images, semantic search and an MCP server.",
   "license": "MIT",

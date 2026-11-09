@@ -6,16 +6,18 @@
 //      a Copy button, and the sign-in note (signInNote).
 //   2. "Connected": a list of connected assistants (name + date connected), "No assistants are
 //      connected." when empty, and "Disconnect all" (tap twice to confirm) under the list.
-//   3. "Set up": one row of toggle chips, one per entry in ASSISTANTS. Nothing is open at first;
-//      tapping a chip shows that assistant's steps under the row, tapping it again (or another
-//      chip) closes it. Only one open at a time.
+//   3. "Set up": a sliding toggle, one option per entry in ASSISTANTS (Claude covers
+//      Claude Code too). Nothing is chosen at first; choosing one shows its steps, tapping it
+//      again clears it. Only one open at a time.
 //   4. "Example prompts": collapsed by default; opens the app's own examples (tap to copy).
 
 export interface AssistantSetup {
-  id: 'claude' | 'chatgpt' | 'claude-code' | 'other';
+  id: 'claude' | 'chatgpt' | 'other';
   name: string;
   /** Numbered steps. */
   steps: string[];
+  /** A line before the command (Claude: "In Claude Code, run:"). */
+  commandIntro?: string;
   /** A command to copy (Claude Code). */
   command?: string;
   /** A line under the command. */
@@ -50,6 +52,9 @@ export function assistants(title: string, slug: string, url: string): AssistantS
         `Name it ${title} and paste the URL above.`,
         `Choose Connect, then enter your password on the ${title} page.`,
       ],
+      commandIntro: 'In Claude Code, run:',
+      command: `claude mcp add --transport http ${slug} ${url}`,
+      after: 'Then type /mcp and choose Authenticate.',
     },
     {
       id: 'chatgpt',
@@ -59,13 +64,6 @@ export function assistants(title: string, slug: string, url: string): AssistantS
         'Paste the URL above and choose OAuth sign-in.',
         `Enter your password on the ${title} page.`,
       ],
-    },
-    {
-      id: 'claude-code',
-      name: 'Claude Code',
-      steps: [],
-      command: `claude mcp add --transport http ${slug} ${url}`,
-      after: 'Then run /mcp in Claude Code and choose Authenticate.',
     },
     {
       id: 'other',
