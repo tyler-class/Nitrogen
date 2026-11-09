@@ -7,4 +7,4 @@ SET body = replace(
   'Entries are read-only. To remove a bad one, open it and choose **Purge entry**.',
   'Entries are read-only and permanent.'
 )
-WHERE body LIKE '%To remove a bad one, open it and choose **Purge entry**.%';
+WHERE instr(body, 'To remove a bad one, open it and choose **Purge entry**.') > 0;
