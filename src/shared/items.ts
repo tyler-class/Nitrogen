@@ -119,4 +119,6 @@ export function setItemAnswer(md: string, line: number, answer: string): string 
 }
 
 /** Today in UTC as YYYY-MM-DD. */
-export const todayKey = () => new Date().toISOString().slice(0, 10);
+/** Today as YYYY-MM-DD on this device's clock (in a Worker, which runs on UTC, that's the UTC date). */
+export const todayKey = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
