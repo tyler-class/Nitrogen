@@ -3511,6 +3511,11 @@ body.resizing {
     padding: 9px;
     margin-left: -2px;
   }
+  /* Search matches the menu button, mirrored on the right. */
+  .mobile-bar .search-btn {
+    margin-left: 0;
+    margin-right: -2px;
+  }
 }
 .page-head .locked-note {
   margin-top: 10px;

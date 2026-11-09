@@ -250,8 +250,12 @@ export function Layout() {
             <img src="/favicon.svg" alt="" width={22} height={22} />
             Nitrogen
           </Link>
-          <button onClick={() => setPalette(true)} aria-label="Search">
-            <Icon name="search" />
+          <button
+            onClick={() => setPalette(true)}
+            aria-label="Search"
+            className="menu-btn search-btn"
+          >
+            <Icon name="search" size={24} />
           </button>
         </header>
         <Outlet />
