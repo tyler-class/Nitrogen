@@ -3304,26 +3304,6 @@ body.resizing {
 .ai-conns .muted {
   font-size: 12.5px;
 }
-.ai-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.ai-chip {
-  padding: 6px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  font-size: 13.5px;
-  color: var(--ink);
-}
-.ai-chip:hover {
-  background: var(--accent-soft);
-}
-.ai-chip.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--paper);
-}
 .ai-steps {
   margin-top: 10px;
   max-width: 600px;

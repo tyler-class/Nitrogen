@@ -264,30 +264,35 @@ export function Chips<K extends string>(props: {
 /**
  * One sliding toggle for picking one of a few: a thumb slides to the chosen option. Each option
  * is as wide as its label, and the row scrolls sideways when it doesn't fit. With `tones`, the
- * thumb takes the chosen option's colour class (`tone-<key>`).
+ * thumb takes the chosen option's colour class (`tone-<key>`). With `allowClear`, tapping the
+ * chosen option again clears it, and no thumb shows while nothing is chosen.
  */
-export function SlideToggle<K extends string>({
-  options,
-  value,
-  onChange,
-  label,
-  tones = false,
-}: {
-  options: readonly (readonly [K, string])[];
-  value: K;
-  onChange: (k: K) => void;
-  label: string;
-  tones?: boolean;
-}) {
+export function SlideToggle<K extends string>(
+  props: {
+    options: readonly (readonly [K, string])[];
+    label: string;
+    tones?: boolean;
+  } & (
+    | { value: K; onChange: (k: K) => void; allowClear?: false }
+    | { value: K | null; onChange: (k: K | null) => void; allowClear: true }
+  ),
+) {
+  const { options, value, label, tones = false } = props;
   const box = useRef<HTMLDivElement>(null);
-  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number; hidden?: boolean } | null>(
+    null,
+  );
   // Measure the chosen option, and keep measuring as the row resizes (fonts, panel widths).
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const place = () => {
       const on = el.querySelector<HTMLButtonElement>('button[aria-checked="true"]');
-      if (!on) return;
+      if (!on) {
+        // Nothing chosen: hide the thumb where it was, so choosing again slides from there.
+        setThumb((t) => (t ? { ...t, hidden: true } : t));
+        return;
+      }
       setThumb({ left: on.offsetLeft, width: on.offsetWidth });
       // Keep the chosen option in view when the row scrolls.
       const right = on.offsetLeft + on.offsetWidth;
@@ -299,10 +304,14 @@ export function SlideToggle<K extends string>({
     ro.observe(el);
     return () => ro.disconnect();
   }, [value, options]);
+  const pick = (k: K) => {
+    if (props.allowClear) props.onChange(k === props.value ? null : k);
+    else props.onChange(k);
+  };
   return (
     <div
       ref={box}
-      className={`slide-toggle${tones ? ` tone-${value}` : ''}`}
+      className={`slide-toggle${tones && value ? ` tone-${value}` : ''}`}
       role="radiogroup"
       aria-label={label}
     >
@@ -310,9 +319,11 @@ export function SlideToggle<K extends string>({
         className="slide-thumb"
         aria-hidden="true"
         style={
-          thumb
+          thumb && !thumb.hidden
             ? ({ width: thumb.width, transform: `translateX(${thumb.left}px)` } as CSSProperties)
-            : { opacity: 0 }
+            : thumb
+              ? { width: thumb.width, transform: `translateX(${thumb.left}px)`, opacity: 0 }
+              : { opacity: 0 }
         }
       />
       {options.map(([k, l]) => (
@@ -322,7 +333,7 @@ export function SlideToggle<K extends string>({
           role="radio"
           aria-checked={value === k}
           className={value === k ? 'on' : ''}
-          onClick={() => onChange(k)}
+          onClick={() => pick(k)}
         >
           {l}
         </button>

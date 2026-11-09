@@ -9,6 +9,7 @@ import { api, errorMessage } from '../lib/api';
 import { useTree } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toast';
+import { SlideToggle } from '../components/charts';
 import {
   ASSISTANT_INTRO,
   assistants,
@@ -63,20 +64,13 @@ export function ConnectAISection() {
       <Connected />
 
       <h3 className="ai-h">{CONNECTED_TEXT.setUp}</h3>
-      <div className="ai-chips" role="group" aria-label="Set-up steps for">
-        {list.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            className={`ai-chip${open === a.id ? ' on' : ''}`}
-            aria-pressed={open === a.id}
-            aria-controls="ai-steps"
-            onClick={() => setOpen((o) => (o === a.id ? null : a.id))}
-          >
-            {a.name}
-          </button>
-        ))}
-      </div>
+      <SlideToggle<AssistantSetup['id']>
+        label="AI assistant"
+        value={open}
+        allowClear
+        onChange={setOpen}
+        options={list.map((a) => [a.id, a.name] as const)}
+      />
       {shown && (
         <div id="ai-steps" className="ai-steps">
           {shown.steps.length > 0 && (
