@@ -8,6 +8,14 @@ body,
 #root {
   height: 100%;
 }
+/* No sideways swipes at page level: not the browser's back/forward, not a sideways wobble. The
+   only sideways gesture is opening and closing the menu on phones. Wide tables, code and the
+   formatting bar still scroll inside their own boxes. */
+html,
+body {
+  overscroll-behavior-x: none;
+  overflow-x: hidden;
+}
 body {
   margin: 0;
   background: var(--paper);

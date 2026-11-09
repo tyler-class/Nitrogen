@@ -8,7 +8,7 @@ import type { Backup, PanelLayout, SearchHit, SearchResponse } from '@shared/typ
 import { actorOf, isInternal } from '../auth';
 import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
 import { hydrate, itemStatements, listSummaries } from '../pages';
-import { indexSoon, resetIndex, search, searchStatus } from '../search';
+import { indexSoon, resetIndex, search } from '../search';
 import { ApiError, body, type AppEnv } from './util';
 import { kitState, setKitState } from '../kit/telemetry';
 
@@ -112,8 +112,6 @@ admin.get('/search', async (c) => {
     );
   return c.json(res);
 });
-
-admin.get('/search/status', async (c) => c.json(await searchStatus(c.env)));
 
 admin.get('/backup', async (c) => {
   const pages = await all(

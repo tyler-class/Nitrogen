@@ -4,7 +4,7 @@
 // query quota, not indexed yet) callers fall back to keyword results.
 import { ftsQuery, plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
-import type { PageSummary, SearchHit, SearchResponse, SearchStatus } from '@shared/types';
+import type { PageSummary, SearchHit, SearchResponse } from '@shared/types';
 import { all, chunks, first, nowIso } from './db';
 import { listSummaries } from './pages';
 
@@ -181,20 +181,6 @@ export async function semanticSearch(
       best.set(id, { id, score: c.score, snippet: c.text.replace(/\s+/g, ' ').slice(0, 240) });
   }
   return [...best.values()].sort((a, b) => b.score - a.score).slice(0, limit);
-}
-
-export async function searchStatus(env: Cloudflare.Env): Promise<SearchStatus> {
-  const row = await first<{ n: number }>(
-    env.DB,
-    'SELECT COUNT(*) AS n FROM pages WHERE indexed_version < version',
-  );
-  const base = { instance: instanceName(env), pending: row?.n ?? 0 };
-  try {
-    await semanticInstance(env);
-    return { ...base, available: true };
-  } catch (e) {
-    return { ...base, available: false, message: unavailableMessage(e) };
-  }
 }
 
 function unavailableMessage(e: unknown): string {

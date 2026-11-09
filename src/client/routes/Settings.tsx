@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { downloadAll } from '../lib/exportMarkdown';
-import type { Backup, SearchStatus } from '@shared/types';
+import type { Backup } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { keys } from '../lib/queries';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
@@ -28,14 +28,6 @@ export function Settings() {
         updates_set_up: boolean;
         telemetry: boolean;
       }>('/settings'),
-  });
-  const search = useQuery({
-    queryKey: ['search-status'],
-    queryFn: () => api.get<SearchStatus>('/search/status'),
-  });
-  const unused = useQuery({
-    queryKey: ['unused-files'],
-    queryFn: () => api.get<{ count: number; bytes: number }>('/files/unused'),
   });
   const [theme, setTheme] = useTheme();
   const restoreInput = useRef<HTMLInputElement>(null);
@@ -121,20 +113,6 @@ export function Settings() {
       <ConnectAISection />
 
       <section>
-        <h2>Search</h2>
-        {search.data ? (
-          <p>
-            {search.data.available
-              ? `Semantic search is on (AI Search instance “${search.data.instance}”).`
-              : search.data.message}{' '}
-            {search.data.pending > 0 && `${search.data.pending} page(s) waiting to be indexed.`}
-          </p>
-        ) : (
-          <p className="muted">Checking…</p>
-        )}
-      </section>
-
-      <section>
         <h2>Backup</h2>
         <p>
           The backup keeps everything exactly as written and restores it. Markdown is for other apps
@@ -171,21 +149,6 @@ export function Settings() {
             }}
           />
         </div>
-        {unused.data && unused.data.count > 0 && (
-          <p>
-            {unused.data.count} image(s) ({(unused.data.bytes / 1_048_576).toFixed(1)} MB) are not
-            used on any page.{' '}
-            <button
-              className="link"
-              onClick={async () => {
-                await api.post('/files/cleanup').catch((e) => toast(errorMessage(e)));
-                void qc.invalidateQueries({ queryKey: ['unused-files'] });
-              }}
-            >
-              Delete them
-            </button>
-          </p>
-        )}
       </section>
 
       <UpdatesSection

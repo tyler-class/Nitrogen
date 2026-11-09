@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { imageMarkdown } from '@shared/markdown';
 import type { UploadedFile } from '@shared/types';
 import { requestSignedIn } from '../auth';
-import { all, chunks, first, marks, newId, nowIso } from '../db';
+import { all, chunks, first, getSetting, marks, newId, nowIso, setSettingStmt } from '../db';
 import { ApiError, type AppEnv } from './util';
 
 export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -97,40 +97,71 @@ files.post('/files', async (c) => {
   return c.json(out, 201);
 });
 
-/** Images no page references any more (older than a day, so in-progress drafts are safe). */
-async function unusedFiles(db: D1Database) {
-  const cutoff = new Date(Date.now() - 86_400_000).toISOString();
-  const candidates = await all<{ key: string; size: number }>(
-    db,
-    'SELECT key, size FROM files WHERE created_at < ?',
-    cutoff,
-  );
-  const unused: { key: string; size: number }[] = [];
-  for (const f of candidates) {
-    const used = await first(
+/** How long a new image is safe from cleanup: its page may not be saved yet. */
+export const UNUSED_GRACE_MS = 60 * 60 * 1000;
+/** Images checked per cleanup run; a cursor walks the rest on later runs. */
+const CLEANUP_BATCH = 200;
+
+/**
+ * Deletes images nothing points at any more: not a page, not a saved version in page history,
+ * not an upload that's still being placed. Images newer than an hour are left alone. Runs from
+ * the scheduled handler; checks a batch per run and picks up where it left off. Never throws.
+ */
+export async function purgeUnusedFiles(env: Cloudflare.Env, now = Date.now()): Promise<number> {
+  try {
+    const db = env.DB;
+    const cutoff = new Date(now - UNUSED_GRACE_MS).toISOString();
+    const cursor = (await getSetting(db, 'files_cleanup_cursor')) ?? '';
+    let batch = await all<{ key: string }>(
       db,
-      'SELECT 1 FROM pages WHERE instr(body, ?) > 0 LIMIT 1',
-      fileUrl(f.key),
+      'SELECT key FROM files WHERE created_at < ? AND key > ? ORDER BY key LIMIT ?',
+      cutoff,
+      cursor,
+      CLEANUP_BATCH,
     );
-    if (!used) unused.push(f);
+    // Reached the end: start again from the beginning next time.
+    if (!batch.length && cursor) {
+      await setSettingStmt(db, 'files_cleanup_cursor', null).run();
+      batch = await all<{ key: string }>(
+        db,
+        'SELECT key FROM files WHERE created_at < ? ORDER BY key LIMIT ?',
+        cutoff,
+        CLEANUP_BATCH,
+      );
+    }
+    if (!batch.length) return 0;
+    const unused: string[] = [];
+    for (const { key } of batch) {
+      const url = fileUrl(key);
+      const used = await first(
+        db,
+        `SELECT 1 FROM pages WHERE instr(body, ?1) > 0
+         UNION ALL SELECT 1 FROM page_revisions WHERE instr(body, ?1) > 0
+         UNION ALL SELECT 1 FROM image_uploads WHERE file_key = ?2
+         LIMIT 1`,
+        url,
+        key,
+      );
+      if (!used) unused.push(key);
+    }
+    await deleteFiles(env, unused);
+    for (const part of chunks(unused))
+      await db
+        .prepare(`DELETE FROM files WHERE key IN (${marks(part.length)})`)
+        .bind(...part)
+        .run();
+    await setSettingStmt(
+      db,
+      'files_cleanup_cursor',
+      batch.length < CLEANUP_BATCH ? null : batch[batch.length - 1]!.key,
+    ).run();
+    if (unused.length) console.log(`images: removed ${unused.length} no page uses`);
+    return unused.length;
+  } catch (e) {
+    console.warn('image cleanup skipped:', e instanceof Error ? e.message : e);
+    return 0;
   }
-  return unused;
 }
-
-files.get('/files/unused', async (c) => {
-  const unused = await unusedFiles(c.env.DB);
-  return c.json({ count: unused.length, bytes: unused.reduce((n, f) => n + f.size, 0) });
-});
-
-files.post('/files/cleanup', async (c) => {
-  const unused = (await unusedFiles(c.env.DB)).map((f) => f.key);
-  await deleteFiles(c.env, unused);
-  for (const part of chunks(unused))
-    await c.env.DB.prepare(`DELETE FROM files WHERE key IN (${marks(part.length)})`)
-      .bind(...part)
-      .run();
-  return c.json({ ok: true, removed: unused.length });
-});
 
 /** GET /files/<key>: streams an image from R2 to a signed-in viewer. */
 export async function serveFile(request: Request, env: Cloudflare.Env): Promise<Response> {

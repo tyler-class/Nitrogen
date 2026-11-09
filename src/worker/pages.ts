@@ -536,9 +536,12 @@ export async function deletePage(
   // Images can be pasted into other pages; only remove those nothing references any more.
   const orphanFiles: string[] = [];
   for (const key of fileKeys) {
+    // Kept while any page or saved version still shows it (the scheduled cleanup takes it later).
     const used = await first(
       db,
-      'SELECT 1 FROM pages WHERE instr(body, ?) > 0 LIMIT 1',
+      `SELECT 1 FROM pages WHERE instr(body, ?1) > 0
+       UNION ALL SELECT 1 FROM page_revisions WHERE instr(body, ?1) > 0
+       LIMIT 1`,
       `/files/${key}`,
     );
     if (!used) orphanFiles.push(key);

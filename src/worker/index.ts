@@ -11,7 +11,7 @@ import { clientDisplayName, UNKNOWN_ASSISTANT } from './client-name';
 import { handleAuthorize } from './consent';
 import { mcpApiHandler } from './mcp';
 import { handleUploadLink } from './images';
-import { serveFile } from './routes/files';
+import { purgeUnusedFiles, serveFile } from './routes/files';
 import { drainIndex } from './search';
 import { checkIn } from './kit/telemetry';
 import { VERSION } from '@shared/version';
@@ -111,6 +111,8 @@ export default {
         buckets: [env.FILES],
       }),
     );
+    // Images no page or saved version uses any more.
+    ctx.waitUntil(purgeUnusedFiles(env));
     try {
       let total = 0;
       for (let i = 0; i < 5; i++) {

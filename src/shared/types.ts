@@ -110,13 +110,6 @@ export interface UploadedFile {
   markdown: string;
 }
 
-export interface SearchStatus {
-  available: boolean;
-  instance: string;
-  pending: number;
-  message?: string;
-}
-
 export interface Backup {
   format: 'nitrogen-backup';
   version: 1;

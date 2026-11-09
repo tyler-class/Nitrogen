@@ -18,7 +18,10 @@ const VIEWS = [
   ['/tags', 'tag', 'Tags'],
 ] as const;
 
-/** Phones: swipe left to close the open menu, swipe right from the left edge to open it. */
+/**
+ * Phones: swipe left to close the open menu, swipe right from the left edge to open it. That's
+ * the only sideways swipe: a swipe from the edge is ours, not the browser's back gesture.
+ */
 function useEdgeSwipe(open: boolean, setOpen: (v: boolean) => void) {
   const start = useRef<{ x: number; y: number; t: number } | null>(null);
   useEffect(() => {
@@ -30,6 +33,14 @@ function useEdgeSwipe(open: boolean, setOpen: (v: boolean) => void) {
       // Opening only from the edge, so scrolling sideways in a page (tables, code) still works.
       if (!open && t.clientX > 28) return;
       start.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    };
+    // Once a swipe from the edge is clearly sideways, keep the browser from treating it as "back".
+    const move = (e: TouchEvent) => {
+      const s = start.current;
+      const t = e.touches[0];
+      if (!s || !t || open || !e.cancelable) return;
+      const dx = t.clientX - s.x;
+      if (dx > 8 && Math.abs(t.clientY - s.y) < dx) e.preventDefault();
     };
     const up = (e: TouchEvent) => {
       const s = start.current;
@@ -44,9 +55,11 @@ function useEdgeSwipe(open: boolean, setOpen: (v: boolean) => void) {
       if (!open && dx > 0) setOpen(true);
     };
     document.addEventListener('touchstart', down, { passive: true });
+    document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', up, { passive: true });
     return () => {
       document.removeEventListener('touchstart', down);
+      document.removeEventListener('touchmove', move);
       document.removeEventListener('touchend', up);
     };
   }, [open, setOpen]);
