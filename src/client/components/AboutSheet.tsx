@@ -1,28 +1,22 @@
-import { useState } from 'react';
 import { VERSION } from '@shared/version';
-import { checkForUpdate } from '../lib/pwa';
-import { useToast } from './Toast';
+import { aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 
-const LINKS = [
-  { icon: 'github', label: 'Nitrogen on GitHub', href: 'https://github.com/tyler-class/Nitrogen' },
-  {
-    icon: 'mail',
-    label: 'Questions or help? nitrogen@tylerclass.net',
-    href: 'mailto:nitrogen@tylerclass.net',
-  },
-  {
-    icon: 'dollar',
-    label: 'Nitrogen is free, like 78% of the air. Buy me a coffee to keep it that way ☕',
-    href: 'https://ko-fi.com/tylerclass',
-  },
-  { icon: 'link', label: 'tylerclass.net', href: 'https://tylerclass.net' },
-];
+const LINKS = aboutLinks({
+  title: 'Nitrogen',
+  repo: 'tyler-class/Nitrogen',
+  email: 'nitrogen@tylerclass.net',
+});
+const ICONS: Record<AboutLinkKind, string> = {
+  github: 'github',
+  email: 'mail',
+  coffee: 'coffee',
+  site: 'link',
+};
 
+/** About Nitrogen: version, what it is, who built it, and links (Selfhost Kit layout). */
 export function AboutSheet({ onClose }: { onClose: () => void }) {
-  const [checking, setChecking] = useState(false);
-  const toast = useToast();
   return (
     <Sheet title="About Nitrogen" sub={`Version ${VERSION}`} onClose={onClose}>
       <div className="about">
@@ -31,29 +25,17 @@ export function AboutSheet({ onClose }: { onClose: () => void }) {
           page tree, markdown, search by meaning, and an MCP server. It runs on your own Cloudflare
           account, so your data stays yours.
         </p>
-        <p className="about-by">Built by Tyler Class.</p>
-        <button
-          type="button"
-          className="btn small about-update"
-          disabled={checking}
-          onClick={async () => {
-            setChecking(true);
-            try {
-              if ((await checkForUpdate()) === 'latest') toast('You’re on the latest version.');
-            } catch {
-              toast('Couldn’t check. Are you online?');
-            } finally {
-              setChecking(false);
-            }
-          }}
-        >
-          <Icon name="history" size={14} /> {checking ? 'Checking…' : 'Check for updates'}
-        </button>
+        <p className="about-by">{BUILT_BY}</p>
         <div className="about-links">
           {LINKS.map((l) => (
-            <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="about-link">
+            <a
+              key={l.href}
+              href={l.href}
+              {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+              className="about-link"
+            >
               <span className="about-link-icon">
-                <Icon name={l.icon} size={18} />
+                <Icon name={ICONS[l.kind]} size={18} />
               </span>
               <span className="about-link-label">{l.label}</span>
               <span className="about-link-chev">

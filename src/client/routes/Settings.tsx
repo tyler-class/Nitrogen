@@ -14,14 +14,11 @@ import { Link } from 'react-router';
 import { VERSION } from '@shared/version';
 import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
-import {
-  isNewer,
-  isSourceRepo,
-  runUrl,
-  setupUrl,
-  UPSTREAM,
-  useLatestVersion,
-} from '../lib/updates';
+import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
+import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
+
+/** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
+const USAGE_COUNTED = 'pages, revisions, tags and links';
 
 export function Settings() {
   const qc = useQueryClient();
@@ -372,49 +369,39 @@ function UpdatesSection({
   const latest = useLatestVersion();
   const repo = __SOURCE_REPO__;
   const isSource = isSourceRepo(repo, UPSTREAM);
-  const newer = latest.data && isNewer(latest.data, VERSION) ? latest.data : null;
-  const status = newer
-    ? `Nitrogen ${newer} is available. You have ${VERSION}.`
-    : latest.isError
-      ? `Nitrogen ${VERSION}. Couldn’t check for a newer version.`
-      : latest.data
-        ? `Nitrogen ${VERSION}, up to date.`
-        : `Nitrogen ${VERSION}.`;
+  const status = updateStatus('Nitrogen', VERSION, latest.data, latest.isError);
+  const how = howUpdatesWork('Nitrogen');
+  const shared = whatsShared('Nitrogen', USAGE_COUNTED, true);
   return (
     <section>
       <h2>
-        Updates{' '}
+        {UPDATE_TEXT.heading}{' '}
         {!isSource && (
-          <InfoTip label="How updates work">
-            <p>Updates take two steps, both in your own accounts:</p>
+          <InfoTip label={UPDATE_TEXT.howUpdatesWork}>
+            <p>{how.intro}</p>
             <ul>
-              <li>
-                An update workflow in your GitHub copy brings in the latest Nitrogen every Monday.
-                GitHub needs you to add it once: Set up opens it ready to commit.
-              </li>
-              <li>Cloudflare deploys your copy every time it changes. That part is already on.</li>
+              {how.steps.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
             </ul>
-            <p>
-              Your pages and files live in your database and storage, so updates don’t touch them.
-              Changes you made to the code in your copy are replaced.
-            </p>
+            <p>{how.outro}</p>
           </InfoTip>
         )}
       </h2>
-      <p className={newer ? '' : 'muted'}>{status}</p>
+      <p className={status.newer ? '' : 'muted'}>{status.text}</p>
       {isSource ? null : !repo ? (
-        <p className="muted">Deployed by hand: git pull, then npm run deploy.</p>
+        <p className="muted">{UPDATE_TEXT.byHand}</p>
       ) : (
         <>
           <div className="updates-actions">
             {setUp ? (
               <a
-                className={newer ? 'btn primary' : 'btn'}
+                className={status.newer ? 'btn primary' : 'btn'}
                 href={runUrl(repo)}
                 target="_blank"
                 rel="noreferrer"
               >
-                <Icon name="history" size={14} /> Update now
+                <Icon name="history" size={14} /> {UPDATE_TEXT.updateNow}
               </a>
             ) : (
               <a
@@ -424,7 +411,7 @@ function UpdatesSection({
                 rel="noreferrer"
                 onClick={onSetUp}
               >
-                <Icon name="github" size={14} /> Set up automatic updates
+                <Icon name="github" size={14} /> {UPDATE_TEXT.setUp}
               </a>
             )}
             <a
@@ -439,36 +426,31 @@ function UpdatesSection({
           <p className="muted">
             {setUp ? (
               <>
-                Opens GitHub: click Run workflow.{' '}
+                {UPDATE_TEXT.updateNowHint}{' '}
                 <a href={setupUrl(repo, __SOURCE_BRANCH__)} target="_blank" rel="noreferrer">
-                  Set up again
+                  {UPDATE_TEXT.setUpAgain}
                 </a>
               </>
             ) : (
-              'Opens GitHub: click Commit changes. It updates now, then every Monday.'
+              UPDATE_TEXT.setUpHint
             )}
           </p>
         </>
       )}
       <div className="share-row">
         <span>
-          Share anonymous usage counts
-          <InfoTip label="What’s shared">
-            <p>Once a day this copy sends Nitrogen’s developer:</p>
+          {UPDATE_TEXT.telemetry}
+          <InfoTip label={UPDATE_TEXT.whatsShared}>
+            <p>{shared.intro}</p>
             <ul>
-              <li>a random id this copy made for itself</li>
-              <li>its version</li>
-              <li>how many pages, revisions, tags, links and so on it has (counts only)</li>
-              <li>how many files it stores (one total)</li>
-              <li>whether automatic updates are on</li>
+              {shared.items.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
             </ul>
-            <p>
-              Never page titles, contents, file names or anything you write, and no IP address is
-              kept. It shows how many copies are in use, to decide what to work on next.
-            </p>
+            <p>{shared.outro}</p>
           </InfoTip>
         </span>
-        <Switch on={telemetry} onChange={onTelemetry} label="Share anonymous usage counts" />
+        <Switch on={telemetry} onChange={onTelemetry} label={UPDATE_TEXT.telemetry} />
       </div>
     </section>
   );

@@ -2,5 +2,8 @@
   "app": "nitrogen",
   "title": "Nitrogen",
   "upstream": "tyler-class/Nitrogen",
-  "dataNote": "Your data lives in the database and file storage, not here, so it isn't touched."
+  "dataNote": "Your data lives in the database and file storage, not here, so it isn't touched.",
+  "email": "nitrogen@tylerclass.net",
+  "counted": "pages, revisions, tags and links",
+  "files": true
 }

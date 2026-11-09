@@ -1660,6 +1660,7 @@ mark {
 }
 .about-link:hover .about-link-label {
   text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 /* ------------------------------------------------------------- dashboard */
@@ -2719,10 +2720,6 @@ body.resizing {
 /* Writing needs room: the editor is wider than the reading column. */
 .page.editing {
   max-width: 1080px;
-}
-
-.about-update {
-  margin-top: 4px;
 }
 
 /* ------------------------------------------------------- editing surface */
