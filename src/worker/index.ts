@@ -13,7 +13,7 @@ import { mcpApiHandler } from './mcp';
 import { handleUploadLink } from './images';
 import { purgeUnusedFiles, serveFile } from './routes/files';
 import { drainIndex } from './search';
-import { checkIn } from './kit/telemetry';
+import { checkIn, checkInOnRequest, type CheckInOptions } from './kit/telemetry';
 import { buildFlags } from '../shared/kit/build';
 import { VERSION } from '@shared/version';
 
@@ -80,8 +80,19 @@ function oauthCapable(url: URL): boolean {
   return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 }
 
+/** The anonymous daily check-in's settings (counts only; see src/worker/kit/telemetry.ts). */
+const usage = (env: Cloudflare.Env): CheckInOptions => ({
+  app: 'nitrogen',
+  version: VERSION,
+  tables: USAGE_TABLES,
+  buckets: [env.FILES],
+  build: buildFlags(),
+});
+
 export default {
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
+    // Check in the first time the app is opened each day (no cost after that).
+    checkInOnRequest(ctx, request, env.DB, usage(env));
     const url = new URL(request.url);
     if (!oauthCapable(url)) {
       if (
@@ -104,15 +115,7 @@ export default {
    * anonymous daily check-in (at most once a day; off switch in Settings → Updates).
    */
   async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(
-      checkIn(env.DB, {
-        app: 'nitrogen',
-        version: VERSION,
-        tables: USAGE_TABLES,
-        buckets: [env.FILES],
-        build: buildFlags(),
-      }),
-    );
+    ctx.waitUntil(checkIn(env.DB, usage(env)));
     // Images no page or saved version uses any more.
     ctx.waitUntil(purgeUnusedFiles(env));
     try {

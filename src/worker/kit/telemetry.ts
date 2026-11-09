@@ -110,7 +110,7 @@ export interface CheckInOptions {
    * What the build saw (kit buildFlags()): whether the copy's repo has the update workflow,
    * and whether this is the app's own source repo. Without it, the Settings click is used.
    */
-  build?: { updatesOn: boolean; source: boolean };
+  build?: { updatesOn: boolean; source: boolean; real?: boolean };
   /** Extra true/false facts (updates_set_up and source are added for you). */
   flags?: Record<string, boolean>;
   now?: Date;
@@ -154,4 +154,36 @@ export async function checkIn(
   } catch {
     return 'failed';
   }
+}
+
+/** localhost, *.local, *.test, *.localhost and private network addresses. */
+export const isLocal = (host: string) =>
+  /^(localhost|127\.|\[?::1\]?$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) ||
+  /\.(local|test|localhost)$/.test(host);
+
+// The UTC day this Worker instance last saw a check-in done (or switched off), so requests
+// after that cost nothing: no database read until the day changes.
+let doneDay: string | null = null;
+
+/**
+ * The same daily check-in, from a request: call it at the top of the Worker's fetch handler
+ * (`checkInOnRequest(ctx, request, env.DB, opts)`), so a copy that's opened checks in that day even
+ * before its cron runs. At most once a day per copy, like the cron; never slows the request.
+ */
+export function checkInOnRequest(
+  ctx: { waitUntil(p: Promise<unknown>): void },
+  request: Request,
+  db: D1Database,
+  o: CheckInOptions,
+): void {
+  // Only real copies on the internet: never tests (no real build) or local dev.
+  if (!o.build?.real || isLocal(new URL(request.url).hostname)) return;
+  const day = (o.now ?? new Date()).toISOString().slice(0, 10);
+  if (doneDay === day) return;
+  doneDay = day; // claim it now, so a burst of requests sends once
+  ctx.waitUntil(
+    checkIn(db, o).then((r) => {
+      if (r === 'failed') doneDay = null; // try again on a later request
+    }),
+  );
 }

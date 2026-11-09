@@ -1,3 +1,5 @@
+// First, before the router exists: swipes never navigate back on phones.
+import './lib/noSwipeBack';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
