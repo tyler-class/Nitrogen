@@ -5,11 +5,24 @@
 // how many rows each listed table has, how many files its R2 buckets hold (one total), and a
 // few true/false flags. Never contents, names or
 // anything typed in. Owners can switch it off in Settings (setKitState({ telemetry: false })).
+// Switching it off sends one last message saying so (app, id, version, "telemetry_off", time),
+// then nothing; switching it back on sends "telemetry_on" and the daily check-in resumes.
+//
+// Only a live copy sends anything: a real build (never tests) that has served a request at a
+// real, non-local address (checkInOnRequest notes it). Local dev, even its cron, never sends.
 
 export const KIT_VERSION = 1;
-export const CHECKIN_URL = 'https://stats.tylerclass.net/v1/checkin';
+export const STATS_ORIGIN = 'https://stats.tylerclass.net';
+export const CHECKIN_URL = `${STATS_ORIGIN}/v1/checkin`;
+export const EVENT_URL = `${STATS_ORIGIN}/v1/event`;
 
 const TABLE = 'selfhost_kit';
+
+// The UTC day this Worker instance last saw a check-in done (or switched off), so requests
+// after that cost nothing: no database read until the day changes.
+let doneDay: string | null = null;
+// The site this Worker instance has already noted (origin, app, version).
+let notedSite: string | null = null;
 
 export interface KitState {
   /** A random id for this install, made on first use. */
@@ -20,6 +33,29 @@ export interface KitState {
   updates_set_up: boolean;
   /** UTC day of the last check-in sent, YYYY-MM-DD. */
   last_checkin: string | null;
+  /** Where this copy is live, once a real build has served a request there (null: never). */
+  site: KitSite | null;
+}
+
+/** A live copy: its public origin, and the app and version that last served a request there. */
+export interface KitSite {
+  origin: string;
+  app: string;
+  version: string;
+}
+
+function parseSite(v: string | undefined): KitSite | null {
+  if (!v) return null;
+  try {
+    const s = JSON.parse(v) as Partial<KitSite>;
+    return typeof s.origin === 'string' &&
+      typeof s.app === 'string' &&
+      typeof s.version === 'string'
+      ? { origin: s.origin, app: s.app, version: s.version }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 async function ensureTable(db: D1Database) {
@@ -51,14 +87,38 @@ export async function kitState(db: D1Database): Promise<KitState> {
     telemetry: m.get('telemetry') !== '0',
     updates_set_up: m.get('updates_set_up') === '1',
     last_checkin: m.get('last_checkin') ?? null,
+    site: parseSite(m.get('site')),
   };
 }
 
-/** Changes the kit's settings. */
+/** Where a live copy is: written by checkInOnRequest (only for real builds at non-local hosts). */
+export async function noteSite(db: D1Database, site: KitSite): Promise<void> {
+  await ensureTable(db);
+  await db
+    .prepare(
+      `INSERT INTO ${TABLE} (key, value) VALUES ('site', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+    )
+    .bind(JSON.stringify(site))
+    .run();
+}
+
+export interface SetKitStateOptions {
+  now?: Date;
+  /** For tests. */
+  fetcher?: typeof fetch;
+}
+
+/**
+ * Changes the kit's settings. Switching telemetry off (or back on) on a live copy also sends
+ * Tally one small message saying so: app, install id, version, the event and the time. Never
+ * throws because of that message.
+ */
 export async function setKitState(
   db: D1Database,
   patch: Partial<Pick<KitState, 'telemetry' | 'updates_set_up'>> & { last_checkin?: string },
+  o: SetKitStateOptions = {},
 ) {
+  const before = patch.telemetry === undefined ? null : await kitState(db);
   await ensureTable(db);
   const put = (k: string, v: string) =>
     db
@@ -72,6 +132,38 @@ export async function setKitState(
     stmts.push(put('updates_set_up', patch.updates_set_up ? '1' : '0'));
   if (patch.last_checkin !== undefined) stmts.push(put('last_checkin', patch.last_checkin));
   if (stmts.length) await db.batch(stmts);
+  if (before && patch.telemetry !== before.telemetry) {
+    if (patch.telemetry) doneDay = null; // the daily check-in resumes on the next request
+    await sendEvent(before, patch.telemetry ? 'telemetry_on' : 'telemetry_off', o);
+  }
+}
+
+export type TelemetryEvent = 'telemetry_off' | 'telemetry_on';
+
+/** The on/off message, from a live copy only. 'skipped' anywhere else (tests, local dev). */
+export async function sendEvent(
+  s: KitState,
+  event: TelemetryEvent,
+  o: SetKitStateOptions = {},
+): Promise<'sent' | 'skipped' | 'failed'> {
+  if (!s.site) return 'skipped';
+  try {
+    const res = await (o.fetcher ?? fetch)(EVENT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app: s.site.app,
+        install: s.install_id,
+        version: s.site.version,
+        event,
+        at: (o.now ?? new Date()).toISOString(),
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.ok ? 'sent' : 'failed';
+  } catch {
+    return 'failed';
+  }
 }
 
 /** How many files the buckets hold in all. Stops counting at `cap` (a big bucket is "lots"). */
@@ -121,13 +213,18 @@ export interface CheckInOptions {
 /**
  * Sends today's check-in, at most once a UTC day. Call it from the Worker's scheduled
  * handler (any cron works; it only sends once a day). Never throws.
+ *
+ * 'not-live': nothing sent, because this isn't a real build (tests) or the copy hasn't yet
+ * served a request at a real, non-local address (local dev, whose cron must never send).
  */
 export async function checkIn(
   db: D1Database,
   o: CheckInOptions,
-): Promise<'sent' | 'off' | 'already' | 'failed'> {
+): Promise<'sent' | 'off' | 'already' | 'failed' | 'not-live'> {
   try {
+    if (!o.build?.real) return 'not-live';
     const s = await kitState(db);
+    if (!s.site) return 'not-live';
     if (!s.telemetry) return 'off';
     const day = (o.now ?? new Date()).toISOString().slice(0, 10);
     if (s.last_checkin === day) return 'already';
@@ -161,10 +258,6 @@ export const isLocal = (host: string) =>
   /^(localhost|127\.|\[?::1\]?$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) ||
   /\.(local|test|localhost)$/.test(host);
 
-// The UTC day this Worker instance last saw a check-in done (or switched off), so requests
-// after that cost nothing: no database read until the day changes.
-let doneDay: string | null = null;
-
 /**
  * The same daily check-in, from a request: call it at the top of the Worker's fetch handler
  * (`checkInOnRequest(ctx, request, env.DB, opts)`), so a copy that's opened checks in that day even
@@ -177,13 +270,34 @@ export function checkInOnRequest(
   o: CheckInOptions,
 ): void {
   // Only real copies on the internet: never tests (no real build) or local dev.
-  if (!o.build?.real || isLocal(new URL(request.url).hostname)) return;
+  const url = new URL(request.url);
+  if (!o.build?.real || isLocal(url.hostname)) return;
+  const site: KitSite = { origin: url.origin, app: o.app, version: o.version };
+  const siteKey = JSON.stringify(site);
   const day = (o.now ?? new Date()).toISOString().slice(0, 10);
-  if (doneDay === day) return;
-  doneDay = day; // claim it now, so a burst of requests sends once
+  const note = notedSite !== siteKey;
+  const send = doneDay !== day;
+  if (!note && !send) return;
+  notedSite = siteKey;
+  if (send) doneDay = day; // claim it now, so a burst of requests sends once
   ctx.waitUntil(
-    checkIn(db, o).then((r) => {
-      if (r === 'failed') doneDay = null; // try again on a later request
-    }),
+    (async () => {
+      try {
+        // Marks this copy live, so the cron may check in too (and keeps app and version current
+        // for the on/off message).
+        if (note && JSON.stringify((await kitState(db)).site) !== siteKey) await noteSite(db, site);
+      } catch {
+        notedSite = null; // note it on a later request
+      }
+      if (!send) return;
+      const r = await checkIn(db, o);
+      if (r === 'failed' || r === 'not-live') doneDay = null; // try again on a later request
+    })(),
   );
+}
+
+/** For tests: forget what this Worker instance remembers between requests. */
+export function resetTelemetryMemo() {
+  doneDay = null;
+  notedSite = null;
 }

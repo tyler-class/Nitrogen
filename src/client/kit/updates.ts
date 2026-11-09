@@ -95,7 +95,7 @@ export const whatsShared = (title: string, counted: string, files: boolean) => (
     'whether automatic updates are on',
   ],
   outro:
-    'Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use, to decide what to work on next.',
+    'Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use, to decide what to work on next. Turning this off sends one last message saying it’s off, then nothing.',
 });
 
 /** The update workflow's file in the copy's repo, where it can be read or deleted. */
