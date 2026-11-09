@@ -161,6 +161,8 @@ kbd {
 .tree-head button,
 .row-actions button {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 3px;
   border-radius: 4px;
   color: var(--muted);
@@ -3366,4 +3368,11 @@ body.resizing {
 }
 .ai-toggle-chev.turned {
   transform: rotate(90deg);
+}
+
+/* --- Touch screens have no ⌘K: hide the shortcut hint. */
+@media (hover: none) and (pointer: coarse) {
+  .search-button kbd {
+    display: none;
+  }
 }
