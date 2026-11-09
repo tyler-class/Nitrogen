@@ -106,7 +106,12 @@ export interface CheckInOptions {
   tables: string[];
   /** R2 buckets whose files are counted (one total). Leave out if the app has none. */
   buckets?: R2Bucket[];
-  /** Extra true/false facts (updates_set_up is added for you). */
+  /**
+   * What the build saw (kit buildFlags()): whether the copy's repo has the update workflow,
+   * and whether this is the app's own source repo. Without it, the Settings click is used.
+   */
+  build?: { updatesOn: boolean; source: boolean };
+  /** Extra true/false facts (updates_set_up and source are added for you). */
   flags?: Record<string, boolean>;
   now?: Date;
   /** For tests. */
@@ -135,7 +140,11 @@ export async function checkIn(
         version: o.version,
         rows: await rowCounts(db, o.tables),
         ...(o.buckets?.length ? { files: await fileCount(o.buckets) } : {}),
-        flags: { ...o.flags, updates_set_up: s.updates_set_up },
+        flags: {
+          ...o.flags,
+          updates_set_up: o.build ? o.build.updatesOn : s.updates_set_up,
+          ...(o.build ? { source: o.build.source } : {}),
+        },
         kit: KIT_VERSION,
       }),
     });

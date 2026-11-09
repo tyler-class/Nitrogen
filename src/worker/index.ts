@@ -14,6 +14,7 @@ import { handleUploadLink } from './images';
 import { purgeUnusedFiles, serveFile } from './routes/files';
 import { drainIndex } from './search';
 import { checkIn } from './kit/telemetry';
+import { buildFlags } from '../shared/kit/build';
 import { VERSION } from '@shared/version';
 
 /** Tables whose row counts go in the anonymous daily check-in (counts only, never contents). */
@@ -109,6 +110,7 @@ export default {
         version: VERSION,
         tables: USAGE_TABLES,
         buckets: [env.FILES],
+        build: buildFlags(),
       }),
     );
     // Images no page or saved version uses any more.

@@ -12,6 +12,7 @@ import { VERSION } from '@shared/version';
 import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
+import { buildFlags } from '@shared/kit/build';
 import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
 
 /** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
@@ -152,7 +153,7 @@ export function Settings() {
       </section>
 
       <UpdatesSection
-        setUp={settings.data?.updates_set_up ?? false}
+        setUp={buildFlags().updatesOn || (settings.data?.updates_set_up ?? false)}
         onSetUp={() =>
           void patch({ updates_set_up: true }, 'Finish on GitHub: click Commit changes.')
         }
