@@ -52,6 +52,8 @@ export const UPDATE_TEXT = {
   byHand: 'Deployed by hand: git pull, then npm run deploy.',
   telemetry: 'Share anonymous usage counts',
   howUpdatesWork: 'How updates work',
+  autoOn: 'Automatic updates are on',
+  aboutAutoOn: 'About automatic updates',
   whatsShared: 'What’s shared',
 };
 
@@ -93,4 +95,20 @@ export const whatsShared = (title: string, counted: string, files: boolean) => (
   ],
   outro:
     'Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use, to decide what to work on next.',
+});
+
+/** The update workflow's file in the copy's repo, where it can be read or deleted. */
+export const workflowFileUrl = (repo: string, branch: string) =>
+  `https://github.com/${repo}/blob/${encodeURIComponent(branch)}/.github/workflows/update.yml`;
+
+/** The ⓘ beside "Automatic updates are on": what it is, how it works, how to turn it off. */
+export const autoUpdatesInfo = (title: string) => ({
+  what: `Your copy of ${title} keeps itself up to date: you get new versions without doing anything.`,
+  how: [
+    `Every Monday, an update workflow in your GitHub copy brings in the latest ${title} and commits it.`,
+    'Cloudflare deploys your copy whenever it changes, so the new version is live a minute or two later.',
+    'Your data stays in your database; updates only change the code.',
+  ],
+  off: 'To turn it off, delete the update file from your GitHub copy: open it, then choose ⋯ → Delete file and commit. Set up automatic updates here to turn it back on.',
+  fileLink: 'Open the update file on GitHub',
 });

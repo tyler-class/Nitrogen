@@ -13,7 +13,14 @@ import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
 import { buildFlags } from '@shared/kit/build';
-import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
+import {
+  autoUpdatesInfo,
+  howUpdatesWork,
+  UPDATE_TEXT,
+  updateStatus,
+  whatsShared,
+  workflowFileUrl,
+} from '../kit/updates';
 
 /** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
 const USAGE_COUNTED = 'pages, revisions, tags and links';
@@ -198,6 +205,7 @@ function UpdatesSection({
   const latest = useLatestVersion();
   const repo = __SOURCE_REPO__;
   const isSource = isSourceRepo(repo, UPSTREAM);
+  const auto = autoUpdatesInfo('Nitrogen');
   const status = updateStatus('Nitrogen', VERSION, latest.data, latest.isError);
   const how = howUpdatesWork('Nitrogen');
   const shared = whatsShared('Nitrogen', USAGE_COUNTED, true);
@@ -218,6 +226,24 @@ function UpdatesSection({
         )}
       </h2>
       <p className={status.newer ? '' : 'muted'}>{status.text}</p>
+      {setUp && repo && !isSource && (
+        <div className="auto-on">
+          <Icon name="check" size={16} />
+          {UPDATE_TEXT.autoOn}
+          <InfoTip label={UPDATE_TEXT.aboutAutoOn}>
+            <p>{auto.what}</p>
+            <ul>
+              {auto.how.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+            <p>{auto.off}</p>
+            <a href={workflowFileUrl(repo, __SOURCE_BRANCH__)} target="_blank" rel="noreferrer">
+              {auto.fileLink}
+            </a>
+          </InfoTip>
+        </div>
+      )}
       {isSource ? null : !repo ? (
         <p className="muted">{UPDATE_TEXT.byHand}</p>
       ) : (

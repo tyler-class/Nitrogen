@@ -3464,3 +3464,18 @@ body.resizing {
 :root[data-theme='dark'] .who-agents button.on {
   color: #0d0b16;
 }
+
+/* Settings → Updates: "Automatic updates are on". */
+.auto-on {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.auto-on > svg {
+  color: var(--accent-ink);
+}
+.auto-on .infotip-card a {
+  color: var(--accent-ink);
+}
