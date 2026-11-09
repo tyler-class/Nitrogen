@@ -114,7 +114,7 @@ Updates take two steps, both in your own accounts. Nitrogen never deploys to you
 1. **Nitrogen → your GitHub copy.** The update workflow you added in step 8 brings in the latest code every Monday. To update now, open **Settings → Updates → Update now** and click **Run workflow** on GitHub. Settings also tells you when a newer version is out.
 2. **Your GitHub copy → your Cloudflare.** Cloudflare builds and deploys every change to your copy, migrating the database first. This was switched on in step 7.
 
-Your data lives in the database and file storage, not here, so it isn't touched. An update replaces the code in your copy, so changes you made to it are overwritten. Your copy's own name and storage settings are kept.
+Your data lives in your Cloudflare database and file storage, not in the code, so updates don't touch it. An update replaces the code in your copy, so changes you made to it are overwritten. Your copy's own name and storage settings are kept.
 
 Deployed by hand instead? `git pull`, then `npm run deploy`.
 
