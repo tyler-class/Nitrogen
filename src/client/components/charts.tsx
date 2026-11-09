@@ -1,6 +1,13 @@
 // Small hand-drawn SVG charts styled by CSS classes so they follow the theme (same pattern as
 // Ratio). Colours come from --viz-you / --viz-agents in viz.css.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 
 /** The element's content width, kept up to date (charts draw at real size, never scaled). */
 export function useWidth<T extends HTMLElement>(fallback = 600) {
@@ -244,37 +251,19 @@ export function Rank({
   );
 }
 
-export function Chips<K extends string>({
-  options,
-  value,
-  onChange,
-  label,
-}: {
+/** Choices as a sliding toggle (the app's standard control for picking one of a few). */
+export function Chips<K extends string>(props: {
   options: readonly (readonly [K, string])[];
   value: K;
   onChange: (k: K) => void;
   label: string;
 }) {
-  return (
-    <div className="seg" role="radiogroup" aria-label={label}>
-      {options.map(([k, l]) => (
-        <button
-          key={k}
-          type="button"
-          role="radio"
-          aria-checked={value === k}
-          className={value === k ? 'on' : ''}
-          onClick={() => onChange(k)}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
+  return <SlideToggle {...props} />;
 }
 
 /**
- * One sliding toggle for a few choices: a thumb slides to the chosen one. With `tones`, the
+ * One sliding toggle for picking one of a few: a thumb slides to the chosen option. Each option
+ * is as wide as its label, and the row scrolls sideways when it doesn't fit. With `tones`, the
  * thumb takes the chosen option's colour class (`tone-<key>`).
  */
 export function SlideToggle<K extends string>({
@@ -290,18 +279,42 @@ export function SlideToggle<K extends string>({
   label: string;
   tones?: boolean;
 }) {
-  const i = Math.max(
-    0,
-    options.findIndex(([k]) => k === value),
-  );
+  const box = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  // Measure the chosen option, and keep measuring as the row resizes (fonts, panel widths).
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const place = () => {
+      const on = el.querySelector<HTMLButtonElement>('button[aria-checked="true"]');
+      if (!on) return;
+      setThumb({ left: on.offsetLeft, width: on.offsetWidth });
+      // Keep the chosen option in view when the row scrolls.
+      const right = on.offsetLeft + on.offsetWidth;
+      if (on.offsetLeft < el.scrollLeft) el.scrollLeft = on.offsetLeft - 8;
+      else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth + 8;
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [value, options]);
   return (
     <div
+      ref={box}
       className={`slide-toggle${tones ? ` tone-${value}` : ''}`}
       role="radiogroup"
       aria-label={label}
-      style={{ '--i': i, '--n': options.length } as CSSProperties}
     >
-      <span className="slide-thumb" aria-hidden="true" />
+      <span
+        className="slide-thumb"
+        aria-hidden="true"
+        style={
+          thumb
+            ? ({ width: thumb.width, transform: `translateX(${thumb.left}px)` } as CSSProperties)
+            : { opacity: 0 }
+        }
+      />
       {options.map(([k, l]) => (
         <button
           key={k}

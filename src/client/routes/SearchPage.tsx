@@ -6,6 +6,7 @@ import type { SearchResponse } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { Icon, PageGlyph } from '../components/Icon';
 import { Snippet } from '../components/Snippet';
+import { SlideToggle } from '../components/charts';
 
 /** Full search: semantic + keyword (hybrid) by default. */
 export function SearchPage() {
@@ -46,25 +47,16 @@ export function SearchPage() {
           Search
         </button>
       </form>
-      <div className="seg" role="radiogroup" aria-label="Search mode">
-        {(
-          [
-            ['hybrid', 'Best match'],
-            ['semantic', 'Meaning'],
-            ['keyword', 'Exact words'],
-          ] as const
-        ).map(([m, label]) => (
-          <button
-            key={m}
-            role="radio"
-            aria-checked={mode === m}
-            className={mode === m ? 'on' : ''}
-            onClick={() => run({ mode: m })}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SlideToggle
+        label="Search mode"
+        value={mode}
+        onChange={(m) => run({ mode: m })}
+        options={[
+          ['hybrid', 'Best match'],
+          ['semantic', 'Meaning'],
+          ['keyword', 'Exact words'],
+        ]}
+      />
 
       {res.data?.semantic_unavailable && <p className="banner">{res.data.semantic_unavailable}</p>}
       {res.isError && <p className="banner warn">{errorMessage(res.error)}</p>}

@@ -5,6 +5,7 @@ import { pageHref } from '@shared/markdown';
 import type { SearchResponse, TagCount } from '@shared/types';
 import { api } from '../lib/api';
 import { PageGlyph, Icon } from '../components/Icon';
+import { SlideToggle } from '../components/charts';
 
 export function Tags() {
   const { tag } = useParams<{ tag?: string }>();
@@ -29,24 +30,15 @@ function AllTags() {
         <p className="muted">No tags yet. Add them under a page title, or write #tag in a page.</p>
       ) : (
         <>
-          <div className="seg" role="radiogroup" aria-label="Sort">
-            {(
-              [
-                ['count', 'Most used'],
-                ['name', 'A–Z'],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                role="radio"
-                aria-checked={sort === k}
-                className={sort === k ? 'on' : ''}
-                onClick={() => setSort(k)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <SlideToggle
+            label="Sort"
+            value={sort}
+            onChange={setSort}
+            options={[
+              ['count', 'Most used'],
+              ['name', 'A–Z'],
+            ]}
+          />
           <div className="tag-cloud">
             {tags.map((t) => (
               <Link key={t.tag} to={`/tags/${encodeURIComponent(t.tag)}`} className="tag-chip">
