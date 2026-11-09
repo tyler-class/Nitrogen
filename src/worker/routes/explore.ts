@@ -371,7 +371,7 @@ explore.get('/pages/:id/related', async (c) => {
 
 explore.get('/insights', async (c) => {
   const db = c.env.DB;
-  const [days, authors, created, pages, tags, misses, home, links] = await Promise.all([
+  const [days, authors, created, pages, tags, misses, links] = await Promise.all([
     all<{ day: string; you: number; agents: number }>(
       db,
       `SELECT substr(created_at, 1, 10) AS day,
@@ -414,7 +414,6 @@ explore.get('/insights', async (c) => {
        WHERE hits = 0 AND created_at >= ? GROUP BY lower(query) ORDER BY last DESC LIMIT 20`,
       daysAgo(90),
     ),
-    first<{ value: string }>(db, "SELECT value FROM settings WHERE key = 'home_id'"),
     first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM links WHERE src != dst'),
   ]);
   const createdBy = new Map(created.map((r) => [r.actor, r.created]));
@@ -427,7 +426,6 @@ explore.get('/insights', async (c) => {
     pages,
     tags,
     misses,
-    home_id: home?.value ?? null,
     links: links?.n ?? 0,
   });
 });

@@ -1,21 +1,18 @@
-import { Navigate, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { pageHref } from '@shared/markdown';
 import { errorMessage } from '../lib/api';
 import { useCreatePage, useTree } from '../lib/queries';
 import { useToast } from '../components/Toast';
 import { Dashboard } from './Dashboard';
 
-/** "/" opens the chosen home page (Settings), else the dashboard, else a welcome. */
+/** "/": Home (inbox, open items, pinned pages, activity), or a welcome when the wiki is empty. */
 export function Home() {
   const tree = useTree();
   const create = useCreatePage();
   const navigate = useNavigate();
   const toast = useToast();
   if (!tree.data) return <div className="page-loading" aria-busy="true" />;
-  const { pages, home_id } = tree.data;
-  const target = home_id ? pages.find((p) => p.id === home_id) : undefined;
-  if (target) return <Navigate to={pageHref(target.id, target.title)} replace />;
-  if (pages.length) return <Dashboard />;
+  if (tree.data.pages.length) return <Dashboard />;
 
   async function start() {
     try {

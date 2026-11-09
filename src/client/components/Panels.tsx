@@ -1,4 +1,5 @@
-// A board of panels the owner arranges: drag to reorder, half or full width, hide/show.
+// A board of panels the owner arranges: drag to reorder (handle on the left), half or full
+// width, hide/show.
 // Ported from Ratio. Order is live while dragging (the grid reflows; the dragged panel follows
 // the pointer as an overlay). Half-width panels pack two to a row; the grid fills gaps densely.
 import { useRef, useState, type ReactNode } from 'react';
@@ -266,19 +267,18 @@ function Panel({
       data-size={size}
       aria-label={def.title}
     >
+      {/* Handle on the left (as in Ratio), title, then width and hide on the right. */}
       <header className="pn-h">
+        {grip ?? (
+          <span className="pn-grip" aria-hidden>
+            <Icon name="grip" size={17} />
+          </span>
+        )}
         <div className="pn-t">
           <h3>{def.title}</h3>
           {def.sub ? <div className="pn-sub">{def.sub}</div> : null}
         </div>
-        <div className="pn-tools">
-          {grip ?? (
-            <span className="pn-grip">
-              <Icon name="grip" size={17} />
-            </span>
-          )}
-          {tools}
-        </div>
+        {tools ? <div className="pn-tools">{tools}</div> : null}
       </header>
       {def.actions ? <div className="pn-actions">{def.actions}</div> : null}
       {children}

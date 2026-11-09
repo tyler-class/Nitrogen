@@ -11,7 +11,7 @@ import { eventLine } from '../lib/activity';
 import { usePanelLayout } from '../lib/queries';
 import { Chips, Stat } from '../components/charts';
 import { formatDue } from '../components/Markdown';
-import { PageGlyph } from '../components/Icon';
+import { Icon, PageGlyph } from '../components/Icon';
 import { PanelBoard, type PanelDef } from '../components/Panels';
 import { useToast } from '../components/Toast';
 import { formatWhen } from './PageView';
@@ -206,7 +206,9 @@ export function Dashboard() {
 
   return (
     <div className="page dashboard">
-      <h1 className="page-title">Dashboard</h1>
+      <h1 className="page-title view-title">
+        <Icon name="home" size={26} /> Home
+      </h1>
       <PanelBoard defs={panels} saved={layout.saved} onSave={layout.save} />
     </div>
   );

@@ -1,5 +1,5 @@
 const PATHS: Record<string, string> = {
-  chevron: 'M6 4l4 4-4 4',
+  chevron: 'M8 6l4 4-4 4',
   menu: 'M3 5h14M3 10h14M3 15h14',
   search: 'M9 15A6 6 0 1 0 9 3a6 6 0 0 0 0 12zm4.5-1.5L17 17',
   edit: 'M4 14.5V17h2.5L15 8.5 12.5 6 4 14.5zM14 4.5 15.5 3 18 5.5 16.5 7',

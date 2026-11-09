@@ -28,7 +28,6 @@ export function Settings() {
     queryKey: keys.settings,
     queryFn: () =>
       api.get<{
-        home_id: string | null;
         guide_id: string | null;
         updates_set_up: boolean;
         telemetry: boolean;
@@ -146,19 +145,6 @@ export function Settings() {
               {label}
             </button>
           ))}
-        </div>
-      </section>
-
-      <section>
-        <h2>Home page</h2>
-        <div className="field">
-          <PagePicker
-            aria-label="Home page"
-            pages={pages}
-            value={settings.data?.home_id ?? null}
-            noneLabel="Dashboard"
-            onChange={(id) => void patch({ home_id: id }, 'Home page updated.')}
-          />
         </div>
       </section>
 

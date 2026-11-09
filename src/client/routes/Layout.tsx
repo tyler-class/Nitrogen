@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { readLocal, writeLocal } from '../lib/storage';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
 import { AboutButton, AboutSheet } from '../components/AboutSheet';
@@ -9,6 +9,48 @@ import { Tree } from '../components/Tree';
 
 const MIN_W = 200;
 const MAX_W = 460;
+
+/** The four views, as one pill: icons only, the current one with its name. */
+const VIEWS = [
+  ['/', 'home', 'Home'],
+  ['/activity', 'activity', 'Activity'],
+  ['/insights', 'insights', 'Insights'],
+  ['/tags', 'tag', 'Tags'],
+] as const;
+
+/** Phones: swipe left to close the open menu, swipe right from the left edge to open it. */
+function useEdgeSwipe(open: boolean, setOpen: (v: boolean) => void) {
+  const start = useRef<{ x: number; y: number; t: number } | null>(null);
+  useEffect(() => {
+    const phone = window.matchMedia('(max-width: 860px)');
+    const down = (e: TouchEvent) => {
+      const t = e.touches[0];
+      start.current = null;
+      if (!phone.matches || !t || e.touches.length > 1) return;
+      // Opening only from the edge, so scrolling sideways in a page (tables, code) still works.
+      if (!open && t.clientX > 28) return;
+      start.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    };
+    const up = (e: TouchEvent) => {
+      const s = start.current;
+      const t = e.changedTouches[0];
+      start.current = null;
+      if (!s || !t) return;
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      // A quick, mostly sideways swipe.
+      if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx) * 0.7 || Date.now() - s.t > 600) return;
+      if (open && dx < 0) setOpen(false);
+      if (!open && dx > 0) setOpen(true);
+    };
+    document.addEventListener('touchstart', down, { passive: true });
+    document.addEventListener('touchend', up, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', down);
+      document.removeEventListener('touchend', up);
+    };
+  }, [open, setOpen]);
+}
 
 export function Layout() {
   const tree = useTree();
@@ -64,6 +106,7 @@ export function Layout() {
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+  useEdgeSwipe(nav, setNav);
   // Phones: the menu covers the page, so the page behind it shouldn't scroll.
   useEffect(() => {
     document.body.classList.toggle('nav-locked', nav);
@@ -117,31 +160,34 @@ export function Layout() {
           <span>Search</span>
           <kbd>⌘K</kbd>
         </button>
-        <nav className="side-nav" aria-label="Wiki">
-          {(
-            [
-              ['/dashboard', 'home', 'Dashboard'],
-              ['/activity', 'activity', 'Activity'],
-              ['/insights', 'insights', 'Insights'],
-              ['/tags', 'tag', 'Tags'],
-            ] as const
-          ).map(([to, icon, label]) => (
-            <NavLink key={to} to={to} end className="foot-link">
-              <Icon name={icon} size={15} /> {label}
+        <nav className="view-pill" aria-label="Views">
+          {VIEWS.map(([to, icon, label]) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to !== '/tags'}
+              className="vp-item"
+              aria-label={label}
+              title={label}
+            >
+              <Icon name={icon} size={16} />
+              <span className="vp-label">{label}</span>
             </NavLink>
           ))}
         </nav>
+        <hr className="side-rule" />
         {tree.data ? (
           <Tree pages={pages} currentId={match?.params.id} onNavigate={() => setNav(false)} />
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
         )}
-        {sessionCount > 0 && (
-          <NavLink to="/sessions" className="foot-link sessions-link">
-            <Icon name="sparkle" size={15} /> AI Sessions
-          </NavLink>
-        )}
+        {/* One rule above the footer links (AI sessions, when there are any, then Settings). */}
         <div className="sidebar-foot">
+          {sessionCount > 0 && (
+            <NavLink to="/sessions" className="foot-link sessions-link">
+              <Icon name="sparkle" size={15} /> AI Sessions
+            </NavLink>
+          )}
           <NavLink to="/settings" className="foot-link">
             <Icon name="settings" size={15} /> Settings
           </NavLink>
@@ -180,7 +226,10 @@ export function Layout() {
           <button onClick={() => setNav(true)} aria-label="Open menu">
             <Icon name="menu" />
           </button>
-          <span className="mobile-title">Nitrogen</span>
+          <Link to="/" className="mobile-title">
+            <img src="/favicon.svg" alt="" width={22} height={22} />
+            Nitrogen
+          </Link>
           <button onClick={() => setPalette(true)} aria-label="Search">
             <Icon name="search" />
           </button>

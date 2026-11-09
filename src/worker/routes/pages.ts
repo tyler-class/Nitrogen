@@ -7,7 +7,7 @@ import {
   updatePageInput,
 } from '@shared/schemas';
 import type { TreeResponse } from '@shared/types';
-import { getSetting, nowIso } from '../db';
+import { nowIso } from '../db';
 import {
   createPage,
   createTree,
@@ -29,13 +29,8 @@ import { ApiError, body, type AppEnv } from './util';
 export const pages = new Hono<AppEnv>();
 
 pages.get('/tree', async (c) => {
-  const [list, home, sessions] = await Promise.all([
-    listSummaries(c.env.DB),
-    getSetting(c.env.DB, 'home_id'),
-    sessionsRoot(c.env.DB),
-  ]);
-  const homeId = home && list.some((p) => p.id === home) ? home : null;
-  return c.json<TreeResponse>({ pages: list, home_id: homeId, sessions_id: sessions });
+  const [list, sessions] = await Promise.all([listSummaries(c.env.DB), sessionsRoot(c.env.DB)]);
+  return c.json<TreeResponse>({ pages: list, sessions_id: sessions });
 });
 
 pages.get('/pages/:id', async (c) => {
@@ -109,7 +104,7 @@ pages.post('/pages/:id/revisions/:rev/restore', async (c) => {
   return c.json(page);
 });
 
-/** Pinned pages show on the dashboard. Not a content change: no history or event. */
+/** Pinned pages show on Home. Not a content change: no history or event. */
 pages.post('/pages/:id/pin', async (c) => {
   const { pinned } = await body(c, pinInput);
   const res = await c.env.DB.prepare('UPDATE pages SET pinned_at = ? WHERE id = ?')

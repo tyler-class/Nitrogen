@@ -126,7 +126,6 @@ interface TreeCtx {
   pages: PageSummary[];
   byId: Map<string, PageSummary>;
   roots: TreeNode[];
-  home: string | null;
 }
 
 /** The owner's conventions page (Settings → Connect an AI assistant), if one is set. */
@@ -158,7 +157,6 @@ function buildServer(
       pages: t.pages,
       byId: new Map(t.pages.map((p) => [p.id, p])),
       roots: buildTree(t.pages),
-      home: t.home_id,
     };
   };
 
@@ -237,8 +235,7 @@ function buildServer(
         if (!roots.length) return text(`${describe(p, t)} has no child pages.`);
       }
       const lines = outline(roots, 0, depth ?? Infinity);
-      const home = t.home ? `\nHome page: ${describe(t.byId.get(t.home)!)}` : '';
-      return text(`${header}${home}\n\n${lines.join('\n')}`);
+      return text(`${header}\n\n${lines.join('\n')}`);
     }),
   );
 

@@ -2880,3 +2880,228 @@ body.resizing {
   align-items: center;
   gap: 4px;
 }
+
+/* ================================================================ 0.15 */
+
+/* --- Sidebar: the four views as one pill; rules above the tree and above the footer links. */
+.view-pill {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin: 0 0 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.vp-item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  transition:
+    flex-grow 0.2s ease,
+    background 0.12s,
+    color 0.12s;
+}
+.vp-item svg {
+  flex: none;
+}
+.vp-item:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.vp-label {
+  display: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+/* The current view grows to show its name; the others stay icons. */
+.vp-item.active {
+  flex-grow: 2.8;
+  background: var(--paper);
+  color: var(--accent-ink);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, #000 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.vp-item.active .vp-label {
+  display: inline;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .vp-item.active {
+    background: color-mix(in srgb, var(--ink) 16%, var(--sidebar));
+  }
+}
+:root[data-theme='dark'] .vp-item.active {
+  background: color-mix(in srgb, var(--ink) 16%, var(--sidebar));
+}
+.side-rule {
+  flex: none;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  margin: 10px 0 6px;
+}
+.sidebar-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--hairline);
+  padding-top: 6px;
+}
+.sidebar-foot .sessions-link {
+  margin-top: 0;
+}
+
+/* --- Mobile header: the logo beside the name. */
+.mobile-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* --- Home, Activity, Insights and Tags: their icon beside the title. */
+.view-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.view-title svg {
+  flex: none;
+  color: var(--accent);
+}
+
+/* --- Pages read wider on desktop. */
+.page {
+  max-width: 880px;
+}
+
+/* --- Nothing scrolls sideways at page level (wide tables and code scroll in their own boxes). */
+.main {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+.page.dashboard {
+  overflow-x: clip;
+}
+.open-items .dash-title,
+.dashboard .dash-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- What's about the page (subpages, links, mentions, related), set apart from the writing. */
+.page-foot {
+  margin-top: 64px;
+  padding: 4px 24px 20px;
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background: var(--sidebar);
+}
+.page-foot:empty {
+  display: none;
+}
+.page-foot .related {
+  margin-top: 0;
+  padding-top: 18px;
+  border-top: 0;
+}
+.page-foot .related + .related {
+  margin-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+.page-foot .card {
+  background: var(--paper);
+}
+
+/* --- Editor toolbar: a touch wider than the writing box below it. */
+.toolbar {
+  margin-inline: -6px;
+}
+
+/* --- Search: esc on keyboards, a close button on phones. */
+.palette-close {
+  display: none;
+  flex: none;
+  padding: 6px;
+  margin: -6px -6px -6px 0;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.palette-close:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+@media (max-width: 860px) {
+  .vp-item {
+    height: 42px;
+  }
+  .vp-label {
+    font-size: 15px;
+  }
+  .view-title svg {
+    width: 23px;
+    height: 23px;
+  }
+  .page-foot {
+    margin-top: 48px;
+    padding: 2px 16px 16px;
+  }
+  /* One row of formatting buttons that scrolls sideways, instead of wrapping into a block. */
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 4px 6px;
+  }
+  .toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  .toolbar > * {
+    flex: none;
+  }
+  /* Breadcrumbs stay on one line and scroll, so the header row doesn't break. */
+  .page-top {
+    gap: 8px;
+  }
+  .crumbs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    flex: 1;
+  }
+  .crumbs::-webkit-scrollbar {
+    display: none;
+  }
+  .crumbs span {
+    flex: none;
+  }
+  /* A long trail fades out at its right edge instead of running into the buttons. */
+  .crumbs {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+    padding-right: 14px;
+  }
+  .palette-esc {
+    display: none;
+  }
+  .palette-close {
+    display: inline-flex;
+  }
+}
+
+/* --- Menus: one line per option. */
+.menu button {
+  white-space: nowrap;
+}

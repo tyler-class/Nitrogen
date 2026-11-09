@@ -136,7 +136,16 @@ export function Palette({ pages, onClose }: { pages: PageSummary[]; onClose(): v
             aria-expanded="true"
             aria-controls="palette-list"
           />
-          <kbd>esc</kbd>
+          {/* Keyboards get the esc hint; phones get a close button (or tap outside). */}
+          <kbd className="palette-esc">esc</kbd>
+          <button
+            type="button"
+            className="palette-close"
+            onClick={onClose}
+            aria-label="Close search"
+          >
+            <Icon name="close" size={18} />
+          </button>
         </div>
         <ul id="palette-list" ref={list} role="listbox" className="palette-list">
           {items.map((it, i) => (

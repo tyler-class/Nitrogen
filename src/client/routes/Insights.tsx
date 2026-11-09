@@ -17,7 +17,7 @@ import {
   type Col,
   type RankRow,
 } from '../components/charts';
-import { PageGlyph } from '../components/Icon';
+import { PageGlyph, Icon } from '../components/Icon';
 import { PanelBoard, type PanelDef } from '../components/Panels';
 import { usePanelLayout } from '../lib/queries';
 import { formatWhen } from './PageView';
@@ -70,7 +70,9 @@ export function Insights() {
   if (!d.pages.length)
     return (
       <div className="page insights">
-        <h1 className="page-title">Insights</h1>
+        <h1 className="page-title view-title">
+          <Icon name="insights" size={26} /> Insights
+        </h1>
         <div className="panel empty">Write a few pages to see patterns here.</div>
       </div>
     );
@@ -295,7 +297,9 @@ export function Insights() {
 
   return (
     <div className="page insights">
-      <h1 className="page-title">Insights</h1>
+      <h1 className="page-title view-title">
+        <Icon name="insights" size={26} /> Insights
+      </h1>
       <PanelBoard defs={panels} saved={layout.saved} onSave={layout.save} />
     </div>
   );
@@ -384,7 +388,7 @@ function model(d: InsightsData) {
     agents30,
     words: d.pages.reduce((s, p) => s + p.words, 0),
     new30: d.pages.filter((p) => now - Date.parse(p.created_at) < 30 * DAY).length,
-    orphans: d.pages.filter((p) => !p.backlinks && p.id !== d.home_id),
+    orphans: d.pages.filter((p) => !p.backlinks),
     stale: d.pages.filter((p) => now - Date.parse(p.updated_at) > 90 * DAY).length,
     empty: d.pages.filter((p) => !p.words).length,
   };
@@ -456,7 +460,7 @@ function explore(
     }
     case 'orphans':
       list = d.pages
-        .filter((p) => !p.backlinks && p.id !== d.home_id)
+        .filter((p) => !p.backlinks)
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .map((p) => row(p, 1, formatWhen(p.updated_at)));
       empty = 'Every page has at least one link in.';

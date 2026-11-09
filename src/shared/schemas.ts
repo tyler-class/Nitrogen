@@ -60,8 +60,6 @@ export const panelLayoutInput = z
   .refine((l) => new Set(l.map((s) => s.id)).size === l.length, 'Each panel once.');
 
 export const settingsInput = z.object({
-  /** A page to open at "/" instead of the dashboard. */
-  home_id: z.string().min(1).nullable().optional(),
   /** The page assistants read first for your conventions. */
   guide_id: z.string().min(1).nullable().optional(),
   /** Panel order, width and visibility; unknown or missing panels use defaults. */

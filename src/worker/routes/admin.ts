@@ -25,15 +25,13 @@ export async function panelLayout(db: D1Database, key: string): Promise<PanelLay
 }
 
 admin.get('/settings', async (c) => {
-  const [home, guide, dashboard_layout, insights_layout, kit] = await Promise.all([
-    getSetting(c.env.DB, 'home_id'),
+  const [guide, dashboard_layout, insights_layout, kit] = await Promise.all([
     getSetting(c.env.DB, 'guide_id'),
     panelLayout(c.env.DB, 'dashboard_layout'),
     panelLayout(c.env.DB, 'insights_layout'),
     kitState(c.env.DB),
   ]);
   return c.json({
-    home_id: home,
     guide_id: guide,
     dashboard_layout,
     insights_layout,
@@ -45,7 +43,6 @@ admin.get('/settings', async (c) => {
 admin.patch('/settings', async (c) => {
   const input = await body(c, settingsInput);
   const stmts = [];
-  if (input.home_id !== undefined) stmts.push(setSettingStmt(c.env.DB, 'home_id', input.home_id));
   if (input.guide_id !== undefined)
     stmts.push(setSettingStmt(c.env.DB, 'guide_id', input.guide_id));
   for (const key of ['dashboard_layout', 'insights_layout'] as const)

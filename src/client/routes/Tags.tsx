@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router';
 import { pageHref } from '@shared/markdown';
 import type { SearchResponse, TagCount } from '@shared/types';
 import { api } from '../lib/api';
-import { PageGlyph } from '../components/Icon';
+import { PageGlyph, Icon } from '../components/Icon';
 
 export function Tags() {
   const { tag } = useParams<{ tag?: string }>();
@@ -22,7 +22,9 @@ function AllTags() {
   );
   return (
     <div className="page tags-page">
-      <h1 className="page-title">Tags</h1>
+      <h1 className="page-title view-title">
+        <Icon name="tag" size={26} /> Tags
+      </h1>
       {q.data && !tags.length ? (
         <p className="muted">No tags yet. Add them under a page title, or write #tag in a page.</p>
       ) : (

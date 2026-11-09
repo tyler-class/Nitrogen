@@ -1,11 +1,10 @@
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { api, ApiError, onUnauthorized } from './lib/api';
 import { startPwa } from './lib/pwa';
 import { ToastProvider } from './components/Toast';
 import { Activity } from './routes/Activity';
-import { Dashboard } from './routes/Dashboard';
 import { Home } from './routes/Home';
 import { Insights } from './routes/Insights';
 import { Layout } from './routes/Layout';
@@ -35,7 +34,8 @@ const router = createBrowserRouter([
       { path: '/p/:id/*', element: <PageView /> },
       { path: '/search', element: <SearchPage /> },
       { path: '/settings', element: <Settings /> },
-      { path: '/dashboard', element: <Dashboard /> },
+      // Home used to be called the dashboard; old links still land there.
+      { path: '/dashboard', element: <Navigate to="/" replace /> },
       { path: '/activity', element: <Activity /> },
       { path: '/insights', element: <Insights /> },
       { path: '/sessions', element: <Sessions /> },

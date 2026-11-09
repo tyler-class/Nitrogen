@@ -7,6 +7,7 @@ import type { RevertResult, Session } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { eventVerb, formatDay, formatTime } from '../lib/activity';
 import { keys } from '../lib/queries';
+import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toast';
 
 type Filter = 'all' | 'you' | 'agents';
@@ -63,7 +64,9 @@ export function Activity() {
 
   return (
     <div className="page activity">
-      <h1 className="page-title">Activity</h1>
+      <h1 className="page-title view-title">
+        <Icon name="activity" size={26} /> Activity
+      </h1>
       <div className="seg" role="radiogroup" aria-label="Show">
         {(
           [

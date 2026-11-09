@@ -219,20 +219,13 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
     }
   }
 
-  async function setHome() {
-    setMenu(false);
-    await api.patch('/settings', { home_id: page.id }).catch((e) => toast(errorMessage(e)));
-    await qc.invalidateQueries({ queryKey: keys.tree });
-    toast('This is now your home page.');
-  }
-
   async function pin() {
     setMenu(false);
     try {
       await api.post(`/pages/${page.id}/pin`, { pinned: !page.pinned_at });
       await qc.invalidateQueries({ queryKey: keys.page(page.id) });
       void qc.invalidateQueries({ queryKey: ['dashboard'] });
-      toast(page.pinned_at ? 'Unpinned.' : 'Pinned to the dashboard.');
+      toast(page.pinned_at ? 'Unpinned from Home.' : 'Pinned to Home.');
     } catch (e) {
       toast(errorMessage(e));
     }
@@ -308,10 +301,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
                   </button>
                 )}
                 <button role="menuitem" onClick={pin}>
-                  {page.pinned_at ? 'Unpin from dashboard' : 'Pin to dashboard'}
-                </button>
-                <button role="menuitem" onClick={setHome}>
-                  Set as home page
+                  {page.pinned_at ? 'Unpin from Home' : 'Pin to Home'}
                 </button>
                 <button
                   role="menuitem"
@@ -333,7 +323,7 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
                     toast('Copied. Paste it into Claude to check this page.');
                   }}
                 >
-                  Copy review request
+                  Review prompt
                 </button>
                 <button
                   role="menuitem"
@@ -395,49 +385,52 @@ function ReadPage({ detail, onEdit }: { detail: PageDetail; onEdit(): void }) {
         )}
       </div>
 
-      {locked !== 'entry' && (
-        <section className="related" aria-label="Pages inside">
-          <div className="related-head">
-            <h2>{locked === 'root' ? 'Sessions' : 'Pages inside'}</h2>
-            {!locked && (
-              <button className="btn small" onClick={addChild}>
-                <Icon name="plus" size={14} /> Add subpage
-              </button>
-            )}
-          </div>
-          {children.length ? (
-            <div className="cards">
-              {children.map((c) => (
-                <Link key={c.id} to={pageHref(c.id, c.title)} className="card">
-                  <PageGlyph icon={c.icon} folder={false} />
-                  <span>{c.title}</span>
-                </Link>
-              ))}
+      {/* Everything about the page rather than in it: set apart from the writing. */}
+      <footer className="page-foot">
+        {locked !== 'entry' && (
+          <section className="related" aria-label="Pages inside">
+            <div className="related-head">
+              <h2>{locked === 'root' ? 'Sessions' : 'Pages inside'}</h2>
+              {!locked && (
+                <button className="btn small" onClick={addChild}>
+                  <Icon name="plus" size={14} /> Add subpage
+                </button>
+              )}
             </div>
-          ) : (
-            <p className="muted">None yet.</p>
-          )}
-        </section>
-      )}
+            {children.length ? (
+              <div className="cards">
+                {children.map((c) => (
+                  <Link key={c.id} to={pageHref(c.id, c.title)} className="card">
+                    <PageGlyph icon={c.icon} folder={false} />
+                    <span>{c.title}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">None yet.</p>
+            )}
+          </section>
+        )}
 
-      {backlinks.length > 0 && (
-        <section className="related" aria-label="Linked from">
-          <div className="related-head">
-            <h2>Linked from</h2>
-          </div>
-          <ul className="backlinks">
-            {backlinks.map((b) => (
-              <li key={b.id}>
-                <Link to={pageHref(b.id, b.title)}>
-                  <PageGlyph icon={b.icon} folder={false} /> {b.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <Mentions page={page} />
-      <Related page={page} />
+        {backlinks.length > 0 && (
+          <section className="related" aria-label="Linked from">
+            <div className="related-head">
+              <h2>Linked from</h2>
+            </div>
+            <ul className="backlinks">
+              {backlinks.map((b) => (
+                <li key={b.id}>
+                  <Link to={pageHref(b.id, b.title)}>
+                    <PageGlyph icon={b.icon} folder={false} /> {b.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <Mentions page={page} />
+        <Related page={page} />
+      </footer>
       {history && <HistoryPanel page={page} onClose={() => setHistory(false)} />}
     </article>
   );

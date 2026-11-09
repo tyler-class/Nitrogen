@@ -33,7 +33,6 @@ export interface PageDetail {
 
 export interface TreeResponse {
   pages: PageSummary[];
-  home_id: string | null;
   /** The protected Sessions section, if it exists. */
   sessions_id: string | null;
 }
@@ -228,6 +227,5 @@ export interface Insights {
   tags: TagCount[];
   /** Assistant searches that found nothing (last 90 days). */
   misses: { query: string; count: number; last: string }[];
-  home_id: string | null;
   links: number;
 }

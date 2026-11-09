@@ -17,12 +17,12 @@ straight into the page, search understands meaning, and Claude can read and writ
 - **Claude and other assistants.** A built-in MCP server lets assistants search, read, create, edit
   and reorganize pages. Every edit is labelled with the assistant that made it, and you can undo
   a whole assistant session from the Activity page.
-- **A dashboard.** An inbox of what assistants changed since you last looked, pinned pages, recent
-  activity and a few numbers. Drag panels to arrange them, make them half or full width, or hide
-  them; or pick a page as home instead.
+- **Home.** An inbox of what assistants changed since you last looked, open items, pages you pin
+  (from a page's ⋯ menu), recent activity and a few numbers. Drag panels to arrange them, make them
+  half or full width, or hide them.
 - **To-dos, questions and reminders anywhere.** Write `- [ ] todo: … @owner due:2026-11-20`,
   `- question: …` or `- [ ] reminder: … due:…` on any page. They show as cards you can check off, a
-  summary at the top of the page, and an Open items panel on the dashboard; assistants list them with
+  summary at the top of the page, and an Open items panel on Home; assistants list them with
   `open_items`.
 - **Sessions.** Every assistant session that changes the wiki is recorded automatically under a
   protected, read-only Sessions section, with the pages it touched and the assistant's own summary.
@@ -30,7 +30,7 @@ straight into the page, search understands meaning, and Claude can read and writ
   wiki as a .zip) that downgrades callouts and items to plain text for other apps and Google Docs.
 - **Tags and connections.** Tag pages (or write `#tag` in the text), see pages that mention this
   one without linking it and link them in one click, and related pages found by meaning.
-- **Insights.** Arrangeable panels like the dashboard: a calendar of edits by you and by assistants, who writes the wiki, what's busiest, what
+- **Insights.** Arrangeable panels like Home: a calendar of edits by you and by assistants, who writes the wiki, what's busiest, what
   needs attention, and what assistants searched for and couldn't find.
 - **Yours.** It runs on your Cloudflare account; the free plan is enough for a personal wiki.
 
