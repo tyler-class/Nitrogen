@@ -283,8 +283,8 @@ export function Insights() {
     },
     {
       id: 'attention',
-      title: 'Needs attention',
-      sub: 'Open one in the page explorer',
+      title: 'Tidy up',
+      sub: 'Pages that might need a link, an update or deleting.',
       size: 'half',
       body: <div className="attn">{attention}</div>,
     },
@@ -383,9 +383,9 @@ function model(d: InsightsData) {
     agents30,
     words: d.pages.reduce((s, p) => s + p.words, 0),
     new30: d.pages.filter((p) => now - Date.parse(p.created_at) < 30 * DAY).length,
-    orphans: d.pages.filter((p) => !p.backlinks),
-    stale: d.pages.filter((p) => now - Date.parse(p.updated_at) > 90 * DAY).length,
-    empty: d.pages.filter((p) => !p.words).length,
+    orphans: d.pages.filter((p) => !p.system && !p.backlinks),
+    stale: d.pages.filter((p) => !p.system && now - Date.parse(p.updated_at) > 90 * DAY).length,
+    empty: d.pages.filter((p) => !p.system && !p.words).length,
   };
 }
 
@@ -449,20 +449,21 @@ function explore(
       const ages = d.pages.map((p) => (now - Date.parse(p.updated_at)) / 86_400_000);
       list = [...d.pages]
         .map((p, i) => ({ p, age: ages[i]! }))
+        .filter(({ p }) => !p.system)
         .sort((a, b) => b.age - a.age)
         .map(({ p, age }) => row(p, age, formatWhen(p.updated_at)));
       break;
     }
     case 'orphans':
       list = d.pages
-        .filter((p) => !p.backlinks)
+        .filter((p) => !p.system && !p.backlinks)
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .map((p) => row(p, 1, formatWhen(p.updated_at)));
       empty = 'Every page has at least one link in.';
       break;
     case 'empty':
       list = d.pages
-        .filter((p) => !p.words)
+        .filter((p) => !p.system && !p.words)
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .map((p) => row(p, 1, formatWhen(p.updated_at)));
       empty = 'No empty pages.';

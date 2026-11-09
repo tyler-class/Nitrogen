@@ -209,6 +209,8 @@ export interface PageStat {
   created_at: string;
   updated_at: string;
   backlinks: number;
+  /** AI Sessions (the page and everything in it) and Conventions: left out of Tidy up. */
+  system?: boolean;
   /** Edits (create/edit/restore events) in the last 7, 30 and 90 days, and ever. */
   e7: number;
   e30: number;

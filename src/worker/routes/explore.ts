@@ -20,7 +20,7 @@ import type {
   TagCount,
 } from '@shared/types';
 import { actorOf } from '../auth';
-import { all, first, nowIso } from '../db';
+import { all, first, getSetting, nowIso } from '../db';
 import {
   ConflictError,
   deletePage,
@@ -369,6 +369,30 @@ explore.get('/pages/:id/related', async (c) => {
 
 // ---------------------------------------------------------------- insights
 
+/** Marks AI Sessions (and every page inside it) and Conventions, which Tidy up leaves out. */
+async function markSystem<T extends { id: string; parent_id: string | null }>(
+  db: D1Database,
+  pages: T[],
+): Promise<(T & { system?: boolean })[]> {
+  const [sessions, guide] = await Promise.all([sessionsRoot(db), getSetting(db, 'guide_id')]);
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  const inSessions = (p: T) => {
+    const seen = new Set<string>();
+    for (
+      let cur: T | undefined = p;
+      cur && !seen.has(cur.id);
+      cur = byId.get(cur.parent_id ?? '')
+    ) {
+      if (cur.id === sessions) return true;
+      seen.add(cur.id);
+    }
+    return false;
+  };
+  return pages.map((p) =>
+    p.id === guide || (sessions && inSessions(p)) ? { ...p, system: true } : p,
+  );
+}
+
 explore.get('/insights', async (c) => {
   const db = c.env.DB;
   const [days, authors, created, pages, tags, misses, links] = await Promise.all([
@@ -423,7 +447,7 @@ explore.get('/insights', async (c) => {
   return c.json<Insights>({
     days,
     authors: authors.map((a) => ({ ...a, created: createdBy.get(a.actor) ?? 0 })),
-    pages,
+    pages: await markSystem(db, pages),
     tags,
     misses,
     links: links?.n ?? 0,

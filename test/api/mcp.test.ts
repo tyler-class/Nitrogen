@@ -390,6 +390,15 @@ describe('MCP', () => {
     const insights = (await api.get<Insights>('/insights')).data;
     expect(insights.misses.some((m) => m.query === 'zzqx nothing here')).toBe(true);
     expect(insights.authors.some((a) => a.actor === 'agent:Test Assistant')).toBe(true);
+    // AI Sessions and everything in it are marked, so Tidy up leaves them out.
+    const treeRes = (await api.get<{ sessions_id: string | null }>('/tree')).data;
+    if (treeRes.sessions_id) {
+      const marked = insights.pages.filter((p) => p.system).map((p) => p.id);
+      expect(marked).toContain(treeRes.sessions_id);
+      for (const p of insights.pages.filter((p) => p.parent_id === treeRes.sessions_id))
+        expect(p.system).toBe(true);
+    }
+    expect(insights.pages.some((p) => !p.system)).toBe(true);
 
     // The owner's edit in the middle is kept; the assistant's session is undone.
     const { sessions } = (await api.get<{ sessions: Session[] }>('/activity?limit=50')).data;
