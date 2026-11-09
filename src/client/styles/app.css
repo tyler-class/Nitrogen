@@ -148,12 +148,17 @@ kbd {
 
 /* ------------------------------------------------------------------- tree */
 
+/* The scrollbar gets its own gutter, so rows and their hover never run under it. */
 .tree {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
   margin: 0 -4px;
-  padding: 0 4px;
+  /* Room on the right for overlay scrollbars, which take no gutter. */
+  padding: 0 8px 0 4px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 18%, transparent) transparent;
 }
 .tree-head {
   display: flex;
@@ -3464,9 +3469,21 @@ body.resizing {
 }
 
 /* --- 0.16: headings. */
-/* A document's emoji and title: the emoji above it on wide screens, beside it on phones. */
+/* A document's emoji and title: the emoji just left of it, on the same line. */
 .page-title-row {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.page-title-row .page-icon {
+  flex: none;
+  font-size: 34px;
+  line-height: 1.15;
+  margin: 0;
+}
+.page-title-row .page-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .title-addon {
   display: inline-flex;
@@ -3498,19 +3515,10 @@ body.resizing {
 }
 @media (max-width: 860px) {
   .page-title-row {
-    display: flex;
-    align-items: flex-start;
     gap: 10px;
   }
   .page-title-row .page-icon {
-    flex: none;
     font-size: 28px;
-    line-height: 1.15;
-    margin: 0;
-  }
-  .page-title-row .page-title {
-    min-width: 0;
-    overflow-wrap: anywhere;
   }
   /* The menu button: a bigger target and icon. */
   .mobile-bar .menu-btn {

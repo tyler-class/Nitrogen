@@ -362,7 +362,7 @@ function ReadPage({
         </div>
       </div>
       <header className="page-head">
-        {/* Desktop: the emoji above the title. Phones: just left of it, on the same line. */}
+        {/* The emoji just left of the title, on the same line. */}
         <div className="page-title-row">
           {page.icon && <div className="page-icon">{page.icon}</div>}
           <h1 className="page-title">
