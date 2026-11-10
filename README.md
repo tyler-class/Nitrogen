@@ -3,7 +3,7 @@
 A personal wiki you host yourself on Cloudflare. Pages live in a tree, bodies are markdown, images go
 straight into the page, search understands meaning, and Claude can read and write it over MCP.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
 ![Nitrogen on a laptop and a phone: a page with its tree, tags and to-dos, and Home’s open items](docs/screenshots/hero.png)
 
@@ -125,7 +125,7 @@ You can also do this in the middle of the next step: Cloudflare asks you to conn
 
 ### 4. Click Deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
 Sign in to Cloudflare if it asks. You land on a setup page.
 
