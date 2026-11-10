@@ -1,7 +1,6 @@
 # Nitrogen (N2)
 
-A personal wiki you host yourself on Cloudflare. Pages live in a tree, bodies are markdown, images go
-straight into the page, search understands meaning, and Claude can read and write it over MCP.
+Your notes shouldn't live in someone else's database, and they shouldn't be invisible to the AI you already talk to every day. Nitrogen is a personal wiki you host yourself on Cloudflare: a tree of markdown pages, images right in the page, search that finds things by meaning, and a built-in MCP server so Claude can read, write and reorganize it with you. Every assistant edit is labelled and can be undone a whole session at a time, so you can hand it real work without wondering what it touched. It's for people who keep a lot in their heads (projects, house stuff, recipes, plans) and want one place for it that they own and their assistant can actually use.
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
