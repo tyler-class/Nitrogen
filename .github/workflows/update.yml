@@ -15,6 +15,12 @@ on:
   push:
     paths: ['.github/workflows/update.yml']
 
+# One run at a time. A run started while another is going (Update now right after setting up
+# updates, say) waits for it, then finds there's nothing new instead of failing at the push.
+concurrency:
+  group: update
+  cancel-in-progress: false
+
 permissions:
   contents: write
   # For the keep-alive step below.
@@ -26,7 +32,11 @@ jobs:
     if: github.repository != 'tyler-class/Nitrogen'
     runs-on: ubuntu-latest
     steps:
+      # The branch as it is now, not the commit that started the run: a run that waited for
+      # another one starts from that run's update.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
       - name: Take the latest Nitrogen
         run: |
           git fetch --depth=1 https://github.com/tyler-class/Nitrogen.git main
@@ -49,8 +59,10 @@ jobs:
             echo "Already up to date."
             exit 0
           fi
-          if ! git diff --quiet "$upstream" HEAD -- .github/workflows 2>/dev/null; then
-            echo "::notice::Your .github/workflows differ from Nitrogen's and were left as they are. Copy any you want from tyler-class/Nitrogen by hand."
+          # GitHub doesn't let this job change workflow files, so a newer version of this one
+          # has to be copied in by hand. Only said when it's actually different.
+          if ! git diff --quiet "$upstream" HEAD -- .github/workflows/update.yml 2>/dev/null; then
+            echo "::notice::There's a newer version of this update workflow. Replace .github/workflows/update.yml with the one in tyler-class/Nitrogen to get it."
           fi
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
