@@ -12,7 +12,7 @@
 // real, non-local address (checkInOnRequest notes it). Local dev, even its cron, never sends.
 
 export const KIT_VERSION = 1;
-export const STATS_ORIGIN = 'https://stats.tylerclass.net';
+export const STATS_ORIGIN = 'https://tally.tylerclass.net';
 export const CHECKIN_URL = `${STATS_ORIGIN}/v1/checkin`;
 export const EVENT_URL = `${STATS_ORIGIN}/v1/event`;
 

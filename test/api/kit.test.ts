@@ -41,7 +41,7 @@ describe('anonymous check-in', () => {
     // The Settings switch sends its on/off message with the global fetch: catch it here.
     const events: unknown[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      expect(String(input)).toBe('https://stats.tylerclass.net/v1/event');
+      expect(String(input)).toBe('https://tally.tylerclass.net/v1/event');
       events.push((JSON.parse(String(init?.body)) as { event: string }).event);
       return new Response('{"ok":true}');
     });

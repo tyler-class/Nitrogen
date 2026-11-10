@@ -64,7 +64,7 @@ describe('kit telemetry guards', () => {
       app: 'kit',
       version: '1.0.0',
     });
-    expect(sent.map((s) => s.url)).toEqual(['https://stats.tylerclass.net/v1/checkin']);
+    expect(sent.map((s) => s.url)).toEqual(['https://tally.tylerclass.net/v1/checkin']);
     // The cron the same day: already done. The next day: it sends.
     expect(await checkIn(env.DB, opts)).toBe('already');
     expect(await request('https://copy.example.com/api/y', opts)).toBe(0);
@@ -85,7 +85,7 @@ describe('kit telemetry on/off message', () => {
     await setKitState(env.DB, { telemetry: false }, { fetcher, now });
     expect(sent).toEqual([
       {
-        url: 'https://stats.tylerclass.net/v1/event',
+        url: 'https://tally.tylerclass.net/v1/event',
         body: {
           app: 'kit',
           install: id,
