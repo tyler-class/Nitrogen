@@ -1,9 +1,12 @@
 # Nitrogen (N2)
 
-A personal wiki you host yourself on Cloudflare. Pages live in a tree, bodies are markdown, images go
-straight into the page, search understands meaning, and Claude can read and write it over MCP.
+Your notes shouldn't live in someone else's database, and they shouldn't be invisible to the AI you already talk to every day. If you think out loud with an assistant, the good stuff (ideas, plans, decisions, open questions) usually scrolls away in a chat you'll never find again.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
+Nitrogen is where it lands instead: a personal wiki you host yourself on Cloudflare, with a tree of markdown pages, search that finds things by meaning, and a built-in MCP server so your AI assistant can write to it, organize it and pull it back up when you ask. To-dos, questions and reminders live right on the page they belong to and roll up to one list, so nothing you meant to come back to gets lost. Every assistant edit is labelled and can be undone a whole session at a time, so you can hand it real work without wondering what it touched.
+
+It's for people who keep a lot in their heads, talk it through with AI, and want an external memory that's structured, theirs, and easy to revisit later.
+
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
 ![Nitrogen on a laptop and a phone: a page with its tree, tags and to-dos, and Home’s open items](docs/screenshots/hero.png)
 
@@ -14,7 +17,7 @@ straight into the page, search understands meaning, and Claude can read and writ
   markdown lands at the cursor.
 - **Semantic search.** Find pages by meaning and by keywords (Cloudflare AI Search + D1 full-text).
 - **History.** Every page keeps earlier versions, each marked with who wrote it; restore any of them.
-- **Claude and other assistants.** A built-in MCP server lets assistants search, read, create, edit
+- **AI assistants.** A built-in MCP server lets Claude, ChatGPT and other assistants search, read, create, edit
   and reorganize pages. Every edit is labelled with the assistant that made it, and you can undo
   a whole assistant session from the Activity page.
 - **Home.** An inbox of what assistants changed since you last looked, open items, pages you pin
@@ -125,7 +128,7 @@ You can also do this in the middle of the next step: Cloudflare asks you to conn
 
 ### 4. Click Deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
 Sign in to Cloudflare if it asks. You land on a setup page.
 
