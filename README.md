@@ -38,6 +38,10 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
   needs attention, and what assistants searched for and couldn't find.
 - **Yours.** It runs on your Cloudflare account; the free plan is enough for a personal wiki.
 
+**Ask your assistant, typed or out loud.** It works in your wiki for you: updating a plan as you talk it through, summarizing a section with its open items, and adding a reminder you dictate on your phone.
+
+![An AI assistant connected to Nitrogen: on a laptop it updates the Garden redesign page and summarizes Projects with its open items; on a phone it answers what was decided about the patio and adds a dictated reminder](docs/screenshots/ai-chat.png)
+
 ## A look around
 
 **A page:** headings, a table, and to-dos, questions and reminders right in the text.
