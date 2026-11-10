@@ -1,7 +1,8 @@
 /* Arrangeable panels (Dashboard, Insights). Ported from Ratio. */
 
 .pn-wrap {
-  container-type: inline-size;
+  /* Named: each panel is a container too, so board-width rules must say which they mean. */
+  container: pn-board / inline-size;
   margin-top: 18px;
 }
 .pn-grid {
@@ -10,7 +11,7 @@
   grid-auto-flow: row dense;
   gap: 12px;
 }
-@container (min-width: 600px) {
+@container pn-board (min-width: 600px) {
   .pn-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -115,7 +116,7 @@
 .pn-size {
   display: none;
 }
-@container (min-width: 600px) {
+@container pn-board (min-width: 600px) {
   .pn-size {
     display: inline-flex;
   }
