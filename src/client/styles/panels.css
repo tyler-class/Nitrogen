@@ -29,8 +29,10 @@
   background: var(--paper);
   transition: border-color 0.12s;
 }
-.pn:hover {
-  border-color: color-mix(in srgb, var(--ink) 16%, var(--hairline));
+@media (hover: hover) and (pointer: fine) {
+  .pn:hover {
+    border-color: color-mix(in srgb, var(--ink) 16%, var(--hairline));
+  }
 }
 .pn-h {
   display: flex;
@@ -92,10 +94,12 @@
 .pn-grip:active {
   cursor: grabbing;
 }
-.pn-tool:hover,
-.pn-grip:hover {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .pn-tool:hover,
+  .pn-grip:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
 }
 .pn-tools {
   display: flex;
@@ -103,9 +107,13 @@
   opacity: 0;
   transition: opacity 0.12s;
 }
-.pn:hover .pn-tools,
 .pn:focus-within .pn-tools {
   opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pn:hover .pn-tools {
+    opacity: 1;
+  }
 }
 @media (hover: none) {
   .pn-tools {
@@ -254,9 +262,13 @@
     opacity 0.12s,
     background 0.12s;
 }
-.pn:hover .pn-grip,
 .pn-grip:focus-visible {
   opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pn:hover .pn-grip {
+    opacity: 1;
+  }
 }
 .pn-overlay .pn-grip {
   opacity: 1;
@@ -303,9 +315,11 @@
   font-weight: 600;
   border-radius: 999px;
 }
-.pn-actions .seg button:hover {
-  color: var(--ink);
-  background: transparent;
+@media (hover: hover) and (pointer: fine) {
+  .pn-actions .seg button:hover {
+    color: var(--ink);
+    background: transparent;
+  }
 }
 .pn-actions .seg button.on {
   background: var(--paper);

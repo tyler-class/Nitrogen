@@ -145,8 +145,10 @@
   color: inherit;
   text-decoration: none;
 }
-.rk-link:hover .rk-l {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .rk-link:hover .rk-l {
+    text-decoration: underline;
+  }
 }
 .rk-top {
   display: flex;
@@ -241,8 +243,10 @@
 .attn button:first-child {
   border-top: 0;
 }
-.attn button:hover span {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .attn button:hover span {
+    text-decoration: underline;
+  }
 }
 .attn strong {
   font-size: 18px;
@@ -278,9 +282,11 @@
 .insights .pn-tool {
   opacity: 0.45;
 }
-.insights .pn:hover .pn-grip,
-.insights .pn:hover .pn-tool {
-  opacity: 0.85;
+@media (hover: hover) and (pointer: fine) {
+  .insights .pn:hover .pn-grip,
+  .insights .pn:hover .pn-tool {
+    opacity: 0.85;
+  }
 }
 
 /* ---- KPI tiles: label on top, big number, quiet sub-line ---- */
@@ -405,15 +411,19 @@
   border-radius: 10px;
   transition: background 0.12s;
 }
-.insights .rk:hover {
-  background: var(--i-soft);
+@media (hover: hover) and (pointer: fine) {
+  .insights .rk:hover {
+    background: var(--i-soft);
+  }
 }
 .insights .rk-link {
   display: flex;
   flex-direction: column;
 }
-.insights .rk-link:hover .rk-l {
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .insights .rk-link:hover .rk-l {
+    text-decoration: none;
+  }
 }
 .insights .rk-top {
   margin-bottom: 0;
@@ -437,8 +447,10 @@
 .insights .rk .bar > i {
   opacity: 0.8;
 }
-.insights .rk:hover .bar > i {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .insights .rk:hover .bar > i {
+    opacity: 1;
+  }
 }
 
 /* ---- Assistant misses + Tidy up: hairline rows with hover fill ---- */
@@ -458,11 +470,15 @@
   width: calc(100% + 20px);
   border-radius: 10px;
 }
-.insights .attn button:hover {
-  background: var(--i-soft);
+@media (hover: hover) and (pointer: fine) {
+  .insights .attn button:hover {
+    background: var(--i-soft);
+  }
 }
-.insights .attn button:hover span {
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .insights .attn button:hover span {
+    text-decoration: none;
+  }
 }
 .insights .attn strong {
   font-size: 20px;
