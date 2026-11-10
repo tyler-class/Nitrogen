@@ -265,6 +265,7 @@ function Panel({
       ref={nodeRef}
       className={`pn${placeholder ? ' pn-ph' : ''}${overlay ? ' pn-overlay' : ''}`}
       data-size={size}
+      data-panel={def.id}
       aria-label={def.title}
     >
       {/* Handle on the left (as in Ratio), title, then width and hide on the right. */}

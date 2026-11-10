@@ -145,8 +145,10 @@
   color: inherit;
   text-decoration: none;
 }
-.rk-link:hover .rk-l {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .rk-link:hover .rk-l {
+    text-decoration: underline;
+  }
 }
 .rk-top {
   display: flex;
@@ -241,10 +243,251 @@
 .attn button:first-child {
   border-top: 0;
 }
-.attn button:hover span {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .attn button:hover span {
+    text-decoration: underline;
+  }
 }
 .attn strong {
   font-size: 18px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ polish
+   Style only, scoped to .insights so the Home board is untouched. Tiles: label above the
+   number. Bars: pastel fill with an outline; the week/month still in progress dashed.
+   Ranked rows: a slim share track along the bottom. Colours mix the theme tokens. */
+.insights {
+  --i-soft: color-mix(in srgb, var(--sidebar) 70%, var(--paper));
+  --i-track: color-mix(in srgb, var(--hairline) 85%, transparent);
+}
+
+/* ---- panel shell ---- */
+.insights .pn {
+  border-radius: 16px;
+  padding: 16px 20px 20px;
+  box-shadow:
+    0 1px 2px rgb(23 25 28 / 0.04),
+    0 1px 1px rgb(23 25 28 / 0.02);
+}
+.insights .pn-t h3 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.insights .pn-sub {
+  font-size: 12.5px;
+}
+.insights .pn-grip,
+.insights .pn-tool {
+  opacity: 0.45;
+}
+@media (hover: hover) and (pointer: fine) {
+  .insights .pn:hover .pn-grip,
+  .insights .pn:hover .pn-tool {
+    opacity: 0.85;
+  }
+}
+
+/* ---- KPI tiles: label on top, big number, quiet sub-line ---- */
+.insights .stats {
+  gap: 10px;
+}
+.insights .stat {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--i-track);
+  border-radius: 12px;
+  padding: 12px 14px 13px;
+}
+.insights .stat .l {
+  order: -1;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+.insights .stat .v {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.insights .stat .d {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+/* ---- calendar heatmap: classed tiers of one hue, softer empty days ---- */
+.insights .heat {
+  --tone: var(--viz-you);
+}
+.insights .heat.tone-agents {
+  --tone: var(--viz-agents);
+}
+.insights .heat .h0 {
+  fill: var(--i-soft);
+}
+.insights .heat rect:not(.h0) {
+  opacity: 1;
+}
+.insights .heat rect.h1 {
+  fill: color-mix(in srgb, var(--tone) 22%, var(--paper));
+}
+.insights .heat rect.h2 {
+  fill: color-mix(in srgb, var(--tone) 45%, var(--paper));
+}
+.insights .heat rect.h3 {
+  fill: color-mix(in srgb, var(--tone) 72%, var(--paper));
+}
+.insights .heat rect.h4 {
+  fill: var(--tone);
+}
+.insights .heat rect {
+  rx: 3.5px;
+}
+
+/* ---- axes and labels ---- */
+.insights .chart text {
+  font-size: 10.5px;
+  fill: var(--faint);
+}
+.insights .chart .ax {
+  stroke: var(--i-track);
+}
+.insights .chart .vl {
+  fill: var(--muted);
+  font-weight: 500;
+}
+
+/* ---- bars: pastel fill + outline; this week / this month dashed ---- */
+.insights .chart [class^='bar-'] {
+  stroke-width: 1.25px;
+  rx: 5px;
+  opacity: 1;
+}
+.insights .chart .bar-you {
+  fill: color-mix(in srgb, var(--viz-you) 20%, var(--paper));
+  stroke: var(--viz-you);
+}
+.insights .chart .bar-agents {
+  fill: color-mix(in srgb, var(--viz-agents) 20%, var(--paper));
+  stroke: var(--viz-agents);
+}
+.insights .chart .current [class^='bar-'] {
+  stroke-dasharray: 3 2.5;
+}
+.insights .chart .current .bar-you {
+  fill: color-mix(in srgb, var(--viz-you) 10%, var(--paper));
+}
+.insights .chart .current .bar-agents {
+  fill: color-mix(in srgb, var(--viz-agents) 10%, var(--paper));
+}
+
+/* ---- legend ---- */
+.insights .legend {
+  gap: 16px;
+  margin-top: 10px;
+}
+.insights .legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2.5px;
+}
+
+/* ---- ranked lists: slim share track along the row's bottom, hover fill ---- */
+.insights .rank {
+  gap: 2px;
+}
+.insights .rk {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 9px;
+  margin: 0 -10px;
+  border-radius: 10px;
+  transition: background 0.12s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .insights .rk:hover {
+    background: var(--i-soft);
+  }
+}
+.insights .rk-link {
+  display: flex;
+  flex-direction: column;
+}
+@media (hover: hover) and (pointer: fine) {
+  .insights .rk-link:hover .rk-l {
+    text-decoration: none;
+  }
+}
+.insights .rk-top {
+  margin-bottom: 0;
+}
+.insights .rk-l {
+  font-weight: 500;
+}
+.insights .rk-v {
+  font-size: 13px;
+}
+.insights .rk-s {
+  order: 1;
+  margin-top: 1px;
+}
+.insights .rk .bar {
+  order: 2;
+  height: 4px;
+  margin-top: 7px;
+  background: var(--i-track);
+}
+.insights .rk .bar > i {
+  opacity: 0.8;
+}
+@media (hover: hover) and (pointer: fine) {
+  .insights .rk:hover .bar > i {
+    opacity: 1;
+  }
+}
+
+/* ---- Assistant misses + Tidy up: hairline rows with hover fill ---- */
+.insights .misses li {
+  border-top-color: var(--i-track);
+  padding: 9px 10px;
+  margin: 0 -10px;
+  border-radius: 0;
+}
+.insights .misses .q {
+  font-weight: 500;
+}
+.insights .attn button {
+  border-top-color: var(--i-track);
+  padding: 11px 10px;
+  margin: 0 -10px;
+  width: calc(100% + 20px);
+  border-radius: 10px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .insights .attn button:hover {
+    background: var(--i-soft);
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .insights .attn button:hover span {
+    text-decoration: none;
+  }
+}
+.insights .attn strong {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* ---- hint / empty ---- */
+.insights .hint {
+  font-size: 12.5px;
+  color: var(--faint);
 }

@@ -116,8 +116,10 @@ kbd {
 .search-button span {
   flex: 1;
 }
-.search-button:hover {
-  border-color: color-mix(in srgb, var(--ink) 20%, var(--hairline));
+@media (hover: hover) and (pointer: fine) {
+  .search-button:hover {
+    border-color: color-mix(in srgb, var(--ink) 20%, var(--hairline));
+  }
 }
 .sidebar-foot {
   border-top: 1px solid var(--hairline);
@@ -133,9 +135,11 @@ kbd {
   text-decoration: none;
   border-radius: var(--radius-sm);
 }
-.foot-link:hover {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .foot-link:hover {
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    color: var(--ink);
+  }
 }
 .main {
   overflow-y: auto;
@@ -180,10 +184,12 @@ kbd {
   border-radius: 4px;
   color: var(--muted);
 }
-.tree-head button:hover,
-.row-actions button:hover {
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .tree-head button:hover,
+  .row-actions button:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+  }
 }
 .tree ul {
   list-style: none;
@@ -199,8 +205,10 @@ kbd {
   border-radius: 6px;
   padding-right: 4px;
 }
-.tree-row:hover {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .tree-row:hover {
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+  }
 }
 .tree-row.current {
   background: var(--accent-soft);
@@ -242,9 +250,11 @@ kbd {
   flex: none;
   transition: background 0.12s;
 }
-.twisty:not(.leaf):hover {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .twisty:not(.leaf):hover {
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    color: var(--ink);
+  }
 }
 .twisty svg {
   transition: transform 0.12s ease;
@@ -274,9 +284,19 @@ kbd {
   display: none;
   gap: 1px;
 }
-.tree-row:hover .row-actions,
 .tree-row:focus-within .row-actions {
   display: inline-flex;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tree-row:hover .row-actions {
+    display: inline-flex;
+  }
+}
+/* Touch screens have no hover to reveal them, so they always show (as on phones). */
+@media (hover: none) {
+  .row-actions {
+    display: inline-flex;
+  }
 }
 .tree-rename {
   flex: 1;
@@ -320,10 +340,15 @@ kbd {
   padding: 7px 10px;
   border-radius: 5px;
 }
-.menu button:hover,
 .menu button:focus-visible {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
   box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu button:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    box-shadow: none;
+  }
 }
 .menu .danger {
   color: var(--danger);
@@ -342,8 +367,10 @@ kbd {
   color: var(--ink);
   white-space: nowrap;
 }
-.btn:hover {
-  background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  }
 }
 .btn:disabled {
   opacity: 0.5;
@@ -355,8 +382,10 @@ kbd {
   color: var(--paper);
   font-weight: 550;
 }
-.btn.primary:hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+@media (hover: hover) and (pointer: fine) {
+  .btn.primary:hover {
+    background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+  }
 }
 .btn.danger {
   color: var(--danger);
@@ -413,8 +442,10 @@ button.link {
   text-decoration: none;
   display: inline-flex;
 }
-.crumbs a:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .crumbs a:hover {
+    color: var(--ink);
+  }
 }
 .crumbs svg {
   color: var(--faint);
@@ -507,9 +538,11 @@ button.link {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.card:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--hairline));
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--hairline));
+    background: var(--accent-soft);
+  }
 }
 .backlinks {
   list-style: none;
@@ -719,9 +752,13 @@ button.link {
   border: 1px solid transparent;
   border-radius: var(--radius);
 }
-.emoji-button:hover,
 .emoji-button[aria-expanded='true'] {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .emoji-button:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
 }
 .emoji-button.empty {
   border: 1px dashed var(--hairline);
@@ -769,8 +806,10 @@ button.link {
   border-radius: var(--radius-sm);
   font-size: 18px;
 }
-.emoji-skin:hover {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .emoji-skin:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
 }
 .emoji-viewport {
   position: relative;
@@ -873,9 +912,11 @@ button.link {
   color: var(--muted);
   font-size: 13px;
 }
-.toolbar button:hover {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .toolbar button:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
 }
 .editor {
   min-height: 50vh;
@@ -1045,9 +1086,13 @@ mark {
   font-size: 12px;
   color: var(--muted);
 }
-.history-list button.current,
-.history-list button:hover {
+.history-list button.current {
   background: var(--accent-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .history-list button:hover {
+    background: var(--accent-soft);
+  }
 }
 .history-preview {
   padding: 16px 24px;
@@ -1135,8 +1180,10 @@ mark {
   color: var(--ink);
   text-decoration: none;
 }
-.results a:hover {
-  background: var(--sidebar);
+@media (hover: hover) and (pointer: fine) {
+  .results a:hover {
+    background: var(--sidebar);
+  }
 }
 .result-title {
   display: flex;
@@ -1223,8 +1270,10 @@ mark {
   text-align: left;
   color: var(--muted);
 }
-.picker-trigger:hover {
-  border-color: color-mix(in srgb, var(--ink) 25%, var(--hairline));
+@media (hover: hover) and (pointer: fine) {
+  .picker-trigger:hover {
+    border-color: color-mix(in srgb, var(--ink) 25%, var(--hairline));
+  }
 }
 .picker-trigger[aria-expanded='true'] {
   border-color: var(--accent);
@@ -1673,9 +1722,11 @@ mark {
   display: flex;
   color: var(--faint);
 }
-.about-link:hover .about-link-label {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+@media (hover: hover) and (pointer: fine) {
+  .about-link:hover .about-link-label {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
 }
 
 /* ------------------------------------------------------------- dashboard */
@@ -1764,9 +1815,11 @@ mark {
   text-decoration: none;
   min-width: 0;
 }
-.dash-list a:hover .dash-title,
-.dash-list a.dash-title:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .dash-list a:hover .dash-title,
+  .dash-list a.dash-title:hover {
+    text-decoration: underline;
+  }
 }
 .dash-title {
   font-weight: 550;
@@ -1875,8 +1928,10 @@ mark {
   background: var(--accent-soft);
   text-decoration: none;
 }
-a.tag-chip:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  a.tag-chip:hover {
+    text-decoration: underline;
+  }
 }
 .tag-chip button {
   color: inherit;
@@ -1885,8 +1940,10 @@ a.tag-chip:hover {
   line-height: 1;
   padding: 0 0 1px 2px;
 }
-.tag-chip button:hover {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .tag-chip button:hover {
+    opacity: 1;
+  }
 }
 .tag-chip.inline {
   background: transparent;
@@ -2040,8 +2097,10 @@ a.btn {
   text-align: left;
   color: var(--ink);
 }
-.try-list button:hover {
-  color: var(--accent-ink);
+@media (hover: hover) and (pointer: fine) {
+  .try-list button:hover {
+    color: var(--accent-ink);
+  }
 }
 
 /* ------------------------------------------------------------ typed items */
@@ -2196,8 +2255,10 @@ a.btn {
   color: var(--ink);
   text-decoration: none;
 }
-.item-group a:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .item-group a:hover {
+    text-decoration: underline;
+  }
 }
 .item-chip {
   flex: none;
@@ -2249,9 +2310,11 @@ a.btn {
   color: var(--ink);
   text-decoration: none;
 }
-.session-card:hover {
-  border-color: color-mix(in srgb, var(--claude) 45%, var(--hairline));
-  background: color-mix(in srgb, var(--claude-soft) 45%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .session-card:hover {
+    border-color: color-mix(in srgb, var(--claude) 45%, var(--hairline));
+    background: color-mix(in srgb, var(--claude-soft) 45%, transparent);
+  }
 }
 .session-card > svg {
   flex: none;
@@ -2320,8 +2383,10 @@ a.btn {
   padding-inline: 8px;
   color: var(--item-fg);
 }
-.toolbar .tb-item:hover {
-  background: var(--item-bg);
+@media (hover: hover) and (pointer: fine) {
+  .toolbar .tb-item:hover {
+    background: var(--item-bg);
+  }
 }
 .crumbs a svg {
   margin-right: 4px;
@@ -2354,15 +2419,26 @@ a.btn {
   opacity: 0;
   transition: opacity 0.12s;
 }
-.sidebar:hover .side-toggle,
 .side-toggle:focus-visible {
   opacity: 1;
 }
-.side-toggle:hover,
-.side-close:hover,
-.side-open:hover {
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover .side-toggle {
+    opacity: 1;
+  }
+}
+@media (hover: none) {
+  .side-toggle {
+    opacity: 1;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .side-toggle:hover,
+  .side-close:hover,
+  .side-open:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+  }
 }
 .side-open {
   position: fixed;
@@ -2392,9 +2468,13 @@ a.btn {
   background: transparent;
   transition: background 0.12s;
 }
-.side-resize:hover::after,
 body.resizing .side-resize::after {
   background: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .side-resize:hover::after {
+    background: var(--accent);
+  }
 }
 body.resizing {
   cursor: col-resize;
@@ -2579,9 +2659,11 @@ body.resizing {
   font-size: 13px;
   font-weight: 600;
 }
-.seg button:hover {
-  color: var(--ink);
-  border-color: color-mix(in srgb, var(--ink) 22%, var(--hairline));
+@media (hover: hover) and (pointer: fine) {
+  .seg button:hover {
+    color: var(--ink);
+    border-color: color-mix(in srgb, var(--ink) 22%, var(--hairline));
+  }
 }
 .seg button.on {
   background: var(--accent);
@@ -2600,8 +2682,10 @@ body.resizing {
   padding: 7px 12px;
   font-weight: 550;
 }
-.foot-link:hover {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .foot-link:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
 }
 .foot-link.active {
   background: var(--accent-soft);
@@ -2662,9 +2746,11 @@ body.resizing {
     box-shadow 0.12s,
     border-color 0.12s;
 }
-.card:hover {
-  background: var(--paper);
-  box-shadow: var(--shadow-sm);
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    background: var(--paper);
+    box-shadow: var(--shadow-sm);
+  }
 }
 .item-summary,
 .session-card,
@@ -2715,8 +2801,10 @@ body.resizing {
   font: inherit;
   font-size: 15px;
 }
-.item-answer input:hover {
-  border-bottom-color: color-mix(in srgb, var(--ink) 30%, var(--hairline));
+@media (hover: hover) and (pointer: fine) {
+  .item-answer input:hover {
+    border-bottom-color: color-mix(in srgb, var(--ink) 30%, var(--hairline));
+  }
 }
 .item-answer input:focus {
   outline: none;
@@ -2800,9 +2888,13 @@ body.resizing {
   border-radius: 50%;
   color: var(--muted);
 }
-.infotip > button:hover,
 .infotip > button.on {
   color: var(--accent-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .infotip > button:hover {
+    color: var(--accent-ink);
+  }
 }
 .infotip-pop {
   position: absolute;
@@ -2915,9 +3007,11 @@ body.resizing {
 .vp-item svg {
   flex: none;
 }
-.vp-item:hover {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .vp-item:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
 }
 .vp-label {
   display: none;
@@ -3039,9 +3133,11 @@ body.resizing {
   border-radius: 999px;
   color: var(--muted);
 }
-.palette-close:hover {
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .palette-close:hover {
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    color: var(--ink);
+  }
 }
 
 @media (max-width: 860px) {
@@ -3241,8 +3337,10 @@ body.resizing {
   color: var(--muted);
   background: var(--hairline);
 }
-.diff-fold:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .diff-fold:hover {
+    color: var(--ink);
+  }
 }
 
 /* ------------------------------------------------------------- Conventions */
@@ -3386,8 +3484,10 @@ body.resizing {
   white-space: nowrap;
   transition: color 0.2s;
 }
-.slide-toggle button:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .slide-toggle button:hover {
+    color: var(--ink);
+  }
 }
 .slide-toggle button.on {
   color: var(--ink);
@@ -3418,8 +3518,10 @@ body.resizing {
   font-size: 15px;
   text-decoration: none;
 }
-.back-link:hover {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .back-link:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
 }
 /* Dark mode's blue and purple are light: dark text reads better on them. */
 @media (prefers-color-scheme: dark) {
