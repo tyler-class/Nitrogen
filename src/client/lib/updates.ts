@@ -1,6 +1,6 @@
 // Settings → Updates, on top of the Selfhost Kit (src/client/kit/updates.ts).
 import { useQuery } from '@tanstack/react-query';
-import workflow from '../../../.github/workflows/update.yml?raw';
+import workflow from '../kit/update-workflow.yml?raw';
 import { latestVersion, setupUrl as kitSetupUrl } from '../kit/updates';
 
 export { isNewer, isSourceRepo, runUrl } from '../kit/updates';
