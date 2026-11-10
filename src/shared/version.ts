@@ -1,2 +1,2 @@
 /** The app version, reported by the MCP server. Kept equal to package.json (checked by a test). */
-export const VERSION = '0.16.12';
+export const VERSION = '1.0.0';
