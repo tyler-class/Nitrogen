@@ -51,7 +51,9 @@ const DAY = 86_400_000;
 
 export function Insights() {
   const q = useQuery({ queryKey: ['insights'], queryFn: () => api.get<InsightsData>('/insights') });
+  // Each panel's toggle filters that panel only.
   const [who, setWho] = useState<Who>('all');
+  const [weeklyWho, setWeeklyWho] = useState<Who>('all');
   const [authorBy, setAuthorBy] = useState<'edits' | 'created'>('edits');
   const [dim, setDim] = useState<Dim>('edited');
   const [period, setPeriod] = useState<Period>('e30');
@@ -80,7 +82,8 @@ export function Insights() {
   );
   const weekly: Col[] = m.weeks.map((w, i) => ({
     label: w.label,
-    values: who === 'you' ? [w.you] : who === 'agents' ? [0, w.agents] : [w.you, w.agents],
+    values:
+      weeklyWho === 'you' ? [w.you] : weeklyWho === 'agents' ? [0, w.agents] : [w.you, w.agents],
     current: i === m.weeks.length - 1,
     title: `Week of ${w.label}: ${w.you} by you, ${w.agents} by assistants`,
   }));
@@ -166,12 +169,13 @@ export function Insights() {
     {
       id: 'weekly',
       title: 'Edits per week',
-      sub: 'Last 12 weeks; follows the calendar’s filter',
+      sub: 'Last 12 weeks',
       size: 'half',
+      actions: <WhoToggle value={weeklyWho} onChange={setWeeklyWho} />,
       body: (
         <>
           <Columns data={weekly} />
-          {who === 'all' && <Legend />}
+          {weeklyWho === 'all' && <Legend />}
         </>
       ),
     },
