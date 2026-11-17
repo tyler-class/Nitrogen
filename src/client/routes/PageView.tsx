@@ -386,10 +386,16 @@ function ReadPage({
     return () => window.removeEventListener('keydown', onKey);
   }, [onEdit, locked]);
 
-  // Scroll to #h-… anchors after the body renders.
+  // Scroll to a #h-… or #item-… anchor once the body renders, once per page and anchor: checking
+  // off or editing an item changes the body, and that mustn't jump back to the linked item.
+  const anchored = useRef<string | null>(null);
   useEffect(() => {
-    if (location.hash)
-      document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+    const target = `${page.id}${location.hash}`;
+    if (!location.hash || anchored.current === target) return;
+    const el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (!el) return;
+    anchored.current = target;
+    el.scrollIntoView();
   }, [page.id, page.body]);
 
   async function addChild() {
