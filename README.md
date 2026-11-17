@@ -62,7 +62,7 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 **The page menu (⋯):** pin a page to Home, copy its wiki link, or download it as Markdown.
 
-![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy wiki link, Review prompt, Download as Markdown and Delete](docs/screenshots/page-menu.png)
+![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy wiki link, Copy prompt, Download as Markdown and Delete](docs/screenshots/page-menu.png)
 
 **Search (⌘K):** jump to any page by title or keyword, or press Enter to search by meaning.
 

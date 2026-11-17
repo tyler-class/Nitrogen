@@ -67,6 +67,13 @@ export const isStandalone = () =>
   window.matchMedia?.('(display-mode: standalone)').matches ||
   (navigator as { standalone?: boolean }).standalone === true;
 
+/** The installed app on a phone or tablet: the only place notifications are offered. */
+export const isPhoneApp = () =>
+  isStandalone() &&
+  (isIOS() ||
+    /android/i.test(navigator.userAgent) ||
+    !!window.matchMedia?.('(pointer: coarse)').matches);
+
 /** This browser can subscribe to push here and now. */
 export const pushSupported = () =>
   typeof window !== 'undefined' &&

@@ -313,10 +313,11 @@ function ReadPage({
                 <Menu onClose={() => setMenu(false)}>
                   {!locked && !header && (
                     <button role="menuitem" onClick={() => (setMenu(false), void addChild())}>
-                      Add subpage
+                      <Icon name="plus" size={15} /> Add subpage
                     </button>
                   )}
                   <button role="menuitem" onClick={pin}>
+                    <Icon name="pin" size={15} />
                     {page.pinned_at ? 'Unpin from Home' : 'Pin to Home'}
                   </button>
                   <button
@@ -327,7 +328,7 @@ function ReadPage({
                       toast('Link copied. Paste it into another page.');
                     }}
                   >
-                    Copy wiki link
+                    <Icon name="link" size={15} /> Copy wiki link
                   </button>
                   <button
                     role="menuitem"
@@ -339,7 +340,7 @@ function ReadPage({
                       toast('Copied. Paste it into Claude to check this page.');
                     }}
                   >
-                    Review prompt
+                    <Icon name="question" size={15} /> Copy prompt
                   </button>
                   <button
                     role="menuitem"
@@ -348,11 +349,11 @@ function ReadPage({
                       downloadPage(page);
                     }}
                   >
-                    Download as Markdown
+                    <Icon name="download" size={15} /> Download as Markdown
                   </button>
                   {!locked && (
                     <button role="menuitem" className="danger" onClick={remove}>
-                      Delete
+                      <Icon name="trash" size={15} /> Delete
                     </button>
                   )}
                 </Menu>
@@ -681,21 +682,27 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
       <header className="page-head">
         <div className="title-row">
           <EmojiButton value={draft.icon} onChange={(icon) => change({ icon })} />
-          <input
-            className="title-input"
-            value={draft.title}
-            onChange={(e) => change({ title: e.target.value })}
-            placeholder="Untitled"
-            aria-label="Title"
-            autoFocus={page.title === 'Untitled'}
-            onFocus={(e) => page.title === 'Untitled' && e.target.select()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                editor.current?.focus();
-              }
-            }}
-          />
+          {/* Sized to its text inside a scroller, so a long title can be swiped across on phones. */}
+          <div className="title-scroll">
+            <span className="title-sizer" aria-hidden>
+              {draft.title || 'Untitled'}
+            </span>
+            <input
+              className="title-input"
+              value={draft.title}
+              onChange={(e) => change({ title: e.target.value })}
+              placeholder="Untitled"
+              aria-label="Title"
+              autoFocus={page.title === 'Untitled'}
+              onFocus={(e) => page.title === 'Untitled' && e.target.select()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  editor.current?.focus();
+                }
+              }}
+            />
+          </div>
         </div>
         <TagEditor
           tags={draft.tags}

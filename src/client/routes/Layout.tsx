@@ -70,6 +70,18 @@ export function Layout() {
   const tree = useTree();
   // Notification taps open in-app; the app-icon badge follows what's due.
   useNotifications();
+  // Rows that pin while scrolling (the editor's header and toolbar) sit just under the phone header.
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const set = () =>
+      document.documentElement.style.setProperty('--mobile-bar-h', `${el.offsetHeight}px`);
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    set();
+    return () => ro.disconnect();
+  }, []);
   // The splat also matches /p/:id without a slug.
   const match = useMatch('/p/:id/*');
   const [nav, setNav] = useState(false);
@@ -245,7 +257,7 @@ export function Layout() {
         tabIndex={-1}
       />
       <div className="main">
-        <header className="mobile-bar">
+        <header className="mobile-bar" ref={bar}>
           <button onClick={() => setNav(true)} aria-label="Open menu" className="menu-btn">
             <Icon name="menu" size={24} />
           </button>

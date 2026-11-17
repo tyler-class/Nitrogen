@@ -10,7 +10,7 @@ import { useTheme, type Theme } from '../lib/theme';
 import { ConnectAISection } from './ConnectAI';
 import { NotificationsSection } from './NotificationsSection';
 import { InstallHint } from '../components/InstallHint';
-import { isStandalone } from '../kit/push';
+import { isPhoneApp, isStandalone } from '../kit/push';
 import { VERSION } from '@shared/version';
 import { InfoTip, Switch } from '../components/InfoTip';
 import { Icon } from '../components/Icon';
@@ -113,7 +113,7 @@ export function Settings() {
         />
       </section>
 
-      <NotificationsSection />
+      {isPhoneApp() && <NotificationsSection />}
 
       <ConnectAISection />
 
@@ -185,7 +185,7 @@ export function Settings() {
             window.location.assign('/');
           }}
         >
-          Sign out
+          <Icon name="logout" size={15} /> Sign out
         </button>
       </section>
     </div>

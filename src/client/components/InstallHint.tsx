@@ -27,14 +27,11 @@ export function InstallHint() {
           </button>
         </div>
       )}
-      {isIOS() ? (
-        <p>In Safari, tap Share, then “Add to Home Screen”.</p>
-      ) : (
-        <p>
-          On iPhone: open this page in Safari, tap Share, then “Add to Home Screen”. On Android:
-          open the Chrome menu and tap “Install app”.
-        </p>
-      )}
+      <p>
+        Open <span className="install-url">{window.location.host}</span> in your phone’s browser,
+        tap Share, then “Add to Home Screen”.
+        {!isIOS() && ' On Android, open the browser menu and tap “Install app”.'}
+      </p>
     </>
   );
 }

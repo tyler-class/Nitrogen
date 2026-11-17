@@ -198,13 +198,6 @@ export function Tree({
             ) : (
               <span className="row-actions">
                 <button
-                  onClick={() => addChild(p.id)}
-                  aria-label={`Add a page inside ${p.title}`}
-                  title="Add subpage"
-                >
-                  <Icon name="plus" size={14} />
-                </button>
-                <button
                   onClick={() => setMenu(menu === p.id ? null : p.id)}
                   aria-label={`More for ${p.title}`}
                   aria-haspopup="menu"
@@ -217,10 +210,10 @@ export function Tree({
             {menu === p.id && !locked && (
               <Menu onClose={() => setMenu(null)}>
                 <button role="menuitem" onClick={() => (setMenu(null), setRenaming(p.id))}>
-                  Rename
+                  <Icon name="edit" size={15} /> Rename
                 </button>
                 <button role="menuitem" onClick={() => (setMenu(null), void addChild(p.id))}>
-                  Add subpage
+                  <Icon name="plus" size={15} /> Add subpage
                 </button>
                 {p.parent_id && (
                   <button
@@ -230,7 +223,7 @@ export function Tree({
                       move.mutate({ id: p.id, parent_id: null });
                     }}
                   >
-                    Move to top level
+                    <Icon name="arrowUp" size={15} /> Move to top level
                   </button>
                 )}
                 <button
@@ -238,7 +231,7 @@ export function Tree({
                   className="danger"
                   onClick={() => (setMenu(null), void remove(p))}
                 >
-                  Delete
+                  <Icon name="trash" size={15} /> Delete
                 </button>
               </Menu>
             )}

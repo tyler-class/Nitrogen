@@ -3675,3 +3675,140 @@ body.resizing {
 #install {
   scroll-margin-top: 64px;
 }
+
+/* --- 1.0.2: editing on phones, saved state, search spacing, install link. */
+
+/* The title scrolls sideways inside its row instead of being cut off. */
+.title-scroll {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(100%, max-content);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.title-scroll::-webkit-scrollbar {
+  display: none;
+}
+.title-sizer,
+.title-scroll .title-input {
+  grid-area: 1 / 1;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 4px 0;
+}
+.title-sizer {
+  visibility: hidden;
+  white-space: pre;
+  padding-right: 12px;
+}
+.title-scroll .title-input {
+  width: 100%;
+}
+
+.save-state.saved {
+  color: var(--ok);
+  font-weight: 550;
+}
+
+.search-page .slide-toggle {
+  margin-top: 14px;
+}
+
+.install-url {
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+@media (max-width: 860px) {
+  .title-sizer,
+  .title-scroll .title-input {
+    font-size: 28px;
+  }
+  /* Breadcrumbs, Saved and Done stay put under the phone header; the page scrolls beneath. */
+  .editing .page-top {
+    position: sticky;
+    top: var(--mobile-bar-h, 50px);
+    z-index: 15;
+    height: 52px;
+    margin: 0 -16px;
+    padding: 6px 16px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--hairline);
+    backdrop-filter: none;
+  }
+  .editing .page-top .crumbs {
+    flex: 1;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+  .editing .page-top .page-actions {
+    flex: none;
+  }
+  /* The formatting bar pins just under that row, with a little air between them. */
+  .editing .toolbar {
+    top: calc(var(--mobile-bar-h, 50px) + 52px + 8px);
+  }
+}
+
+/* Phones zoom into any text field under 16px when it's tapped. Keep them at 16px so editing
+   starts exactly where you were. */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], .title-input),
+  select,
+  textarea,
+  .editor .cm-content {
+    font-size: 16px !important;
+  }
+}
+
+/* Page header buttons (Edit, History, ⋯, Done): a slimmer row. */
+.page-actions .btn {
+  height: 32px;
+  padding-block: 0;
+}
+.page-actions .btn.icon-only {
+  width: 32px;
+}
+
+/* Menu options with an icon in front. */
+.menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.menu button svg {
+  flex: none;
+  color: var(--muted);
+}
+.menu .danger svg {
+  color: inherit;
+}
+
+/* Page tree buttons (⋯ on a row, + for a new page): round hover backgrounds. */
+.tree-head button,
+.row-actions button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+}
+@media (max-width: 860px) {
+  .sidebar .row-actions button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Sidebar show/hide buttons: round, like the other icon buttons. */
+.side-toggle,
+.side-close,
+.side-open {
+  border-radius: 50%;
+}
