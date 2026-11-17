@@ -94,7 +94,8 @@ How to work with it:
 - Refer to a page by its id (best), its exact title, or its path from the top of the tree ("Projects / Nitrogen / Roadmap").
 - For small changes use edit_page (find/replace, append, section edits). It keeps the rest of the page byte-for-byte and retries safely if the page changed. Use update_page with base_version only to rewrite a whole page.
 - To build a structure (a project with sub-pages, meeting notes series), use create_pages to create the whole subtree in one call.
-- Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their inbox and activity log, and can undo a whole session.
+- Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their activity log, and can undo a whole session.
+- Archive instead of deleting: archive_page takes a finished or obsolete page (and everything under it) out of the tree, search and open items without losing it; list_archived and restore_page bring it back. delete_page is permanent.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
 - AI Instructions: the owner keeps one page of house rules for assistants (where things go, naming, tags, style). It's at the end of these instructions; follow it over the general advice here. It is identified by the app, not by its title: always read it with get_ai_instructions and change it with update_ai_instructions, never by searching for a page called "AI Instructions" (a page with that title elsewhere in the wiki is an ordinary page, not your instructions). When the owner asks you to add or change a rule, use update_ai_instructions.
@@ -115,7 +116,7 @@ Markdown format:
     - [ ] todo: <text> [@owner] [due:YYYY-MM-DD]
     - [ ] question: <text> [@owner]
     - reminder: <text> due:YYYY-MM-DD [HH:MM]            (no checkbox; reminders must have a date)
-  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. A to-do is a task to act on: done means changing "[ ]" to "[x]", and one past its date is overdue. A reminder is a nudge, not a task: it notifies the owner on its date (or at its time) and then simply passes; it has no checkbox, is never overdue, and isn't checked off. Use a reminder for "remind me to…" or "nudge me on…", a to-do for work someone has to do. A question is resolved by checking it and ending the line with " answer: <the answer>". Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
+  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. A to-do is a task to act on: done means changing "[ ]" to "[x]", and one past its date is overdue. A reminder is a nudge, not a task: it notifies the owner on its date (or at its time) and then simply passes; it has no checkbox, is never overdue, and isn't checked off. Use a reminder for "remind me to…" or "nudge me on…", a to-do for work someone has to do. A question is resolved by checking it and ending the line with " answer: <the answer>"; a longer answer can go on over lines indented under the item (lists, quotes and other markdown work there). Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
   Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- reminder: Renew the domain due:2026-12-01", "- reminder: Call the dentist due:2026-11-12 14:00".
 - Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
 - Headings: "#" (largest), "##" and "###" render at three distinct sizes. Don't repeat the page title as a heading at the top of the body; the title is shown separately. Use "##" for sections and "###" for subsections; "#" is for a page split into a few major parts.
@@ -663,7 +664,7 @@ function buildServer(
     {
       title: 'Delete a page',
       description:
-        'Permanently delete a page AND all pages under it (their history too). To confirm, pass the page’s exact title as confirm_title. Prefer move_page to archive instead.',
+        'Permanently delete a page AND all pages under it (their history too). To confirm, pass the page’s exact title as confirm_title. Prefer archive_page, which can be undone.',
       inputSchema: z.object({
         page: z.string(),
         confirm_title: z.string().describe('The exact title of the page being deleted.'),
@@ -691,6 +692,101 @@ function buildServer(
       return text(
         `Deleted ${res.deleted} page(s) (${p.title} and everything under it)${res.images_removed ? ` and ${res.images_removed} unused image(s)` : ''}.`,
       );
+    }),
+  );
+
+  // ---------------------------------------------------------------- archive
+
+  server.registerTool(
+    'archive_page',
+    {
+      title: 'Archive a page',
+      description:
+        'Archive a page AND all pages under it: they leave the tree, search, open items and your view of the wiki, but are kept and can be brought back with restore_page. Links to them still open them for the owner. Use this (not delete_page) to tidy away pages that are finished or obsolete.',
+      inputSchema: z.object({ page: z.string().describe('Page id, title or path.') }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    safe(async ({ page }) => {
+      const t = await loadTree();
+      const p = resolve(page, t);
+      const count = (id: string): number =>
+        1 + t.pages.filter((c) => c.parent_id === id).reduce((n, c) => n + count(c.id), 0);
+      const n = count(p.id);
+      await call('POST', `/pages/${p.id}/archive`, { archived: true });
+      return text(
+        `Archived ${describe(p, t)}${n > 1 ? ` and the ${n - 1} page(s) under it` : ''}. restore_page brings ${n > 1 ? 'them' : 'it'} back.`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    'list_archived',
+    {
+      title: 'List archived pages',
+      description:
+        'Pages that were archived (out of the tree, search and open items), most recently archived first, with ids for restore_page.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async () => {
+      const tr = await call<TreeResponse>('GET', '/tree');
+      if (!tr.archived.length) return text('Nothing is archived.');
+      const archived = new Map(tr.archived.map((p) => [p.id, p]));
+      // One line per archived branch: its top page and how many came with it.
+      const tops = tr.archived.filter((p) => {
+        const parent = p.parent_id ? archived.get(p.parent_id) : undefined;
+        return !parent || parent.archived_at !== p.archived_at;
+      });
+      const lines = tops.map((p) => {
+        const inside = tr.archived.filter(
+          (c) => c.id !== p.id && c.archived_at === p.archived_at,
+        ).length;
+        return `- ${p.icon ? `${p.icon} ` : ''}${p.title} (id ${p.id}) · archived ${p.archived_at?.slice(0, 10)}${inside ? ` · with ${inside} page(s) under it` : ''}`;
+      });
+      return text(`${tops.length} archived:\n${lines.join('\n')}`);
+    }),
+  );
+
+  server.registerTool(
+    'restore_page',
+    {
+      title: 'Restore an archived page',
+      description:
+        'Bring an archived page back into the wiki, with the pages archived along with it (and any archived pages above it, so it has a place in the tree). Find archived pages with list_archived.',
+      inputSchema: z.object({
+        page: z.string().describe('The archived page’s id, or its exact title.'),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    safe(async ({ page }) => {
+      const tr = await call<TreeResponse>('GET', '/tree');
+      const k = page.trim();
+      const byId = tr.archived.find((p) => p.id === k);
+      const byTitle = tr.archived.filter((p) => p.title.toLowerCase() === k.toLowerCase());
+      if (!byId && byTitle.length > 1)
+        throw new ToolError(
+          `Several archived pages are titled “${k}”:\n${byTitle.map((p) => `- ${p.title} (id ${p.id})`).join('\n')}\nUse the id.`,
+        );
+      const hit = byId ?? byTitle[0];
+      if (!hit)
+        throw new ToolError(
+          tr.pages.some((p) => p.id === k || p.title.toLowerCase() === k.toLowerCase())
+            ? `“${k}” isn’t archived.`
+            : `No archived page matches “${k}”. Use list_archived to see them.`,
+          404,
+        );
+      await call('POST', `/pages/${hit.id}/archive`, { archived: false });
+      return text(`Restored “${hit.title}” (id ${hit.id}) to the wiki.`);
     }),
   );
 
@@ -891,7 +987,7 @@ function buildServer(
     {
       title: 'What can I do here?',
       description:
-        'Call when someone asks what you can do with Nitrogen or how to start. Returns the wiki’s current state (size, main areas, tags, inbox) and example requests that fit it, plus the ready-made prompts.',
+        'Call when someone asks what you can do with Nitrogen or how to start. Returns the wiki’s current state (size, main areas, tags) and example requests that fit it, plus the ready-made prompts.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -913,9 +1009,6 @@ function buildServer(
                   .join(' ')}.`
               : 'No tags yet.',
             `${dash.stats.edits_week} edits this week (${dash.stats.agent_edits_week} by assistants).`,
-            dash.inbox.length
-              ? `${dash.inbox.length} page(s) changed by assistants that the owner hasn't opened yet.`
-              : '',
             guide
               ? 'The owner has AI Instructions; follow them (they are in your instructions).'
               : '',

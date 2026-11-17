@@ -9,6 +9,8 @@ export interface PageSummary {
   /** Encoded actor ('you' | 'agent:<name>'), null if unknown. See shared/actor.ts. */
   updated_by: string | null;
   pinned_at: string | null;
+  /** When the page (or a page above it) was archived; null in the wiki. */
+  archived_at?: string | null;
 }
 
 export interface Page extends PageSummary {
@@ -39,6 +41,8 @@ export interface TreeResponse {
   sessions_id: string | null;
   /** The AI Instructions page (shown at /instructions, outside the tree). */
   instructions_id: string | null;
+  /** Archived pages: out of the tree, but [[links]] to them still open them. */
+  archived: PageSummary[];
 }
 
 /** One AI session in the Sessions log. */
@@ -156,11 +160,6 @@ export interface RevertResult {
   skipped: { title: string; reason: string }[];
 }
 
-export interface InboxItem extends PageSummary {
-  /** True if the page is new since you last looked, false if it was only changed. */
-  is_new: boolean;
-}
-
 /** One panel on an arrangeable board (Dashboard, Insights): order is the array order. */
 export interface PanelLayout {
   id: string;
@@ -176,9 +175,11 @@ export interface Dashboard {
     agent_edits_week: number;
     tags: number;
   };
-  inbox: InboxItem[];
   pinned: PageSummary[];
+  /** The latest changes: by anyone, by you, and by assistants. */
   activity: PageEvent[];
+  activity_you: PageEvent[];
+  activity_agents: PageEvent[];
 }
 
 export interface TagCount {

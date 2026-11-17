@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast';
 import { Activity } from './routes/Activity';
 import { Home } from './routes/Home';
 import { Insights } from './routes/Insights';
+import { Archive } from './routes/Archive';
 import { OpenItems } from './routes/OpenItems';
 import { Layout } from './routes/Layout';
 import { Login, SetupNeeded } from './routes/Login';
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
       { path: '/dashboard', element: <Navigate to="/" replace /> },
       { path: '/activity', element: <Activity /> },
       { path: '/items', element: <OpenItems /> },
+      { path: '/archive', element: <Archive /> },
       { path: '/insights', element: <Insights /> },
       { path: '/instructions', element: <AiInstructions /> },
       { path: '/sessions', element: <Sessions /> },

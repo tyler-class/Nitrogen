@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
 import { ancestorsOf } from '@shared/tree';
-import { extractItems, nowMoment, reminderPast, todayKey } from '@shared/items';
+import { extractItems, nowMoment, reminderPast, todayKey, type ItemEdit } from '@shared/items';
 import { extractTags, pageHref } from '@shared/markdown';
 import type {
   Mention,
@@ -17,16 +17,19 @@ import type {
 import { api, ApiError, errorMessage } from '../lib/api';
 import { keys, useCreatePage, useDeletePage, usePage, useTree } from '../lib/queries';
 import { readLocal, writeLocal } from '../lib/storage';
-import type { EditorHandle, LinkTarget } from '../components/Editor';
+import type { Caret, EditorHandle, LinkTarget } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { ItemRow } from '../components/ItemRow';
 import { Icon, PageGlyph } from '../components/Icon';
-import { Markdown, type TitleIndex } from '../components/Markdown';
+import { Markdown } from '../components/Markdown';
 import { DiffView } from '../components/Diff';
 import { downloadPage } from '../lib/exportMarkdown';
 import { TagEditor, TagList } from '../components/Tags';
 import { Menu } from '../components/Tree';
 import { useToast } from '../components/Toast';
+import { useTitleIndex } from '../lib/titles';
+export { useTitleIndex };
+import { deleteItem } from '../lib/items';
 
 // CodeMirror is most of the bundle; load it only when someone edits.
 const Editor = lazy(() => import('../components/Editor').then((m) => ({ default: m.Editor })));
@@ -49,15 +52,59 @@ function useLinkTargets(): LinkTarget[] {
   }, [tree.data]);
 }
 
-export function useTitleIndex(): { index: TitleIndex; titles: string[] } {
-  const tree = useTree();
-  return useMemo(() => {
-    const index: TitleIndex = new Map();
-    for (const p of tree.data?.pages ?? [])
-      if (!index.has(p.title.toLowerCase())) index.set(p.title.toLowerCase(), p);
-    return { index, titles: [...new Set((tree.data?.pages ?? []).map((p) => p.title))].sort() };
-  }, [tree.data]);
+/**
+ * Phones: a tap in the page body opens the editor there. Where the tap landed (the block's source
+ * lines and the text just before the tap) is left here for the editor to put its cursor at.
+ */
+let pendingCaret: Caret | null = null;
+/** Where in its block a tap at (x, y) landed. */
+function caretAt(block: HTMLElement, x: number, y: number): Caret {
+  const sl = Number(block.dataset.sl);
+  const el = Number(block.dataset.el) || sl;
+  let before = '';
+  const doc = document as Document & {
+    caretRangeFromPoint?(x: number, y: number): Range | null;
+    caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
+  };
+  let node: Node | null = null;
+  let offset = 0;
+  const r = doc.caretRangeFromPoint?.(x, y);
+  if (r) {
+    node = r.startContainer;
+    offset = r.startOffset;
+  } else {
+    const pos = doc.caretPositionFromPoint?.(x, y);
+    if (pos) {
+      node = pos.offsetNode;
+      offset = pos.offset;
+    }
+  }
+  if (node && block.contains(node)) {
+    const range = document.createRange();
+    range.setStart(block, 0);
+    range.setEnd(node, offset);
+    before = range.toString();
+  }
+  return { sl, el, before };
 }
+
+/**
+ * iOS only shows the keyboard for a focus made during the tap itself, and the editor appears a
+ * moment later. So the tap focuses a hidden field first; the keyboard stays up when the editor
+ * takes the focus over.
+ */
+function holdKeyboard() {
+  const i = document.createElement('input');
+  i.setAttribute('aria-hidden', 'true');
+  i.tabIndex = -1;
+  i.style.cssText =
+    'position:fixed;top:30%;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0';
+  document.body.appendChild(i);
+  i.focus({ preventScroll: true });
+  setTimeout(() => i.remove(), 3000);
+}
+
+const coarse = () => window.matchMedia('(pointer: coarse)').matches;
 
 /**
  * A wiki page. `pageId` and `header` let another view show a page in its own frame (the
@@ -201,10 +248,10 @@ function ReadPage({
     [page.id, qc, toast],
   );
 
-  const dueItem = useCallback(
-    async (line: number, due: string | null, time: string | null) => {
+  const editItemAt = useCallback(
+    async (line: number, edit: ItemEdit) => {
       try {
-        const next = await api.post<Page>(`/pages/${page.id}/items/due`, { line, due, time });
+        const next = await api.post<Page>(`/pages/${page.id}/items/edit`, { line, ...edit });
         qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
           old ? { ...old, page: next } : old,
         );
@@ -229,6 +276,96 @@ function ReadPage({
       }
     },
     [page.id, qc, toast],
+  );
+
+  const deleteItemAt = useCallback(
+    async (line: number) => {
+      const show = (next: Page) => {
+        qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
+          old ? { ...old, page: next } : old,
+        );
+        void qc.invalidateQueries({ queryKey: ['items'] });
+        void qc.invalidateQueries({ queryKey: ['dashboard'] });
+      };
+      try {
+        const { page: next, undo } = await deleteItem(page.id, line);
+        show(next);
+        toast('Item deleted.', {
+          label: 'Undo',
+          run: () =>
+            void undo()
+              .then(show)
+              .catch((e) => toast(errorMessage(e))),
+        });
+      } catch (e) {
+        toast(errorMessage(e));
+      }
+    },
+    [page.id, qc, toast],
+  );
+
+  // Phones: load the editor ahead of time, so a tap on the text opens it without a wait.
+  useEffect(() => {
+    if (!locked && coarse()) void import('../components/Editor');
+  }, [locked]);
+
+  /** A tap on the text (not on a link, button or item) opens the editor where it landed. */
+  function tapToEdit(e: React.MouseEvent) {
+    if (locked || !coarse()) return;
+    const t = e.target as HTMLElement;
+    if (
+      t.closest(
+        'a, button, input, textarea, select, label, img, summary, details, .item, .mermaid-box, .lightbox',
+      )
+    )
+      return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    const block = t.closest<HTMLElement>('[data-sl]');
+    pendingCaret = block ? caretAt(block, e.clientX, e.clientY) : null;
+    holdKeyboard();
+    onEdit();
+  }
+
+  const archivable = !locked && page.role !== 'ai_instructions';
+  async function archive(on: boolean) {
+    setMenu(false);
+    const refresh = () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: keys.page(page.id) }),
+        qc.invalidateQueries({ queryKey: keys.tree }),
+        qc.invalidateQueries({ queryKey: ['items'] }),
+        qc.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+    try {
+      await api.post(`/pages/${page.id}/archive`, { archived: on });
+      await refresh();
+      const n = (tree.data?.pages ?? []).filter((p) => p.parent_id === page.id).length;
+      toast(
+        on
+          ? n
+            ? `Archived “${page.title}” and the pages inside it.`
+            : `Archived “${page.title}”.`
+          : `Restored “${page.title}”.`,
+        on
+          ? {
+              label: 'Undo',
+              run: () =>
+                void api
+                  .post(`/pages/${page.id}/archive`, { archived: false })
+                  .then(refresh)
+                  .catch((e) => toast(errorMessage(e))),
+            }
+          : undefined,
+      );
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
+
+  // "Linked from" leaves out the pages already shown as this page's parent or its pages inside.
+  const linkedFrom = backlinks.filter(
+    (b) => b.id !== page.parent_id && !children.some((c) => c.id === b.id),
   );
 
   useEffect(() => {
@@ -355,6 +492,12 @@ function ReadPage({
                   >
                     <Icon name="download" size={15} /> Download as Markdown
                   </button>
+                  {archivable && (
+                    <button role="menuitem" onClick={() => void archive(!page.archived_at)}>
+                      <Icon name={page.archived_at ? 'unarchive' : 'archive'} size={15} />
+                      {page.archived_at ? 'Restore from archive' : 'Archive'}
+                    </button>
+                  )}
                   {!locked && (
                     <button role="menuitem" className="danger" onClick={remove}>
                       <Icon name="trash" size={15} /> Delete
@@ -384,6 +527,17 @@ function ReadPage({
         </p>
         <TagList tags={detail.all_tags} />
       </header>
+      {page.archived_at && (
+        <div className="banner archived-banner" role="status">
+          <p>
+            <Icon name="archive" size={15} /> Archived {formatWhen(page.archived_at)}. It’s out of
+            the tree, search, open items and assistants’ view.
+          </p>
+          <button className="btn small" onClick={() => void archive(false)}>
+            <Icon name="unarchive" size={14} /> Restore
+          </button>
+        </div>
+      )}
       {locked && (
         <p className="locked-note">
           <Icon name="lock" size={14} />{' '}
@@ -393,16 +547,24 @@ function ReadPage({
         </p>
       )}
       {!locked && (
-        <ItemSummary page={page} onDone={toggleItem} onAnswer={answerItem} onDue={dueItem} />
+        <ItemSummary
+          key={page.id}
+          page={page}
+          onDone={toggleItem}
+          onAnswer={answerItem}
+          onEdit={editItemAt}
+          onDelete={deleteItemAt}
+        />
       )}
-      <div className="prose">
+      <div className="prose" onClick={tapToEdit}>
         {page.body.trim() ? (
           <Markdown
             source={page.body}
             titles={index}
             onToggleItem={locked ? undefined : toggleItem}
             onAnswerItem={locked ? undefined : answerItem}
-            onDueItem={locked ? undefined : dueItem}
+            onEditItem={locked ? undefined : editItemAt}
+            onDeleteItem={locked ? undefined : deleteItemAt}
             noItems={!!locked}
           />
         ) : locked ? null : (
@@ -439,13 +601,13 @@ function ReadPage({
           </section>
         )}
 
-        {backlinks.length > 0 && (
+        {linkedFrom.length > 0 && (
           <section className="related" aria-label="Linked from">
             <div className="related-head">
               <h2>Linked from</h2>
             </div>
             <ul className="backlinks">
-              {backlinks.map((b) => (
+              {linkedFrom.map((b) => (
                 <li key={b.id}>
                   <Link to={pageHref(b.id, b.title)}>
                     <PageGlyph icon={b.icon} folder={false} /> {b.title}
@@ -491,6 +653,12 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
   });
   const [state, setState] = useState<SaveState>('saved');
   const [editorKey, setEditorKey] = useState(0);
+  // Opened by a tap on the text (phones): the editor starts with its cursor there.
+  const [caret] = useState(() => {
+    const c = pendingCaret;
+    pendingCaret = null;
+    return c;
+  });
   const [stale] = useState<Draft | null>(() => {
     const d = readLocal<Draft | null>(draftKey, null);
     return d && (d.body !== page.body || d.title !== page.title) ? d : null;
@@ -818,6 +986,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           ref={editor}
           value={draft.body}
           pageId={page.id}
+          caret={editorKey === 0 ? caret : null}
           links={links}
           onChange={(body) => change({ body })}
           onSave={() => void save()}
@@ -1006,50 +1175,84 @@ function ComparePair({
 
 /**
  * This page's open items, at the top: the same rows as the Open items page, so a to-do can be
- * checked off, a question answered and a date changed right here as well as where it's written.
+ * checked off, a question answered, a date changed or an item deleted right here as well as where
+ * it's written. Its header stays pinned while the list scrolls under it, and a tap on the header
+ * folds the list away (remembered on this device).
  */
 function ItemSummary({
   page,
   onDone,
   onAnswer,
-  onDue,
+  onEdit,
+  onDelete,
 }: {
   page: Page;
   onDone(line: number, done: boolean): Promise<void>;
   onAnswer(line: number, answer: string): Promise<void>;
-  onDue(line: number, due: string | null, time: string | null): Promise<void>;
+  onEdit(line: number, edit: ItemEdit): Promise<void>;
+  onDelete(line: number): Promise<void>;
 }) {
+  const [open, setOpen] = useState(() => readLocal('n2.items.open', true));
+  const toggle = () =>
+    setOpen((o) => {
+      writeLocal('n2.items.open', !o);
+      return !o;
+    });
+  const items = useMemo(() => extractItems(page.body), [page.body]);
+  const now = nowMoment();
   // Open to-dos and questions, and reminders still ahead (past ones were just nudges).
-  const open = useMemo(() => {
-    const now = nowMoment();
-    return extractItems(page.body).filter((i) => !i.done && !reminderPast(i, now));
-  }, [page.body]);
-  if (!open.length) return null;
+  const isOpen = (i: (typeof items)[number]) => !i.done && !reminderPast(i, now);
+  const keyOf = (i: (typeof items)[number]) => `${i.line}:${i.text}`;
+  // Items stay listed (struck through) once checked off, here or in the page, until you leave:
+  // the box doesn't shrink under your finger, and a mis-tap is one tap to undo.
+  const openKeys = items.filter(isOpen).map(keyOf);
+  const [shown, setShown] = useState<string[]>(openKeys);
+  const added = openKeys.filter((k) => !shown.includes(k));
+  if (added.length) setShown([...shown, ...added]);
+  const list = items.filter((i) => isOpen(i) || shown.includes(keyOf(i)));
+  if (!list.length) return null;
   const today = todayKey();
+  const count = list.filter(isOpen).length;
   return (
-    <aside className="item-summary" aria-label="Open items on this page">
+    <aside className={`item-summary${open ? ' open' : ''}`} aria-label="Open items on this page">
       <h2 className="item-summary-title">
-        <Icon name="checks" size={16} /> Open items <span className="count">{open.length}</span>
+        <button
+          type="button"
+          className="item-summary-head"
+          aria-expanded={open}
+          aria-controls={`items-${page.id}`}
+          onClick={toggle}
+        >
+          <Icon name="checks" size={16} /> Open items <span className="count">{count}</span>
+          <span className="item-summary-chev" aria-hidden>
+            <Icon name="chevron" size={16} />
+          </span>
+        </button>
       </h2>
-      <ul className="items-full">
-        {open.map((i) => (
-          <ItemRow
-            key={`${i.line}:${i.text}`}
-            item={{
-              ...i,
-              page_id: page.id,
-              page_title: page.title,
-              page_icon: page.icon,
-              path: [],
-            }}
-            today={today}
-            showPage={false}
-            onDone={(d) => void onDone(i.line, d)}
-            onAnswer={(t) => onAnswer(i.line, t)}
-            onDue={(d, t) => onDue(i.line, d, t)}
-          />
-        ))}
-      </ul>
+      <div className="item-summary-drawer" id={`items-${page.id}`} inert={!open}>
+        <div className="item-summary-inner">
+          <ul className="items-full">
+            {list.map((i) => (
+              <ItemRow
+                key={keyOf(i)}
+                item={{
+                  ...i,
+                  page_id: page.id,
+                  page_title: page.title,
+                  page_icon: page.icon,
+                  path: [],
+                }}
+                today={today}
+                showPage={false}
+                onDone={(d) => void onDone(i.line, d)}
+                onAnswer={(t) => onAnswer(i.line, t)}
+                onEdit={(edit) => onEdit(i.line, edit)}
+                onDelete={() => void onDelete(i.line)}
+              />
+            ))}
+          </ul>
+        </div>
+      </div>
     </aside>
   );
 }

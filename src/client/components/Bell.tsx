@@ -144,7 +144,9 @@ export function Bell({ className = '', size = 17 }: { className?: string; size?:
           style={pos ? { top: pos.top, left: pos.left, width: pos.width } : undefined}
         >
           <div className="bell-head">
-            <h2>Notifications</h2>
+            <h2>
+              <Icon name="bell" size={16} /> Notifications
+            </h2>
             {unread > 0 && (
               <button className="bell-all" onClick={() => readAll.mutate()}>
                 Mark all read

@@ -1,22 +1,22 @@
-// One open item as a row you can act on: check off a to-do, resolve or answer a question, change
-// a to-do's or reminder's date and time. Used on the Open items page and in a page's own Open
-// items box; each change edits that one line of the page.
+// One open item as a row you can act on: check off a to-do or question, answer a question, or edit
+// (type, text, date, time) and delete it from the buttons at the end of its first row. Used on the
+// Open items page and in a page's own Open items box; each change edits that item in its page.
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { ITEM_LABELS, dateWords, isOverdue } from '@shared/items';
+import { ITEM_LABELS, dateWords, isOverdue, type ItemEdit } from '@shared/items';
 import { pageHref, plainText } from '@shared/markdown';
 import type { OpenItem } from '@shared/types';
 import { formatDue } from './Markdown';
 import { Icon } from './Icon';
-import { DatePicker, TimePicker } from './DateTimePicker';
+import { AnswerBox, ItemActions, ItemEditor } from './ItemParts';
 
-/** One item: its checkbox, text and page, and inline controls for its date or answer. */
 export function ItemRow({
   item: i,
   today,
   onDone,
   onAnswer,
-  onDue,
+  onEdit,
+  onDelete,
   showPage = true,
 }: {
   item: OpenItem;
@@ -25,22 +25,14 @@ export function ItemRow({
   today: string;
   onDone(done: boolean): void;
   onAnswer(text: string): Promise<void>;
-  onDue(due: string | null, time: string | null): Promise<void>;
+  onEdit(edit: ItemEdit): Promise<void>;
+  onDelete(): void;
 }) {
-  const [editing, setEditing] = useState<'due' | 'answer' | null>(null);
-  const [date, setDate] = useState(i.due ?? today);
-  const [time, setTime] = useState(i.due_time ?? '');
-  const [text, setText] = useState(i.answer ?? '');
-  const [busy, setBusy] = useState(false);
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    await fn();
-    setBusy(false);
-    setEditing(null);
-  };
+  const [editing, setEditing] = useState(false);
   const late = isOverdue(i, today);
   const question = i.type === 'question';
   const reminder = i.type === 'reminder';
+  const dated = !question && !!i.due;
 
   return (
     <li className={`item-row item-${i.type}${i.done ? ' is-done' : ''}`}>
@@ -103,90 +95,38 @@ export function ItemRow({
             </>
           )}
         </div>
-        <div className="item-row-meta">
-          {!question && !i.done && (
-            <button
-              type="button"
-              className={`item-due-btn${late ? ' overdue' : ''}`}
-              onClick={() => setEditing(editing === 'due' ? null : 'due')}
-              aria-expanded={editing === 'due'}
-            >
-              <Icon name="calendar" size={13} />
-              {i.due
-                ? `${dateWords(i, today).replace(' ·', '')} ${formatDue(i.due, i.due_time)}`
-                : 'Add a date'}
-            </button>
-          )}
-          {question && !i.done && (
-            <button
-              type="button"
-              className="item-due-btn"
-              onClick={() => setEditing(editing === 'answer' ? null : 'answer')}
-              aria-expanded={editing === 'answer'}
-            >
-              <Icon name="edit" size={13} /> Answer
-            </button>
-          )}
-          {i.done && i.answer && <span className="item-answer">Answer: {i.answer}</span>}
-          {i.owner && <span className="muted">@{i.owner}</span>}
-        </div>
-        {editing === 'due' && (
-          <form
-            className="item-edit"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(() => onDue(date, time || null));
-            }}
-          >
-            <DatePicker
-              value={date}
-              onChange={setDate}
-              label={i.type === 'reminder' ? 'Scheduled for' : 'Due date'}
-            />
-            <TimePicker value={time} onChange={setTime} label="Time (optional)" />
-            <button className="btn small primary" disabled={busy || !date}>
-              Save
-            </button>
-            {i.type === 'todo' && i.due && (
+        {(dated || i.owner) && (
+          <div className="item-row-meta">
+            {dated && (
+              // The date, and a shortcut to the editor (the pencil does the same).
               <button
                 type="button"
-                className="btn small"
-                disabled={busy}
-                onClick={() => void run(() => onDue(null, null))}
+                className={`item-due-btn${late && !i.done ? ' overdue' : ''}`}
+                onClick={() => setEditing((e) => !e)}
+                aria-expanded={editing}
               >
-                Remove date
+                <Icon name="calendar" size={13} />
+                {`${dateWords(i, today).replace(' ·', '')} ${formatDue(i.due!, i.due_time)}`}
               </button>
             )}
-            <button type="button" className="btn small" onClick={() => setEditing(null)}>
-              Cancel
-            </button>
-          </form>
+            {i.owner && <span className="muted">@{i.owner}</span>}
+          </div>
         )}
-        {editing === 'answer' && (
-          <form
-            className="item-edit"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (text.trim()) void run(() => onAnswer(text));
+        {editing && (
+          <ItemEditor
+            item={i}
+            onCancel={() => setEditing(false)}
+            onSave={async (edit) => {
+              await onEdit(edit);
+              setEditing(false);
             }}
-          >
-            <input
-              className="item-answer-input"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Type the answer"
-              aria-label="Answer"
-              autoFocus
-            />
-            <button className="btn small primary" disabled={busy || !text.trim()}>
-              Save
-            </button>
-            <button type="button" className="btn small" onClick={() => setEditing(null)}>
-              Cancel
-            </button>
-          </form>
+          />
+        )}
+        {question && (
+          <AnswerBox answer={i.answer} onAnswer={i.done && !i.answer ? undefined : onAnswer} />
         )}
       </div>
+      <ItemActions onEdit={() => setEditing((e) => !e)} onDelete={onDelete} />
     </li>
   );
 }

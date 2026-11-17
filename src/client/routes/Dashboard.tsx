@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+// Home: a fixed layout of what needs you and where you left off. Wide screens show two columns
+// (open items and recent edits on the left; pinned pages and AI sessions on the right); phones
+// stack them. Insights is the arrangeable board; Home stays put.
+import { useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { actorLabel, isAgent } from '@shared/actor';
-import { pageHref } from '@shared/markdown';
+import { pageHref, plainText } from '@shared/markdown';
 import {
   ITEM_LABELS,
   dateWords,
@@ -11,19 +14,65 @@ import {
   reminderPast,
   todayKey,
 } from '@shared/items';
-import { plainText } from '@shared/markdown';
-import type { Dashboard as DashboardData, OpenItem } from '@shared/types';
-import { api, errorMessage } from '../lib/api';
+import type { Dashboard as DashboardData, OpenItem, SessionEntry } from '@shared/types';
+import { api } from '../lib/api';
 import { eventLine } from '../lib/activity';
-import { usePanelLayout } from '../lib/queries';
-import { Chips, Stat } from '../components/charts';
+import { readLocal, writeLocal } from '../lib/storage';
+import { WhoToggle, type Who } from '../components/charts';
+import {
+  ItemsEmpty,
+  OpenItemsToggle,
+  parseShow,
+  showFilter,
+  showHref,
+  type Show,
+} from '../components/OpenItemsFilter';
 import { formatDue } from '../components/Markdown';
 import { Icon, PageGlyph } from '../components/Icon';
-import { PanelBoard, type PanelDef } from '../components/Panels';
-import { useToast } from '../components/Toast';
 import { formatWhen } from './PageView';
 
-const fmt = (n: number) => n.toLocaleString();
+const OPEN_SHOWN = 10;
+const SESSIONS_SHOWN = 4;
+
+/** One section of Home: an icon and title, a "View all" link, its controls, then its body. */
+function Card({
+  icon,
+  title,
+  link,
+  sub,
+  actions,
+  className = '',
+  children,
+}: {
+  icon: string;
+  title: string;
+  link?: string;
+  sub?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`home-card ${className}`} aria-label={title}>
+      <header className="home-card-h">
+        <h2>
+          <span className="home-card-icon" aria-hidden>
+            <Icon name={icon} size={17} />
+          </span>
+          {title}
+          {link && (
+            <Link to={link} className="pn-link">
+              View all
+            </Link>
+          )}
+        </h2>
+        {sub && <p className="home-card-sub">{sub}</p>}
+      </header>
+      {actions && <div className="home-card-actions">{actions}</div>}
+      {children}
+    </section>
+  );
+}
 
 export function Dashboard() {
   const q = useQuery({
@@ -31,211 +80,167 @@ export function Dashboard() {
     queryFn: () => api.get<DashboardData>('/dashboard'),
     refetchInterval: 60_000,
   });
-  const layout = usePanelLayout('dashboard_layout');
   const items = useQuery({
     queryKey: ['items'],
     queryFn: () => api.get<{ items: OpenItem[] }>('/items'),
     refetchInterval: 60_000,
   });
-  // "/?items=question" (the weekly open-questions notification) opens on one type.
+  const sessions = useQuery({
+    queryKey: ['sessions'],
+    queryFn: () => api.get<{ root_id: string | null; entries: SessionEntry[] }>('/sessions'),
+  });
+  // The same filter as the Open items page. "/?items=question" (older notifications) opens on
+  // Questions.
   const [params] = useSearchParams();
   const asked = params.get('items');
-  const pick = (v: string | null): 'all' | OpenItem['type'] =>
-    v === 'todo' || v === 'question' || v === 'reminder' ? v : 'all';
-  const [kind, setKind] = useState(() => pick(asked));
+  const fromUrl = (v: string | null): Show => (v === 'question' ? 'questions' : parseShow(v));
+  const [show, setShow] = useState<Show>(() => fromUrl(asked));
   const [seen, setSeen] = useState(asked);
   if (seen !== asked) {
     setSeen(asked);
-    if (asked) setKind(pick(asked));
+    if (asked) setShow(fromUrl(asked));
   }
-  const qc = useQueryClient();
-  const toast = useToast();
+  // Recently edited: everyone's, yours or assistants' (remembered on this device).
+  const [who, setWhoState] = useState<Who>(() => readLocal<Who>('n2.home.who', 'all'));
+  const setWho = (w: Who) => {
+    setWhoState(w);
+    writeLocal('n2.home.who', w);
+  };
   const d = q.data;
+  if (!d) return <div className="page-loading" aria-busy="true" />;
 
-  async function clearInbox() {
-    try {
-      await api.post('/inbox/clear');
-      await qc.invalidateQueries({ queryKey: ['dashboard'] });
-    } catch (e) {
-      toast(errorMessage(e));
-    }
-  }
-
-  if (!d || !layout.ready) return <div className="page-loading" aria-busy="true" />;
-
+  // Lists filtered on the server, and checked again here so a stale response can't mix them.
+  const recent =
+    (who === 'you' ? d.activity_you : who === 'agents' ? d.activity_agents : d.activity)?.filter(
+      (e) => (who === 'you' ? e.actor === 'you' : who === 'agents' ? isAgent(e.actor) : true),
+    ) ?? [];
   const today = todayKey();
   const now = nowMoment();
-  const open = (items.data?.items ?? []).filter(
-    (i) => (kind === 'all' || i.type === kind) && !reminderPast(i, now),
-  );
+  const live = items.data?.items.filter((i) => !reminderPast(i, now));
+  const open = (live ?? []).filter(showFilter(today)[show]);
   // To-dos due today or overdue (reminders are nudges, not due).
   const dueNow = open.filter((i) => i.type === 'todo' && i.due && i.due <= today).length;
-
-  const panels: PanelDef[] = [
-    {
-      id: 'items',
-      title: 'Open items',
-      sub: dueNow
-        ? `${dueNow} due today or overdue`
-        : 'To-dos, questions and reminders from every page',
-      size: 'full',
-      actions: (
-        <Chips
-          label="Type"
-          options={[
-            ['all', 'All'],
-            ['todo', 'To do'],
-            ['question', 'Questions'],
-            ['reminder', 'Reminders'],
-          ]}
-          value={kind}
-          onChange={setKind}
-        />
-      ),
-      body: open.length ? (
-        <ul className="dash-list open-items">
-          {open.slice(0, 12).map((i) => (
-            <li key={`${i.page_id}-${i.line}`}>
-              <span className={`item-chip item-${i.type}`}>{ITEM_LABELS[i.type]}</span>
-              <Link
-                to={`${pageHref(i.page_id, i.page_title)}#item-${i.line}`}
-                className="dash-title"
-              >
-                {plainText(i.text)}
-              </Link>
-              <span className="dash-meta">
-                {i.due && (
-                  <span className={isOverdue(i, today) ? 'overdue' : undefined}>
-                    {dateWords(i, today).replace(' ·', '')} {formatDue(i.due, i.due_time)} ·{' '}
-                  </span>
-                )}
-                {i.page_title}
-              </span>
-            </li>
-          ))}
-          <li className="see-all">
-            {open.length > 12 && <span className="muted">and {open.length - 12} more · </span>}
-            <Link to={kind === 'question' ? '/items?show=questions' : '/items'}>
-              See all open items
-            </Link>
-          </li>
-        </ul>
-      ) : (
-        <p className="pn-empty">
-          {items.isPending ? 'Loading…' : 'Nothing open. Write “- [ ] todo: …” on any page.'}
-        </p>
-      ),
-    },
-    {
-      id: 'stats',
-      title: 'At a glance',
-      size: 'full',
-      body: (
-        <div className="stats four">
-          <Stat v={fmt(d.stats.pages)} l="Pages" />
-          <Stat v={fmt(d.stats.words)} l="Words" />
-          <Stat
-            v={fmt(d.stats.edits_week)}
-            l="Edits this week"
-            d={
-              d.stats.edits_week
-                ? `${Math.round((d.stats.agent_edits_week / d.stats.edits_week) * 100)}% by assistants`
-                : undefined
-            }
-          />
-          <Stat v={fmt(d.stats.tags)} l="Tags" />
-        </div>
-      ),
-    },
-    {
-      id: 'inbox',
-      title: d.inbox.length ? `Inbox · ${d.inbox.length}` : 'Inbox',
-      sub: 'What assistants changed since you last looked',
-      size: 'half',
-      actions: d.inbox.length ? (
-        <button className="btn small" onClick={clearInbox}>
-          Mark all read
-        </button>
-      ) : undefined,
-      body: d.inbox.length ? (
-        <ul className="dash-list">
-          {d.inbox.map((p) => (
-            <li key={p.id}>
-              <Link to={pageHref(p.id, p.title)}>
-                <PageGlyph icon={p.icon} folder={false} />
-                <span className="dash-title">{p.title}</span>
-              </Link>
-              <span className={`badge ${p.is_new ? 'new' : ''}`}>
-                {p.is_new ? 'New' : 'Updated'}
-              </span>
-              <span className="dash-meta">
-                {actorLabel(p.updated_by)} · {formatWhen(p.updated_at)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="pn-empty">All caught up.</p>
-      ),
-    },
-    {
-      id: 'pinned',
-      title: 'Pinned',
-      sub: 'Pin pages from their ⋯ menu',
-      size: 'half',
-      body: d.pinned.length ? (
-        <ul className="dash-list">
-          {d.pinned.map((p) => (
-            <li key={p.id}>
-              <Link to={pageHref(p.id, p.title)}>
-                <PageGlyph icon={p.icon} folder={false} />
-                <span className="dash-title">{p.title}</span>
-              </Link>
-              <span className="dash-meta">{formatWhen(p.updated_at)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="pn-empty">Nothing pinned yet.</p>
-      ),
-    },
-    {
-      id: 'activity',
-      title: 'Recent activity',
-      size: 'full',
-      actions: (
-        <Link to="/activity" className="btn small">
-          All activity
-        </Link>
-      ),
-      body: d.activity.length ? (
-        <ul className="dash-list">
-          {d.activity.map((e) => (
-            <li key={e.id}>
-              <span className={`who ${isAgent(e.actor) ? 'agent' : ''}`}>{eventLine(e)}</span>
-              {e.exists ? (
-                <Link to={pageHref(e.page_id, e.title)} className="dash-title">
-                  {e.title}
-                </Link>
-              ) : (
-                <span className="dash-title gone">{e.title}</span>
-              )}
-              <span className="dash-meta">{formatWhen(e.created_at)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="pn-empty">Nothing yet.</p>
-      ),
-    },
-  ];
+  const latestSessions = (sessions.data?.entries ?? []).slice(0, SESSIONS_SHOWN);
 
   return (
-    <div className="page dashboard">
+    <div className="page dashboard home">
       <h1 className="page-title view-title">
         <Icon name="home" size={26} /> Home
       </h1>
-      <PanelBoard defs={panels} saved={layout.saved} onSave={layout.save} />
+      <div className="home-grid">
+        <div className="home-col home-main">
+          <Card
+            icon="checks"
+            title="Open items"
+            link={showHref(show)}
+            sub={dueNow ? `${dueNow} due today or overdue` : undefined}
+            actions={<OpenItemsToggle value={show} onChange={setShow} items={live} today={today} />}
+          >
+            {open.length ? (
+              <ul className="dash-list open-items">
+                {open.slice(0, OPEN_SHOWN).map((i) => (
+                  <li key={`${i.page_id}-${i.line}`}>
+                    <span className={`item-chip item-${i.type}`}>{ITEM_LABELS[i.type]}</span>
+                    <Link
+                      to={`${pageHref(i.page_id, i.page_title)}#item-${i.line}`}
+                      className="dash-title"
+                    >
+                      {plainText(i.text)}
+                    </Link>
+                    <span className="dash-meta">
+                      {i.due && (
+                        <span className={isOverdue(i, today) ? 'overdue' : undefined}>
+                          {dateWords(i, today).replace(' ·', '')} {formatDue(i.due, i.due_time)}{' '}
+                          ·{' '}
+                        </span>
+                      )}
+                      {i.page_title}
+                    </span>
+                  </li>
+                ))}
+                {open.length > OPEN_SHOWN && (
+                  <li className="see-all muted">and {open.length - OPEN_SHOWN} more</li>
+                )}
+              </ul>
+            ) : items.isPending ? (
+              <p className="pn-empty">Loading…</p>
+            ) : (
+              <ItemsEmpty show={show} />
+            )}
+          </Card>
+
+          <Card
+            icon="history"
+            title="Recently edited"
+            link={who === 'all' ? '/activity' : `/activity?who=${who}`}
+            actions={<WhoToggle value={who} onChange={setWho} label="Whose changes" />}
+          >
+            {recent.length ? (
+              <ul className="dash-list">
+                {recent.map((e) => (
+                  <li key={e.id}>
+                    <span className={`who ${isAgent(e.actor) ? 'agent' : ''}`}>{eventLine(e)}</span>
+                    {e.exists ? (
+                      <Link to={pageHref(e.page_id, e.title)} className="dash-title">
+                        {e.title}
+                      </Link>
+                    ) : (
+                      <span className="dash-title gone">{e.title}</span>
+                    )}
+                    <span className="dash-meta">{formatWhen(e.created_at)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pn-empty">Nothing yet.</p>
+            )}
+          </Card>
+        </div>
+
+        <div className="home-col home-side">
+          {/* Only once something is pinned (pin a page from its ⋯ menu). */}
+          {d.pinned.length > 0 && (
+            <Card icon="pin" title="Pinned">
+              <ul className="dash-list">
+                {d.pinned.map((p) => (
+                  <li key={p.id}>
+                    <Link to={pageHref(p.id, p.title)}>
+                      <PageGlyph icon={p.icon} folder={false} />
+                      <span className="dash-title">{p.title}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <Card icon="sparkle" title="Recent AI sessions" link="/sessions">
+            {latestSessions.length ? (
+              <ul className="home-sessions">
+                {latestSessions.map((s) => (
+                  <li key={s.id}>
+                    {/* The session's log, not the pages it touched. */}
+                    <Link to={`/sessions/${s.id}`}>
+                      <span className="home-session-title">{s.title || 'Untitled session'}</span>
+                      <span className="home-session-meta">
+                        {actorLabel(s.actor)} · {formatWhen(s.ended_at)}
+                        {s.pages > 0 && ` · ${s.pages} ${s.pages === 1 ? 'page' : 'pages'}`}
+                      </span>
+                      {s.summary && <span className="home-session-sum">{s.summary}</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pn-empty">
+                {sessions.isPending
+                  ? 'Loading…'
+                  : 'When an assistant works in your wiki, its session shows up here.'}
+              </p>
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

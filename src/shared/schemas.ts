@@ -77,6 +77,8 @@ export const revertInput = z.object({
   to: z.string().min(10).max(40),
 });
 
+export const archiveInput = z.object({ archived: z.boolean() });
+
 export const restoreInput = z.object({
   format: z.literal('nitrogen-backup'),
   version: z.literal(1),
@@ -94,6 +96,7 @@ export const restoreInput = z.object({
         updated_by: z.string().max(100).nullable().optional(),
         pinned_at: z.string().max(40).nullable().optional(),
         role: z.string().max(40).nullable().optional(),
+        archived_at: z.string().max(40).nullable().optional(),
         created_at: z.string(),
         updated_at: z.string(),
       }),

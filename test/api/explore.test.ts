@@ -71,7 +71,6 @@ describe('dashboard', () => {
     await api.post(`/pages/${p.id}/pin`, { pinned: true });
     const dash = (await api.get<Dashboard>('/dashboard')).data;
     expect(dash.pinned.map((x) => x.id)).toContain(p.id);
-    expect(dash.inbox.some((x) => x.id === p.id)).toBe(false);
     expect(dash.activity[0]!.page_id).toBe(p.id);
     expect(dash.stats.pages).toBeGreaterThan(0);
 

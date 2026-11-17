@@ -2,6 +2,7 @@
 // width, hide/show.
 // Ported from Ratio. Order is live while dragging (the grid reflows; the dragged panel follows
 // the pointer as an overlay). Half-width panels pack two to a row; the grid fills gaps densely.
+import { Link } from 'react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
@@ -30,6 +31,8 @@ import '../styles/panels.css';
 export interface PanelDef {
   id: string;
   title: string;
+  /** A small link right after the title, such as "View all". */
+  link?: { to: string; label: string };
   sub?: ReactNode;
   /** Default width; the owner can change it. */
   size: 'half' | 'full';
@@ -276,7 +279,14 @@ function Panel({
           </span>
         )}
         <div className="pn-t">
-          <h3>{def.title}</h3>
+          <h3>
+            {def.title}
+            {def.link && (
+              <Link to={def.link.to} className="pn-link">
+                {def.link.label}
+              </Link>
+            )}
+          </h3>
           {def.sub ? <div className="pn-sub">{def.sub}</div> : null}
         </div>
         {tools ? <div className="pn-tools">{tools}</div> : null}

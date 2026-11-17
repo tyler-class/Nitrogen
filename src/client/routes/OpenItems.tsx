@@ -6,28 +6,20 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
-import { todayKey, isOverdue, nowMoment, reminderPast } from '@shared/items';
+import { todayKey, nowMoment, reminderPast } from '@shared/items';
 import type { OpenItem, Page } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { useToast } from '../components/Toast';
-import { SlideToggle } from '../components/charts';
+import { ItemsEmpty, OpenItemsToggle, parseShow, showFilter } from '../components/OpenItemsFilter';
 import { Icon } from '../components/Icon';
+import type { ItemEdit } from '@shared/items';
 import { ItemRow } from '../components/ItemRow';
-
-const SHOWS = ['all', 'today', 'overdue', 'questions'] as const;
-type Show = (typeof SHOWS)[number];
-
-const EMPTY: Record<Show, string> = {
-  today: 'Nothing due or scheduled today.',
-  overdue: 'Nothing overdue.',
-  questions: 'No open questions.',
-  all: 'Nothing open. Write “- [ ] todo: …” on any page.',
-};
+import { deleteItem } from '../lib/items';
 
 export function OpenItems() {
   const [params, setParams] = useSearchParams();
   const asked = params.get('show');
-  const show: Show = (SHOWS as readonly string[]).includes(asked ?? '') ? (asked as Show) : 'all';
+  const show = parseShow(asked);
   const q = useQuery({
     queryKey: ['items'],
     queryFn: () => api.get<{ items: OpenItem[] }>('/items'),
@@ -65,8 +57,28 @@ export function OpenItems() {
       { answer: text },
       text.trim() ? { ...i, done: true, answer: text } : undefined,
     );
-  const setDue = (i: OpenItem, due: string | null, time: string | null) =>
-    change(i, 'due', { due, time });
+  const edit = (i: OpenItem, e: ItemEdit) => change(i, 'edit', e);
+  const refresh = async (pageId: string) => {
+    await qc.invalidateQueries({ queryKey: ['items'] });
+    void qc.invalidateQueries({ queryKey: ['page', pageId] });
+    void qc.invalidateQueries({ queryKey: ['dashboard'] });
+  };
+  async function remove(i: OpenItem) {
+    try {
+      const { undo } = await deleteItem(i.page_id, i.line);
+      setHandled((m) => (m.delete(id(i)), new Map(m)));
+      await refresh(i.page_id);
+      toast('Item deleted.', {
+        label: 'Undo',
+        run: () =>
+          void undo()
+            .then(() => refresh(i.page_id))
+            .catch((e) => toast(errorMessage(e))),
+      });
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
 
   const today = todayKey();
   const fetched = q.data?.items ?? [];
@@ -76,30 +88,18 @@ export function OpenItems() {
   // Past reminders were nudges: nothing left to do, so they're not listed.
   const live = fetched.filter((i) => !reminderPast(i, now));
   const all = [...live, ...[...handled.values()].filter((i) => !open.has(id(i)))];
-  const pick: Record<Show, (i: OpenItem) => boolean> = {
-    today: (i) => i.type !== 'question' && i.due === today,
-    overdue: (i) => isOverdue(i, today),
-    questions: (i) => i.type === 'question',
-    all: () => true,
-  };
-  const count = (s: Show) => live.filter(pick[s]).length;
-  const list = all.filter(pick[show]);
+  const list = all.filter(showFilter(today)[show]);
 
   return (
     <div className="page open-items-page">
       <h1 className="page-title view-title">
         <Icon name="checks" size={26} /> Open items
       </h1>
-      <SlideToggle<Show>
-        label="Show"
+      <OpenItemsToggle
         value={show}
         onChange={(s) => setParams(s === 'all' ? {} : { show: s }, { replace: true })}
-        options={[
-          ['all', `All${q.data ? ` · ${live.length}` : ''}`],
-          ['today', `Today${q.data ? ` · ${count('today')}` : ''}`],
-          ['overdue', `Overdue${q.data ? ` · ${count('overdue')}` : ''}`],
-          ['questions', `Questions${q.data ? ` · ${count('questions')}` : ''}`],
-        ]}
+        items={q.data ? live : undefined}
+        today={today}
       />
       {q.isPending ? (
         <p className="muted">Loading…</p>
@@ -112,12 +112,13 @@ export function OpenItems() {
               today={today}
               onDone={(d) => void setDone(i, d)}
               onAnswer={(t) => answer(i, t)}
-              onDue={(d, t) => setDue(i, d, t)}
+              onEdit={(e) => edit(i, e)}
+              onDelete={() => void remove(i)}
             />
           ))}
         </ul>
       ) : (
-        <p className="muted items-empty">{EMPTY[show]}</p>
+        <ItemsEmpty show={show} />
       )}
     </div>
   );

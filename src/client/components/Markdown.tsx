@@ -1,8 +1,10 @@
 // Markdown → mdast (GFM) → wikilinks + callouts → hast → sanitized → React.
 import {
+  createContext,
   lazy,
   memo,
   Suspense,
+  useContext,
   useMemo,
   useState,
   type ComponentProps,
@@ -28,6 +30,7 @@ import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { visit, SKIP } from 'unist-util-visit';
 import {
   DUE_RE,
+  extractItems,
   ITEM_LABELS,
   ITEM_TYPES,
   isOverdue,
@@ -35,6 +38,7 @@ import {
   parseItemLine,
   reminderPast,
   todayKey,
+  type ItemEdit,
   type ItemType,
 } from '@shared/items';
 
@@ -42,12 +46,12 @@ import {
 const DUE_ALL = new RegExp(DUE_RE.source, 'gi');
 import { pageHref, slugify, splitTags, WIKILINK_RE } from '@shared/markdown';
 import { Icon } from './Icon';
-import { DatePicker, TimePicker } from './DateTimePicker';
+import { AnswerBox, ItemActions, ItemEditor } from './ItemParts';
 
 const CALLOUTS = ['note', 'tip', 'important', 'warning', 'caution', 'info', 'question'];
 
-/** Title (lowercased) → page, for resolving [[wikilinks]]. */
-export type TitleIndex = Map<string, { id: string; title: string }>;
+/** Title (lowercased) → page, for resolving [[wikilinks]]. Archived pages still resolve. */
+export type TitleIndex = Map<string, { id: string; title: string; archived?: boolean }>;
 
 function headingText(node: { children?: unknown[] }): string {
   let out = '';
@@ -55,6 +59,31 @@ function headingText(node: { children?: unknown[] }): string {
     out += t.value;
   });
   return out;
+}
+
+/**
+ * Cut a paragraph at " answer:": the text node holding it ends there, and everything after it
+ * (more text, bold, links, line breaks: the answer) goes.
+ */
+function cutAnswer(para: Paragraph) {
+  let cut = false;
+  const walk = (parent: { children: PhrasingContent[] }) => {
+    for (let k = 0; k < parent.children.length; k++) {
+      if (cut) {
+        parent.children.length = k;
+        return;
+      }
+      const c = parent.children[k]!;
+      if (c.type === 'text') {
+        const m = /\s+answer:(\s|$)/i.exec(c.value);
+        if (m) {
+          c.value = c.value.slice(0, m.index);
+          cut = true;
+        }
+      } else if ('children' in c && c.type !== 'link') walk(c as { children: PhrasingContent[] });
+    }
+  };
+  walk(para);
 }
 
 function transform(tree: Root, titles: TitleIndex, source: string, items = true) {
@@ -78,7 +107,15 @@ function transform(tree: Root, titles: TitleIndex, source: string, items = true)
           ? `${pageHref(page.id, page.title)}${m[2] ? `#h-${slugify(m[2])}` : ''}`
           : `#missing:${encodeURIComponent(target)}`,
         children: [{ type: 'text', value: label }],
-        data: { hProperties: { className: page ? ['wikilink'] : ['wikilink', 'missing'] } },
+        data: {
+          hProperties: {
+            className: !page
+              ? ['wikilink', 'missing']
+              : page.archived
+                ? ['wikilink', 'archived']
+                : ['wikilink'],
+          },
+        },
       };
       parts.push(link);
       last = m.index + m[0].length;
@@ -112,22 +149,33 @@ function transform(tree: Root, titles: TitleIndex, source: string, items = true)
   // (so it matches the server's index); the marker, owner, due date and answer are moved out of the
   // text into data attributes, and the rest of the line keeps its inline markdown.
   const lines = source.split('\n');
+  // The whole-page parse knows where each answer ends (it can go on over indented lines).
+  const parsed = new Map(extractItems(source).map((i) => [i.line, i]));
   const markItem = (node: ListItem | Paragraph, para: Paragraph) => {
     const line = node.position?.start.line;
     if (!line) return false;
-    const item = parseItemLine(lines[line - 1] ?? '', line);
-    if (!item) return false;
+    const one = parseItemLine(lines[line - 1] ?? '', line);
+    if (!one) return false;
+    const item = parsed.get(line) ?? one;
     const lead = para.children[0];
     if (lead?.type !== 'text') return false;
     const re = new RegExp(`^\\s*(${ITEM_TYPES.join('|')}):\\s+`, 'i');
     if (!re.test(lead.value)) return false;
     lead.value = lead.value.replace(re, '');
+    // Everything from " answer:" on is the answer, shown in its own box: cut it from the text.
+    cutAnswer(para);
     visit(para, 'text', (t: Text) => {
       t.value = t.value
-        .replace(/\s+answer:\s+.*$/i, '')
         .replace(DUE_ALL, (m) => (/^\s/.test(m) ? m[0]! : ''))
         .replace(/(^|\s)@[\p{L}\p{N}._-]+/gu, '$1');
     });
+    // And the answer's lines below the item (a list, a quote…) aren't shown twice.
+    if (node.type === 'listItem' && item.answer_lines) {
+      const last = line + item.answer_lines;
+      node.children = node.children.filter(
+        (c, k) => k === 0 || (c.position?.start.line ?? 0) > last,
+      );
+    }
     if (node.type === 'listItem') node.checked = null;
     const props = {
       className: ['item', `item-${item.type}`, ...(item.done ? ['done'] : [])],
@@ -138,6 +186,7 @@ function transform(tree: Root, titles: TitleIndex, source: string, items = true)
       ...(item.due_time ? { dataDueTime: item.due_time } : {}),
       ...(item.owner ? { dataOwner: item.owner } : {}),
       ...(item.answer ? { dataAnswer: item.answer } : {}),
+      dataText: item.text,
       ...(item.invalid ? { dataInvalid: item.invalid } : {}),
     };
     node.data = {
@@ -198,10 +247,32 @@ function transform(tree: Root, titles: TitleIndex, source: string, items = true)
     seen.set(base, n + 1);
     node.data = { hProperties: { id: n ? `${base}-${n}` : base } };
   });
+
+  // Each block remembers the lines it came from, so a tap on it can open the editor right there.
+  visit(tree, (node) => {
+    if (!BLOCKS.has(node.type) || !node.position) return;
+    const data = (node.data ??= {}) as { hProperties?: Record<string, unknown> };
+    data.hProperties = {
+      ...data.hProperties,
+      dataSl: String(node.position.start.line),
+      dataEl: String(node.position.end.line),
+    };
+  });
 }
+
+const BLOCKS = new Set([
+  'paragraph',
+  'heading',
+  'listItem',
+  'code',
+  'blockquote',
+  'tableRow',
+  'thematicBreak',
+]);
 
 const ITEM_CLASSES = ['item', 'done', ...ITEM_TYPES.map((t) => `item-${t}`)];
 const ITEM_DATA = [
+  'dataText',
   'dataLine',
   'dataType',
   'dataDone',
@@ -223,8 +294,10 @@ const schema: Schema = {
       ...(defaultSchema.attributes?.a ?? []).filter(
         (x) => !(Array.isArray(x) && x[0] === 'className'),
       ),
-      ['className', 'wikilink', 'missing', 'tag', 'data-footnote-backref'],
+      ['className', 'wikilink', 'missing', 'archived', 'tag', 'data-footnote-backref'],
     ],
+    // Source lines on every block (for tap-to-edit).
+    '*': [...(defaultSchema.attributes?.['*'] ?? []), 'dataSl', 'dataEl'],
     aside: [['className', 'callout', ...CALLOUTS.map((c) => `callout-${c}`)]],
     li: [['className', 'task-list-item', ...ITEM_CLASSES], ...ITEM_DATA],
     div: [['className', ...ITEM_CLASSES], ...ITEM_DATA],
@@ -308,213 +381,121 @@ type ItemProps = { className?: string; children?: ReactNode } & Record<
 type Handlers = {
   onToggle?: (line: number, done: boolean) => void;
   onAnswer?: (line: number, answer: string) => void;
-  onDue?: (line: number, due: string | null, time: string | null) => Promise<void>;
+  onEdit?: (line: number, edit: ItemEdit) => Promise<void>;
+  onDelete?: (line: number) => void;
 };
 
 /**
- * A to-do's or reminder's date, as a pill that opens the date and time pickers in place (the same
- * as on the Open items page). Without a handler (read-only views) it's plain text.
+ * The item handlers, passed by context rather than baked into the rendered tree: the tree's
+ * components stay the same from render to render, so checking an item off updates it in place
+ * instead of rebuilding the whole page (which reloaded images and diagrams and made it jump).
  */
-function DueControl({
-  line,
-  type,
-  due,
-  time,
-  words,
-  late,
-  onDue,
-}: {
-  line: number;
-  type: ItemType;
-  due: string | undefined;
-  time: string | undefined;
-  words: string;
-  late: boolean;
-  onDue?: Handlers['onDue'];
-}) {
+const ItemHandlers = createContext<Handlers>({});
+
+const ItemLi = (props: ItemProps) => <ItemOrPlain Tag="li" {...props} />;
+const ItemDiv = (props: ItemProps) => <ItemOrPlain Tag="div" {...props} />;
+
+function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
+  const { onToggle, onAnswer, onEdit, onDelete } = useContext(ItemHandlers);
   const [editing, setEditing] = useState(false);
-  const [date, setDate] = useState(due ?? todayKey());
-  const [at, setAt] = useState(time ?? '');
-  const [busy, setBusy] = useState(false);
-  const text = due ? `${words}${formatDue(due, time)}` : 'Add a date';
-  if (!onDue) return due ? <span className={late ? 'overdue' : undefined}>{text}</span> : null;
-  const save = async (d: string | null, t: string | null) => {
-    setBusy(true);
-    await onDue(line, d, t);
-    setBusy(false);
-    setEditing(false);
-  };
-  return (
-    <>
-      <button
-        type="button"
-        className={`item-due-btn${late ? ' overdue' : ''}`}
-        aria-expanded={editing}
-        onClick={() => {
-          setDate(due ?? todayKey());
-          setAt(time ?? '');
-          setEditing((e) => !e);
-        }}
-      >
-        <Icon name="calendar" size={13} />
-        {text}
-      </button>
-      {editing && (
-        <span className="item-edit">
-          <DatePicker
-            value={date}
-            onChange={setDate}
-            label={type === 'reminder' ? 'Scheduled for' : 'Due date'}
-          />
-          <TimePicker value={at} onChange={setAt} label="Time (optional)" />
-          <button
-            type="button"
-            className="btn small primary"
-            disabled={busy}
-            onClick={() => void save(date, at || null)}
-          >
-            Save
-          </button>
-          {type === 'todo' && due && (
-            <button
-              type="button"
-              className="btn small"
-              disabled={busy}
-              onClick={() => void save(null, null)}
-            >
-              Remove date
-            </button>
-          )}
-          <button type="button" className="btn small" onClick={() => setEditing(false)}>
-            Cancel
-          </button>
-        </span>
-      )}
-    </>
-  );
-}
-
-/** A question's answer, typed in place: a small grey label and an underline to write on. */
-function AnswerField({
-  line,
-  initial,
-  onAnswer,
-}: {
-  line: number;
-  initial: string;
-  onAnswer?: (line: number, answer: string) => void;
-}) {
-  const [value, setValue] = useState(initial);
-  const [saved, setSaved] = useState(initial);
-  if (saved !== initial) {
-    // The page changed underneath (another device, an assistant): show the new answer.
-    setSaved(initial);
-    setValue(initial);
-  }
-  const commit = () => {
-    if (value.trim() !== initial.trim()) onAnswer?.(line, value);
-  };
-  if (!onAnswer && !initial) return null;
-  return (
-    <label className="item-answer">
-      <span className="item-answer-label">Answer</span>
-      {onAnswer ? (
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-            if (e.key === 'Escape') {
-              setValue(initial);
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          aria-label="Answer"
-          placeholder=" "
-        />
-      ) : (
-        <span className="item-answer-text">{initial}</span>
-      )}
-    </label>
-  );
-}
-
-function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer, onDue }: Handlers) {
-  return function ItemOrPlain(props: ItemProps) {
-    const { className, children, ...rest } = props as ItemProps & Record<string, unknown>;
-    if (!className?.split(' ').includes('item'))
-      return (
-        <Tag className={className} {...rest}>
-          {children}
-        </Tag>
-      );
-    const type = props['data-type'] as ItemType;
-    const line = Number(props['data-line']);
-    const done = props['data-done'] === '1';
-    const due = props['data-due'];
-    const dueTime = props['data-due-time'];
-    const reminder = type === 'reminder';
-    // Reminders are nudges: no checkbox, never overdue; once their moment passes they're "Past".
-    const past =
-      reminder && reminderPast({ type, due: due ?? null, due_time: dueTime }, nowMoment());
-    const overdue = !done && isOverdue({ type, due: due ?? null }, todayKey());
-    const label = ITEM_LABELS[type] ?? type;
+  const { className, children, ...rest } = props as ItemProps & Record<string, unknown>;
+  if (!className?.split(' ').includes('item'))
     return (
-      <Tag className={`${className}${past ? ' item-past' : ''}`} id={`item-${line}`}>
-        {reminder ? (
-          <span className="item-bell" aria-hidden>
-            <Icon name="bell" size={14} />
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="item-check"
-            role="checkbox"
-            aria-checked={done}
-            aria-label={`${done ? 'Reopen' : type === 'question' ? 'Resolve' : 'Complete'}: ${label}`}
-            disabled={!onToggle}
-            onClick={() => onToggle?.(line, !done)}
-          />
-        )}
-        <div className="item-main">
-          <span className="item-label">{type}</span>
-          <div className="item-text">{children}</div>
-          {(props['data-owner'] ||
-            due ||
-            props['data-invalid'] ||
-            (onDue && type === 'todo' && !done)) && (
-            <span className="item-meta">
-              {props['data-owner'] && <span>@{props['data-owner']}</span>}
-              {type !== 'question' && (due || (onDue && !done)) && (
-                <DueControl
-                  line={line}
-                  type={type}
-                  due={due}
-                  time={dueTime}
-                  words={
-                    reminder
-                      ? past
-                        ? 'Past · '
-                        : 'Scheduled for '
-                      : overdue
-                        ? 'Overdue · '
-                        : 'Due '
-                  }
-                  late={overdue}
-                  onDue={done ? undefined : onDue}
-                />
-              )}
-              {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
-            </span>
-          )}
-          {type === 'question' && (
-            <AnswerField line={line} initial={props['data-answer'] ?? ''} onAnswer={onAnswer} />
-          )}
-        </div>
+      <Tag className={className} {...rest}>
+        {children}
       </Tag>
     );
-  };
+  const type = props['data-type'] as ItemType;
+  const line = Number(props['data-line']);
+  const done = props['data-done'] === '1';
+  const due = props['data-due'];
+  const dueTime = props['data-due-time'];
+  const reminder = type === 'reminder';
+  // Reminders are nudges: no checkbox, never overdue; once their moment passes they're "Past".
+  const past = reminder && reminderPast({ type, due: due ?? null, due_time: dueTime }, nowMoment());
+  const overdue = !done && isOverdue({ type, due: due ?? null }, todayKey());
+  const label = ITEM_LABELS[type] ?? type;
+  const words = reminder ? (past ? 'Past · ' : 'Scheduled for ') : overdue ? 'Overdue · ' : 'Due ';
+  const dated = type !== 'question' && !!due;
+  return (
+    <Tag
+      className={`${className}${past ? ' item-past' : ''}`}
+      id={`item-${line}`}
+      data-sl={props['data-sl']}
+      data-el={props['data-el']}
+    >
+      {reminder ? (
+        <span className="item-bell" aria-hidden>
+          <Icon name="bell" size={14} />
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="item-check"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={`${done ? 'Reopen' : type === 'question' ? 'Resolve' : 'Complete'}: ${label}`}
+          disabled={!onToggle}
+          onClick={() => onToggle?.(line, !done)}
+        />
+      )}
+      <div className="item-main">
+        <span className="item-label">{type}</span>
+        <div className="item-text">{children}</div>
+        {(props['data-owner'] || dated || props['data-invalid']) && (
+          <span className="item-meta">
+            {props['data-owner'] && <span>@{props['data-owner']}</span>}
+            {dated &&
+              (onEdit && !done ? (
+                <button
+                  type="button"
+                  className={`item-due-btn${overdue ? ' overdue' : ''}`}
+                  onClick={() => setEditing((e) => !e)}
+                  aria-expanded={editing}
+                >
+                  <Icon name="calendar" size={13} />
+                  {words}
+                  {formatDue(due!, dueTime)}
+                </button>
+              ) : (
+                <span className={overdue ? 'overdue' : undefined}>
+                  {words}
+                  {formatDue(due!, dueTime)}
+                </span>
+              ))}
+            {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
+          </span>
+        )}
+        {editing && onEdit && (
+          <ItemEditor
+            item={{
+              type,
+              text: props['data-text'] ?? '',
+              due: due ?? null,
+              due_time: dueTime ?? null,
+            }}
+            onCancel={() => setEditing(false)}
+            onSave={async (edit) => {
+              await onEdit(line, edit);
+              setEditing(false);
+            }}
+          />
+        )}
+        {type === 'question' && (
+          <AnswerBox
+            answer={props['data-answer'] ?? null}
+            onAnswer={
+              onAnswer && !(done && !props['data-answer']) ? (t) => onAnswer(line, t) : undefined
+            }
+          />
+        )}
+      </div>
+      <ItemActions
+        onEdit={onEdit ? () => setEditing((e) => !e) : undefined}
+        onDelete={onDelete ? () => onDelete(line) : undefined}
+      />
+    </Tag>
+  );
 }
 
 /** "Nov 12", or "Nov 12, 2:00 PM" with a time (in this device's own format). */
@@ -534,7 +515,8 @@ export const Markdown = memo(function Markdown({
   titles,
   onToggleItem,
   onAnswerItem,
-  onDueItem,
+  onEditItem,
+  onDeleteItem,
   noItems = false,
 }: {
   source: string;
@@ -545,28 +527,37 @@ export const Markdown = memo(function Markdown({
   onToggleItem?: (line: number, done: boolean) => void;
   /** Lets readers answer questions in place. */
   onAnswerItem?: (line: number, answer: string) => void;
-  /** Lets readers change a to-do's or reminder's date and time in place. */
-  onDueItem?: (line: number, due: string | null, time: string | null) => Promise<void>;
+  /** Lets readers edit an item (type, text, date, time) in place. */
+  onEditItem?: (line: number, edit: ItemEdit) => Promise<void>;
+  /** Lets readers delete an item. */
+  onDeleteItem?: (line: number) => void;
 }): ReactNode {
-  return useMemo(() => {
+  const handlers = useMemo<Handlers>(
+    () => ({
+      onToggle: onToggleItem,
+      onAnswer: onAnswerItem,
+      onEdit: onEditItem,
+      onDelete: onDeleteItem,
+    }),
+    [onToggleItem, onAnswerItem, onEditItem, onDeleteItem],
+  );
+  const rendered = useMemo(() => {
     const tree = fromMarkdown(source, {
       extensions: [gfm()],
       mdastExtensions: [gfmFromMarkdown()],
     });
     transform(tree, titles, source, !noItems);
     const hast = sanitize(toHast(tree), schema);
-    return toJsxRuntime(hast, {
-      Fragment,
-      jsx,
-      jsxs,
-      components: {
-        a: Anchor,
-        img: Img,
-        table: TableWrap,
-        pre: Pre,
-        li: itemCard('li', { onToggle: onToggleItem, onAnswer: onAnswerItem, onDue: onDueItem }),
-        div: itemCard('div', { onToggle: onToggleItem, onAnswer: onAnswerItem, onDue: onDueItem }),
-      },
-    });
-  }, [source, titles, onToggleItem, onAnswerItem, onDueItem, noItems]);
+    return toJsxRuntime(hast, { Fragment, jsx, jsxs, components: COMPONENTS });
+  }, [source, titles, noItems]);
+  return <ItemHandlers.Provider value={handlers}>{rendered}</ItemHandlers.Provider>;
 });
+
+const COMPONENTS = {
+  a: Anchor,
+  img: Img,
+  table: TableWrap,
+  pre: Pre,
+  li: ItemLi,
+  div: ItemDiv,
+};

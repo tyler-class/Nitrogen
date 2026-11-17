@@ -16,10 +16,16 @@ type Filter = 'all' | 'you' | 'agents';
 export function Activity() {
   // "Assistant changes" notifications open /activity?who=agents&from=…&to=… (their hour).
   const [params, setParams] = useSearchParams();
-  const [filter, setFilter] = useState<Filter>(() => {
-    const w = params.get('who');
-    return w === 'agents' || w === 'you' ? w : 'all';
-  });
+  // The filter lives in the URL (?who=), so the toggle always matches what's listed, however
+  // you got here (Home's "View all", a notification, back and forward).
+  const w = params.get('who');
+  const filter: Filter = w === 'agents' || w === 'you' ? w : 'all';
+  const setFilter = (f: Filter) => {
+    const next = new URLSearchParams(params);
+    if (f === 'all') next.delete('who');
+    else next.set('who', f);
+    setParams(next, { replace: true });
+  };
   const from = params.get('from');
   const to = params.get('to');
   const window_ =
@@ -73,7 +79,7 @@ export function Activity() {
     (Date.parse(iso) >= Date.parse(window_.from) && Date.parse(iso) < Date.parse(window_.to));
   const sessions = (q.data?.sessions ?? [])
     .filter((s) =>
-      filter === 'all' ? true : filter === 'agents' ? isAgent(s.actor) : !isAgent(s.actor),
+      filter === 'all' ? true : filter === 'agents' ? isAgent(s.actor) : s.actor === 'you',
     )
     .map((s) => (window_ ? { ...s, events: s.events.filter((e) => inWindow(e.created_at)) } : s))
     .filter((s) => s.events.length > 0);
@@ -87,7 +93,10 @@ export function Activity() {
       {window_ && (
         <p className="act-window">
           Showing {formatTime(window_.from)}–{formatTime(window_.to)} on {formatDay(window_.from)}.{' '}
-          <button className="link" onClick={() => setParams({}, { replace: true })}>
+          <button
+            className="link"
+            onClick={() => setParams(filter === 'all' ? {} : { who: filter }, { replace: true })}
+          >
             Show all
           </button>
         </p>

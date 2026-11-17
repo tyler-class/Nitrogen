@@ -3,7 +3,6 @@ import type { PushDevice } from '../../src/worker/kit/push';
 import { nitrogenPush } from '../../src/worker/notifications';
 import { describe, expect, it } from 'vitest';
 import type {
-  Dashboard,
   Insights,
   PageDetail,
   RevertResult,
@@ -163,6 +162,9 @@ describe('MCP', () => {
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
         'add_image',
+        'archive_page',
+        'list_archived',
+        'restore_page',
         'image_upload_status',
         'request_image_upload',
         'create_page',
@@ -328,6 +330,18 @@ describe('MCP', () => {
     // Moving and guarded deletion.
     const moved = await tool(token, 'move_page', { page: 'Compost', new_parent: 'top' });
     expect(moved.text).toContain('now at Compost');
+
+    // Archive and restore: out of the tree and back.
+    const archived = await tool(token, 'archive_page', { page: 'Compost' });
+    expect(archived.text).toContain('Archived');
+    expect((await tool(token, 'get_tree', {})).text).not.toContain('Compost');
+    expect((await tool(token, 'list_archived', {})).text).toContain('Compost');
+    const back = await tool(token, 'restore_page', { page: 'Compost' });
+    expect(back.text).toContain('Restored “Compost”');
+    expect((await tool(token, 'get_tree', {})).text).toContain('Compost');
+    expect((await tool(token, 'restore_page', { page: 'Compost' })).text).toContain(
+      'isn’t archived',
+    );
     const refused = await tool(token, 'delete_page', {
       page: 'MCP Garden',
       confirm_title: 'garden',
@@ -353,16 +367,11 @@ describe('MCP', () => {
     expect(made.isError).toBe(false);
     const id = /id ([a-z0-9]+)/.exec(made.text)![1]!;
 
-    // Attributed to the connected app, shown in the owner's inbox until opened.
-    let dash = (await api.get<Dashboard>('/dashboard')).data;
-    const item = dash.inbox.find((p) => p.id === id)!;
-    expect(item.updated_by).toBe('agent:Test Assistant');
-    expect(item.is_new).toBe(true);
+    // Attributed to the connected app.
     const detail = (await api.get<PageDetail>(`/pages/${id}`)).data;
     expect(detail.page.created_by).toBe('agent:Test Assistant');
+    expect(detail.page.updated_by).toBe('agent:Test Assistant');
     expect(detail.all_tags).toEqual(['planning', 'research']);
-    dash = (await api.get<Dashboard>('/dashboard')).data;
-    expect(dash.inbox.some((p) => p.id === id)).toBe(false);
 
     // Tags from tools.
     const tagged = await tool(token, 'tag_page', { page: id, add: ['ops'], remove: ['planning'] });

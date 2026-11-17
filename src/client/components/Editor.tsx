@@ -108,9 +108,45 @@ export interface LinkTarget {
   path: string[];
 }
 
+/** Where a tap on the read view landed (see PageView's caretAt). */
+export interface Caret {
+  sl: number;
+  el: number;
+  before: string;
+}
+
+/**
+ * The document position for a tap: just after the text before it, looked for within the block's
+ * lines (rendered text and markdown differ, so shorter and shorter tails are tried), else the end
+ * of the block's first line.
+ */
+export function caretPos(doc: string, c: Caret): number {
+  const lines = doc.split('\n');
+  const sl = Math.min(Math.max(1, c.sl), lines.length);
+  const el = Math.min(Math.max(sl, c.el), lines.length);
+  const start = lines.slice(0, sl - 1).reduce((n, l) => n + l.length + 1, 0);
+  const block = lines.slice(sl - 1, el).join('\n');
+  const before = c.before.replace(/\s+$/, '');
+  for (const len of [24, 14, 8, 4]) {
+    if (before.length < len && len !== 4) continue;
+    const tail = before.slice(-len);
+    if (!tail.trim()) continue;
+    const at = block.lastIndexOf(tail);
+    if (at >= 0) {
+      // Past the rest of the word, so the cursor doesn't land mid-word.
+      let end = at + tail.length;
+      while (end < block.length && /[\p{L}\p{N}_'’]/u.test(block[end]!)) end++;
+      return start + end;
+    }
+  }
+  return start + (lines[sl - 1]?.length ?? 0);
+}
+
 interface Props {
   value: string;
   pageId: string;
+  /** Start with the cursor here, focused and scrolled to (opened by a tap on the text). */
+  caret?: Caret | null;
   /** Pages offered after "[[": title, emoji and where they sit in the tree. */
   links: LinkTarget[];
   onChange(value: string): void;
@@ -192,6 +228,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
           history(),
           drawSelection(),
           EditorView.lineWrapping,
+          // CodeMirror turns these off by default; in prose they help (iOS autocorrect especially).
+          EditorView.contentAttributes.of({
+            autocorrect: 'on',
+            autocapitalize: 'sentences',
+            spellcheck: 'true',
+          }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(highlight),
           theme,
@@ -254,6 +296,15 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
       }),
     });
     view.current = v;
+    const c = props.caret;
+    if (c) {
+      const pos = Math.min(caretPos(props.value, c), v.state.doc.length);
+      v.dispatch({
+        selection: { anchor: pos },
+        effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+      });
+      v.focus();
+    }
     return () => v.destroy();
     // The editor is created once per page; value changes flow out through onChange.
     // eslint-disable-next-line react-hooks/exhaustive-deps

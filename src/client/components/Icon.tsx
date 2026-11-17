@@ -20,8 +20,12 @@ const PATHS: Record<string, string> = {
   graph:
     'M5 3.5a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM15 5.5a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM9 12.5a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM7 5.9l6 1.2M5.7 7.4l2.6 5.2M13.7 9.1l-3.4 3.8',
   history: 'M3 10a7 7 0 1 0 2-4.9M3 4v3h3M10 6v4l3 2',
-  // Two documents with +/− between them: compare versions.
-  diff: 'M4 3h5v14H4zM11 3h5v14h-5M6.5 7.5v3M5 9h3M12.5 9h2',
+  // Two arrows passing each other: compare two versions.
+  diff: 'M3 6.5h13M13 3.5l3 3-3 3M17 13.5H4M7 10.5l-3 3 3 3',
+  // A storage box with its lid: archive a page.
+  archive: 'M2.5 4h15v3.5h-15zM4 7.5V16h12V7.5M8 11h4',
+  // An arrow coming back up out of the box: restore from the archive.
+  unarchive: 'M2.5 4h15v3.5h-15zM4 7.5V16h12V7.5M10 15v-5M7.8 12.2 10 10l2.2 2.2',
   // A page with an AI sparkle: AI Instructions.
   rules:
     'M9.5 3H5.5A1.5 1.5 0 0 0 4 4.5v11A1.5 1.5 0 0 0 5.5 17h8a1.5 1.5 0 0 0 1.5-1.5V11M7 10h3M7 13.5h5M14.5 1.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z',

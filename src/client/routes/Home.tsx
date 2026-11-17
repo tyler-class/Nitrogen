@@ -5,7 +5,7 @@ import { useCreatePage, useTree } from '../lib/queries';
 import { useToast } from '../components/Toast';
 import { Dashboard } from './Dashboard';
 
-/** "/": Home (inbox, open items, pinned pages, activity), or a welcome when the wiki is empty. */
+/** "/": Home (open items, pinned pages, activity), or a welcome when the wiki is empty. */
 export function Home() {
   const tree = useTree();
   const create = useCreatePage();

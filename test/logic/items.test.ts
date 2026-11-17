@@ -131,3 +131,89 @@ describe('setItemDue', () => {
     expect(setItemDue(md, 9, '2026-11-25')).toBeNull();
   });
 });
+
+describe('removeItem', () => {
+  it('removes only item lines', async () => {
+    const { removeItem } = await import('@shared/items');
+    expect(removeItem('a\n- [ ] todo: x\nb', 2)).toBe('a\nb');
+    expect(removeItem('a\n- [ ] todo: x\nb', 1)).toBeNull();
+    expect(removeItem('```\n- [ ] todo: x\n```', 2)).toBeNull();
+  });
+});
+
+describe('multi-line answers', () => {
+  it('reads an answer that goes on over indented lines, and skips them as items', async () => {
+    const { extractItems } = await import('@shared/items');
+    const md = [
+      '- [x] question: Which? answer: Two:',
+      '  - first',
+      '  - todo: not an item here',
+      '',
+      '  > a quote',
+      'After',
+    ].join('\n');
+    const items = extractItems(md);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.answer).toBe('Two:\n- first\n- todo: not an item here\n\n> a quote');
+    expect(items[0]!.answer_lines).toBe(4);
+    expect(items[0]!.done).toBe(true);
+  });
+
+  it('writes a multi-line answer, replaces it, and clears it', async () => {
+    const { setItemAnswer, extractItems } = await import('@shared/items');
+    let md = '- question: Why?\nNext';
+    md = setItemAnswer(md, 1, 'Because:\n- one\n- two')!;
+    expect(md).toBe('- [x] question: Why? answer: Because:\n  - one\n  - two\nNext');
+    md = setItemAnswer(md, 1, '- only a list')!;
+    expect(md).toBe('- [x] question: Why? answer:\n  - only a list\nNext');
+    expect(extractItems(md)[0]!.answer).toBe('- only a list');
+    md = setItemAnswer(md, 1, '')!;
+    expect(md).toBe('- [ ] question: Why?\nNext');
+  });
+
+  it('deletes an item with its answer lines', async () => {
+    const { removeItem, itemLines } = await import('@shared/items');
+    const md = '- [x] question: Q? answer: A\n  - more\nNext';
+    expect(itemLines(md, 1)).toEqual(['- [x] question: Q? answer: A', '  - more']);
+    expect(removeItem(md, 1)).toBe('Next');
+  });
+});
+
+describe('editItem', () => {
+  it('changes type, text, date and time, keeping the owner', async () => {
+    const { editItem } = await import('@shared/items');
+    const md = '- [ ] todo: Call Sam @tyler due:2026-11-20';
+    expect(
+      editItem(md, 1, { type: 'reminder', text: 'Call Sam back', due: '2026-11-21', time: '9:30' }),
+    ).toBe('- reminder: Call Sam back @tyler due:2026-11-21 09:30');
+    expect(
+      editItem(md, 1, { type: 'question', text: 'Call Sam?', due: '2026-11-21', time: null }),
+    ).toBe('- question: Call Sam? @tyler');
+    expect(editItem(md, 1, { type: 'todo', text: 'Call Sam', due: null, time: null })).toBe(
+      '- [ ] todo: Call Sam @tyler',
+    );
+    // Reminders need a date; empty text isn't an item.
+    expect(editItem(md, 1, { type: 'reminder', text: 'x', due: null, time: null })).toBeNull();
+    expect(editItem(md, 1, { type: 'todo', text: '  ', due: null, time: null })).toBeNull();
+  });
+
+  it('keeps a question’s answer, and drops it when it becomes a to-do', async () => {
+    const { editItem } = await import('@shared/items');
+    const md = '- [x] question: Q? answer: A\n  - more';
+    expect(editItem(md, 1, { type: 'question', text: 'Q2?', due: null, time: null })).toBe(
+      '- [x] question: Q2? answer: A\n  - more',
+    );
+    expect(editItem(md, 1, { type: 'todo', text: 'Do Q', due: null, time: null })).toBe(
+      '- [x] todo: Do Q',
+    );
+  });
+});
+
+describe('answers with a lone dash', () => {
+  it('never turn the question into a heading', async () => {
+    const { setItemAnswer, extractItems } = await import('@shared/items');
+    const md = setItemAnswer('- question: Q?', 1, 'one\n-\n- two')!;
+    expect(md).toBe('- [x] question: Q? answer: one\n\n  -\n  - two');
+    expect(extractItems(md)[0]!.answer).toBe('one\n\n-\n- two');
+  });
+});

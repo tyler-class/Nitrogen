@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readLocal, writeLocal } from '../lib/storage';
-import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
-import { AboutButton, AboutSheet } from '../components/AboutSheet';
+import { Link, NavLink, Outlet, useLocation, useMatch, useNavigationType } from 'react-router';
 import { useTree } from '../lib/queries';
 import { useNotifications } from '../lib/notifications';
 import { Icon } from '../components/Icon';
@@ -12,13 +11,20 @@ import { Tree } from '../components/Tree';
 const MIN_W = 200;
 const MAX_W = 460;
 
-/** The four views, as one pill: icons only, the current one with its name. */
+/** The everyday views, as one pill: icons only, the current one with its name. */
 const VIEWS = [
   ['/', 'home', 'Home'],
   ['/items', 'checks', 'Open items'],
   ['/activity', 'activity', 'Activity'],
-  ['/insights', 'insights', 'Insights'],
+] as const;
+
+/** Places visited now and then, as round icon buttons along the bottom of the sidebar. */
+const SHELF = [
   ['/tags', 'tag', 'Tags'],
+  ['/insights', 'insights', 'Insights'],
+  ['/sessions', 'sparkle', 'AI Sessions'],
+  ['/archive', 'archive', 'Archive'],
+  ['/settings', 'settings', 'Settings'],
 ] as const;
 
 /**
@@ -88,7 +94,6 @@ export function Layout() {
   const match = useMatch('/p/:id/*');
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
-  const [about, setAbout] = useState(false);
   // Sessions and AI Instructions live outside the page tree (AI Instructions inside AI Sessions).
   const sessionsId = tree.data?.sessions_id ?? null;
   const instructionsId = tree.data?.instructions_id ?? null;
@@ -104,6 +109,19 @@ export function Layout() {
     [tree.data, sessionsId, instructionsId],
   );
   const location = useLocation();
+  const navType = useNavigationType();
+  const mainRef = useRef<HTMLDivElement>(null);
+  // "/p/<id>" for a page (its slug can change), else the path.
+  const pageKey = location.pathname.split('/').slice(0, 3).join('/');
+  // A new page opens at its top (phones scroll the window, wider screens the main column). Back
+  // and forward keep where you were; a link to a heading scrolls there itself.
+  useLayoutEffect(() => {
+    if (navType === 'POP' || location.hash) return;
+    window.scrollTo(0, 0);
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+    // Only a change of page counts, not ?edit=1 or the slug catching up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageKey]);
 
   // Close the mobile menu after navigating.
   const [navPath, setNavPath] = useState(location.pathname);
@@ -143,7 +161,7 @@ export function Layout() {
   useEdgeSwipe(nav, setNav);
   // Phones: the menu covers the page, so the page behind it shouldn't scroll.
   useEffect(() => {
-    document.body.classList.toggle('nav-locked', nav);
+    document.documentElement.classList.toggle('nav-locked', nav);
   }, [nav]);
 
   useEffect(() => {
@@ -197,14 +215,7 @@ export function Layout() {
         </button>
         <nav className="view-pill" aria-label="Views">
           {VIEWS.map(([to, icon, label]) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to !== '/tags'}
-              className="vp-item"
-              aria-label={label}
-              title={label}
-            >
+            <NavLink key={to} to={to} end className="vp-item" aria-label={label} title={label}>
               <Icon name={icon} size={16} />
               <span className="vp-label">{label}</span>
             </NavLink>
@@ -216,21 +227,23 @@ export function Layout() {
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
         )}
-        {/* One rule above the footer links: AI Sessions (with AI Instructions inside it), Settings. */}
-        <div className="sidebar-foot">
-          <NavLink
-            to="/sessions"
-            className={({ isActive }) =>
-              `foot-link sessions-link${isActive || instructionsOpen ? ' active' : ''}`
-            }
-          >
-            <Icon name="sparkle" size={15} /> AI Sessions
-          </NavLink>
-          <NavLink to="/settings" className="foot-link">
-            <Icon name="settings" size={15} /> Settings
-          </NavLink>
-          <AboutButton className="foot-link about-side" onClick={() => setAbout(true)} />
-        </div>
+        {/* The shelf: the places outside the tree. AI Sessions stays lit inside AI Instructions. */}
+        <nav className="sidebar-foot shelf" aria-label="More">
+          {SHELF.map(([to, icon, label]) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/settings'}
+              className={({ isActive }) =>
+                `shelf-btn${isActive || (to === '/sessions' && instructionsOpen) ? ' active' : ''}`
+              }
+              aria-label={label}
+              title={label}
+            >
+              <Icon name={icon} size={18} />
+            </NavLink>
+          ))}
+        </nav>
         <div
           className="side-resize"
           role="separator"
@@ -259,7 +272,7 @@ export function Layout() {
         onClick={() => setNav(false)}
         tabIndex={-1}
       />
-      <div className="main">
+      <div className="main" ref={mainRef}>
         <header className="mobile-bar" ref={bar}>
           <button onClick={() => setNav(true)} aria-label="Open menu" className="menu-btn">
             <Icon name="menu" size={24} />
@@ -281,7 +294,6 @@ export function Layout() {
         </header>
         <Outlet />
       </div>
-      {about && <AboutSheet onClose={() => setAbout(false)} />}
       {palette && tree.data && <Palette pages={pages} onClose={() => setPalette(false)} />}
     </div>
   );

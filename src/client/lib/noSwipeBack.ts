@@ -1,21 +1,23 @@
 // Phones and tablets: a sideways swipe never goes "back" (or forward) in Nitrogen. The only
 // sideways swipe is the menu (Layout's useEdgeSwipe). Two layers:
 //
-// 1. A touch that starts at the very edge of the screen is claimed by the page, so iOS
-//    Safari's edge swipe never starts. Taps on controls there still work.
+// 1. A touch that starts at the very left edge of the screen is claimed by the page, so iOS
+//    Safari's back swipe never starts. Taps on controls there still work.
 // 2. A back/forward the system sends anyway (Android's back gesture, the installed app) is
 //    undone before the router sees it. This file loads before the router, so its popstate
 //    listener runs first. Desktop (fine pointers) keeps normal back and forward.
 
 const touch = window.matchMedia('(pointer: coarse)');
-const EDGE = 24;
+const EDGE = 20;
 
 document.addEventListener(
   'touchstart',
   (e) => {
     const t = e.touches[0];
     if (!touch.matches || !t || e.touches.length > 1 || !e.cancelable) return;
-    if (t.clientX > EDGE && t.clientX < window.innerWidth - EDGE) return;
+    // The left edge only: that's where iOS's back swipe starts. Claiming the right edge too kept
+    // thumbs scrolling near it from scrolling at all; a forward swipe is undone below anyway.
+    if (t.clientX > EDGE) return;
     const target = e.target as Element | null;
     if (
       target?.closest('a, button, input, textarea, select, label, [contenteditable], [role=button]')

@@ -11,7 +11,7 @@ import { keys } from '../lib/queries';
 import { Chips } from '../components/charts';
 import { Icon } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
-import { useTitleIndex } from './PageView';
+import { useTitleIndex } from '../lib/titles';
 
 export function useSessions() {
   return useQuery({

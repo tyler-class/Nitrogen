@@ -112,7 +112,7 @@ admin.get('/search', async (c) => {
 admin.get('/backup', async (c) => {
   const pages = await all(
     c.env.DB,
-    'SELECT id, parent_id, position, title, icon, body, version, created_at, updated_at, created_by, updated_by, pinned_at, tags, words, role FROM pages ORDER BY created_at',
+    'SELECT id, parent_id, position, title, icon, body, version, created_at, updated_at, created_by, updated_by, pinned_at, tags, words, role, archived_at FROM pages ORDER BY created_at',
   ).then((rows) => rows.map((r) => hydrate(r as never)));
   const files = await all<Backup['files'][number]>(
     c.env.DB,
@@ -169,8 +169,8 @@ admin.post('/restore', async (c) => {
         db
           .prepare(
             `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at,
-               created_by, updated_by, viewed_at, pinned_at, tags, words, role)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               created_by, updated_by, viewed_at, pinned_at, tags, words, role, archived_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             p.id,
@@ -188,6 +188,7 @@ admin.post('/restore', async (c) => {
             JSON.stringify(p.tags ?? []),
             wordCount(p.body),
             p.role ?? null,
+            p.archived_at ?? null,
           ),
       ),
     );

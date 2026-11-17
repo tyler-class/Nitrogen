@@ -1,7 +1,16 @@
 // Typed items (the open-items index and checking items off) and the protected Sessions section.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ITEM_TYPES, reminderPast, setItemAnswer, setItemDone, setItemDue } from '@shared/items';
+import {
+  ITEM_TYPES,
+  reminderPast,
+  editItem,
+  itemLines,
+  removeItem,
+  setItemAnswer,
+  setItemDone,
+  setItemDue,
+} from '@shared/items';
 import { localClock } from '@shared/notify';
 import { plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
@@ -33,7 +42,8 @@ system.get('/items', async (c) => {
   const dueBefore = c.req.query('due_before');
   const includeDone = c.req.query('include_done') === '1';
   const under = c.req.query('under');
-  const where = ['1 = 1'];
+  // Archived pages are out of the wiki, and so are their items.
+  const where = ['p.archived_at IS NULL'];
   const binds: unknown[] = [];
   if (!includeDone) where.push('i.done = 0');
   if (type) {
@@ -144,6 +154,78 @@ system.post('/pages/:id/items/due', async (c) => {
   }
 });
 
+/** Edit an item from the app's item editor: its type, text, date and time. */
+system.post('/pages/:id/items/edit', async (c) => {
+  const input = await body(
+    c,
+    z.object({
+      line: z.number().int().min(1),
+      type: z.enum(ITEM_TYPES),
+      text: z.string().min(1).max(2000),
+      due: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .nullable(),
+      time: z
+        .string()
+        .regex(/^\d{1,2}:\d{2}$/)
+        .nullable(),
+    }),
+  );
+  const db = c.env.DB;
+  for (let attempt = 0; ; attempt++) {
+    const page = await requirePage(db, c.req.param('id'));
+    const next = editItem(page.body, input.line, input);
+    if (next === null)
+      throw new ApiError(
+        input.type === 'reminder' && !input.due ? 400 : 409,
+        input.type === 'reminder' && !input.due ? 'invalid' : 'conflict',
+        input.type === 'reminder' && !input.due
+          ? 'Reminders need a date.'
+          : 'That item has moved. Reload the page.',
+      );
+    if (next === page.body) return c.json(page);
+    try {
+      const saved = await updatePage(
+        db,
+        page.id,
+        { body: next, base_version: page.version },
+        { actor: actorOf(c.env) },
+      );
+      indexSoon(c.env, c.executionCtx);
+      return c.json(saved);
+    } catch (e) {
+      if (e instanceof ConflictError && attempt < 2) continue;
+      throw e;
+    }
+  }
+});
+
+/** Delete an item: its whole line comes out of the page. */
+system.post('/pages/:id/items/delete', async (c) => {
+  const { line } = await body(c, z.object({ line: z.number().int().min(1) }));
+  const db = c.env.DB;
+  for (let attempt = 0; ; attempt++) {
+    const page = await requirePage(db, c.req.param('id'));
+    const next = removeItem(page.body, line);
+    if (next === null) throw new ApiError(409, 'conflict', 'That item has moved. Reload the page.');
+    try {
+      const saved = await updatePage(
+        db,
+        page.id,
+        { body: next, base_version: page.version },
+        { actor: actorOf(c.env) },
+      );
+      indexSoon(c.env, c.executionCtx);
+      // The line as it was, so the app can offer Undo.
+      return c.json({ ...saved, removed: itemLines(page.body, line).join('\n') });
+    } catch (e) {
+      if (e instanceof ConflictError && attempt < 2) continue;
+      throw e;
+    }
+  }
+});
+
 /** The Sessions log, newest first. Entries from before v0.7 have no session row; their page stands in. */
 system.get('/sessions', async (c) => {
   const db = c.env.DB;
@@ -192,7 +274,7 @@ system.get('/sessions', async (c) => {
 system.post('/pages/:id/items/answer', async (c) => {
   const { line, answer } = await body(
     c,
-    z.object({ line: z.number().int().min(1), answer: z.string().max(2000) }),
+    z.object({ line: z.number().int().min(1), answer: z.string().max(10_000) }),
   );
   const db = c.env.DB;
   for (let attempt = 0; ; attempt++) {

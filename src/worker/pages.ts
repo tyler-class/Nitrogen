@@ -28,7 +28,7 @@ export const REVISION_WINDOW_MS = 10 * 60_000;
 export const MAX_REVISIONS = 100;
 
 export const SUMMARY_COLS =
-  'id, parent_id, position, title, icon, updated_at, updated_by, pinned_at';
+  'id, parent_id, position, title, icon, updated_at, updated_by, pinned_at, archived_at';
 const PAGE_COLS = `${SUMMARY_COLS}, body, version, created_at, created_by, tags, words, role`;
 /** SUMMARY_COLS prefixed with a table alias. */
 export const summaryCols = (alias: string) =>
@@ -51,11 +51,71 @@ export function hydrate(row: PageRow): Page {
   return { ...row, tags };
 }
 
+/** Every page in the wiki (archived pages are left out: see listArchived). */
 export function listSummaries(db: D1Database): Promise<PageSummary[]> {
   return all<PageSummary>(
     db,
-    `SELECT ${SUMMARY_COLS} FROM pages ORDER BY parent_id, position, title`,
+    `SELECT ${SUMMARY_COLS} FROM pages WHERE archived_at IS NULL ORDER BY parent_id, position, title`,
   );
+}
+
+/** Archived pages, most recently archived first. */
+export function listArchived(db: D1Database): Promise<PageSummary[]> {
+  return all<PageSummary>(
+    db,
+    `SELECT ${SUMMARY_COLS} FROM pages WHERE archived_at IS NOT NULL
+     ORDER BY archived_at DESC, parent_id, position, title`,
+  );
+}
+
+/**
+ * Archive a page and everything inside it (one timestamp for the branch), or restore it. Restoring
+ * brings back the branch archived with it, and any archived pages above it so it has a place in
+ * the tree. Sessions and AI Instructions can't be archived.
+ */
+export async function setArchived(db: D1Database, id: string, archived: boolean): Promise<Page> {
+  const target = await requirePage(db, id);
+  if (archived) {
+    if (target.role === INSTRUCTIONS_ROLE)
+      throw new ApiError(403, 'protected', 'AI Instructions can’t be archived.');
+    const prot = await protection(db, id);
+    if (prot) throw protectedError(prot);
+    if (target.archived_at) return target;
+    const now = nowIso();
+    const ids = await subtreeIds(db, id);
+    await db.batch(
+      chunks(ids).map((part) =>
+        db
+          .prepare(
+            `UPDATE pages SET archived_at = ? WHERE archived_at IS NULL AND id IN (${marks(part.length)})`,
+          )
+          .bind(now, ...part),
+      ),
+    );
+  } else {
+    if (!target.archived_at) return target;
+    const ids = await subtreeIds(db, id);
+    const stmts = chunks(ids).map((part) =>
+      db
+        .prepare(
+          `UPDATE pages SET archived_at = NULL WHERE archived_at = ? AND id IN (${marks(part.length)})`,
+        )
+        .bind(target.archived_at, ...part),
+    );
+    stmts.push(
+      db
+        .prepare(
+          `WITH RECURSIVE up (id, depth) AS (
+             SELECT parent_id, 1 FROM pages WHERE id = ?1
+             UNION ALL SELECT p.parent_id, up.depth + 1 FROM pages p JOIN up ON p.id = up.id
+             WHERE up.depth < 64
+           ) UPDATE pages SET archived_at = NULL WHERE id IN (SELECT id FROM up)`,
+        )
+        .bind(id),
+    );
+    await db.batch(stmts);
+  }
+  return requirePage(db, id);
 }
 
 export async function getPage(db: D1Database, id: string): Promise<Page | null> {
@@ -89,7 +149,7 @@ export async function getDetail(db: D1Database, id: string): Promise<PageDetail>
     db
       .prepare(
         `SELECT ${summaryCols('p')} FROM links l JOIN pages p ON p.id = l.src
-         WHERE l.dst = ? AND l.src != l.dst ORDER BY p.title`,
+         WHERE l.dst = ? AND l.src != l.dst AND p.archived_at IS NULL ORDER BY p.title`,
       )
       .bind(id),
     db.prepare('SELECT tag FROM page_tags WHERE page_id = ? ORDER BY tag').bind(id),

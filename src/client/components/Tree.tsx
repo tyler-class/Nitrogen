@@ -5,9 +5,10 @@ import { NavLink, useNavigate } from 'react-router';
 import { pageHref } from '@shared/markdown';
 import { ancestorsOf, buildTree, type TreeNode } from '@shared/tree';
 import type { PageSummary } from '@shared/types';
-import { errorMessage } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
 import { readLocal, writeLocal } from '../lib/storage';
-import { useCreatePage, useDeletePage, useMovePage, useRenamePage } from '../lib/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { keys, useCreatePage, useDeletePage, useMovePage, useRenamePage } from '../lib/queries';
 import { Icon, PageGlyph } from './Icon';
 import { useToast } from './Toast';
 
@@ -49,6 +50,7 @@ export function Tree({
   const move = useMovePage();
   const rename = useRenamePage();
   const del = useDeletePage();
+  const qc = useQueryClient();
 
   // Keep the current page visible: when it changes, expand its ancestors (during render, so the
   // tree never paints collapsed first).
@@ -74,6 +76,29 @@ export function Tree({
       if (parentId) setOpen((o) => new Set([...o, parentId]));
       navigate(`${pageHref(page.id, page.title)}?edit=1`);
       onNavigate?.();
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
+
+  /** Archive a page with everything inside it (out of the tree, restorable), or undo that. */
+  async function archive(p: PageSummary, on: boolean) {
+    const refresh = () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: keys.tree }),
+        qc.invalidateQueries({ queryKey: ['page'] }),
+        qc.invalidateQueries({ queryKey: ['items'] }),
+        qc.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+    try {
+      await api.post(`/pages/${p.id}/archive`, { archived: on });
+      await refresh();
+      if (!on) return;
+      const n = pages.some((c) => c.parent_id === p.id);
+      toast(n ? `Archived “${p.title}” and the pages inside it.` : `Archived “${p.title}”.`, {
+        label: 'Undo',
+        run: () => void archive(p, false),
+      });
     } catch (e) {
       toast(errorMessage(e));
     }
@@ -242,6 +267,9 @@ export function Tree({
                     <Icon name="arrowUp" size={15} /> Move to top level
                   </button>
                 )}
+                <button role="menuitem" onClick={() => (setMenu(null), void archive(p, true))}>
+                  <Icon name="archive" size={15} /> Archive
+                </button>
                 <button
                   role="menuitem"
                   className="danger"

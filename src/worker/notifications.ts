@@ -38,7 +38,7 @@ async function loadOpen(db: D1Database): Promise<DatedItem[]> {
     db,
     `SELECT i.page_id, p.title AS page_title, i.line, i.type, i.text, i.due, i.due_time
      FROM page_items i JOIN pages p ON p.id = i.page_id
-     WHERE i.done = 0 AND (i.type = 'question'
+     WHERE i.done = 0 AND p.archived_at IS NULL AND (i.type = 'question'
        OR (i.due IS NOT NULL AND i.type IN (${DATED_TYPES.map(() => '?').join(', ')})))`,
     ...DATED_TYPES,
   );

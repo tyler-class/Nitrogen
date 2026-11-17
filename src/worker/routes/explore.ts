@@ -1,4 +1,4 @@
-// The dashboard, inbox, activity log (with undo by session), insights, tags, and the ways pages
+// The dashboard, activity log (with undo by session), insights, tags, and the ways pages
 // connect beyond the tree: related pages, unlinked mentions and the local graph.
 import { instructionsId } from '../instructions';
 import { Hono } from 'hono';
@@ -9,7 +9,6 @@ import { revertInput } from '@shared/schemas';
 import { ancestorsOf } from '@shared/tree';
 import type {
   Dashboard,
-  InboxItem,
   Insights,
   Mention,
   PageEvent,
@@ -21,7 +20,7 @@ import type {
   TagCount,
 } from '@shared/types';
 import { actorOf } from '../auth';
-import { all, first, nowIso } from '../db';
+import { all, first } from '../db';
 import {
   ConflictError,
   deletePage,
@@ -47,7 +46,7 @@ const EVENT_COLS = `e.id, e.page_id, e.title, e.action, e.actor, e.started_at, e
 
 async function recentEvents(
   db: D1Database,
-  opts: { limit: number; actor?: string; since?: string },
+  opts: { limit: number; actor?: string; since?: string; who?: 'you' | 'agents' },
 ): Promise<PageEvent[]> {
   const where: string[] = [];
   const binds: unknown[] = [];
@@ -55,6 +54,8 @@ async function recentEvents(
     where.push('e.actor = ?');
     binds.push(opts.actor);
   }
+  // You, or any assistant.
+  if (opts.who) where.push(opts.who === 'agents' ? "e.actor LIKE 'agent:%'" : "e.actor = 'you'");
   if (opts.since) {
     where.push('e.created_at >= ?');
     binds.push(opts.since);
@@ -95,27 +96,21 @@ export function toSessions(events: PageEvent[]): Session[] {
 explore.get('/dashboard', async (c) => {
   const db = c.env.DB;
   const week = daysAgo(7);
-  const [inbox, pinned, activity, counts] = await Promise.all([
-    all<Omit<InboxItem, 'is_new'> & { is_new: number }>(
-      db,
-      `SELECT ${summaryCols('p')}, (p.viewed_at IS NULL OR p.viewed_at < p.created_at) AS is_new
-       FROM pages p WHERE p.updated_by LIKE 'agent:%'
-         AND (p.viewed_at IS NULL OR p.viewed_at < p.updated_at)
-         -- Session entries are a log, not news.
-         AND p.id NOT IN (SELECT value FROM settings WHERE key = 'sessions_id')
-         AND (p.parent_id IS NULL OR p.parent_id NOT IN (SELECT value FROM settings WHERE key = 'sessions_id'))
-       ORDER BY p.updated_at DESC LIMIT 30`,
-    ),
+  const [pinned, activity, activityYou, activityAgents, counts] = await Promise.all([
     all<PageSummary>(
       db,
-      `SELECT ${summaryCols('p')} FROM pages p WHERE p.pinned_at IS NOT NULL ORDER BY p.pinned_at`,
+      `SELECT ${summaryCols('p')} FROM pages p WHERE p.pinned_at IS NOT NULL AND p.archived_at IS NULL
+       ORDER BY p.pinned_at`,
     ),
-    recentEvents(db, { limit: 12 }),
+    recentEvents(db, { limit: 8 }),
+    recentEvents(db, { limit: 8, who: 'you' }),
+    recentEvents(db, { limit: 8, who: 'agents' }),
     first<{ pages: number; words: number; tags: number; edits: number; agent_edits: number }>(
       db,
-      `SELECT (SELECT COUNT(*) FROM pages) AS pages,
-              (SELECT COALESCE(SUM(words), 0) FROM pages) AS words,
-              (SELECT COUNT(DISTINCT tag) FROM page_tags) AS tags,
+      `SELECT (SELECT COUNT(*) FROM pages WHERE archived_at IS NULL) AS pages,
+              (SELECT COALESCE(SUM(words), 0) FROM pages WHERE archived_at IS NULL) AS words,
+              (SELECT COUNT(DISTINCT tag) FROM page_tags t JOIN pages p ON p.id = t.page_id
+               WHERE p.archived_at IS NULL) AS tags,
               (SELECT COUNT(*) FROM page_events WHERE created_at >= ?1) AS edits,
               (SELECT COUNT(*) FROM page_events WHERE created_at >= ?1 AND actor LIKE 'agent:%') AS agent_edits`,
       week,
@@ -129,21 +124,11 @@ explore.get('/dashboard', async (c) => {
       edits_week: counts?.edits ?? 0,
       agent_edits_week: counts?.agent_edits ?? 0,
     },
-    inbox: inbox.map((p) => ({ ...p, is_new: !!p.is_new })),
     pinned,
     activity,
+    activity_you: activityYou,
+    activity_agents: activityAgents,
   });
-});
-
-/** Mark everything in the inbox as seen. */
-explore.post('/inbox/clear', async (c) => {
-  const res = await c.env.DB.prepare(
-    `UPDATE pages SET viewed_at = ? WHERE updated_by LIKE 'agent:%'
-       AND (viewed_at IS NULL OR viewed_at < updated_at)`,
-  )
-    .bind(nowIso())
-    .run();
-  return c.json({ ok: true, cleared: res.meta.changes });
 });
 
 // ---------------------------------------------------------------- activity
@@ -247,14 +232,19 @@ explore.post('/activity/revert', async (c) => {
 explore.get('/tags', async (c) => {
   const tags = await all<TagCount>(
     c.env.DB,
-    'SELECT tag, COUNT(*) AS count FROM page_tags GROUP BY tag ORDER BY count DESC, tag',
+    `SELECT t.tag, COUNT(*) AS count FROM page_tags t JOIN pages p ON p.id = t.page_id
+     WHERE p.archived_at IS NULL GROUP BY t.tag ORDER BY count DESC, t.tag`,
   );
   return c.json({ tags });
 });
 
 // ---------------------------------------------------------------- connections
 
-/** Pages that name this page in plain text but don't link to it. */
+/**
+ * Pages that name this page in plain text but don't link to it: the five that name it most. Its
+ * own branch (the pages above it and inside it, which naturally say its name) and AI session
+ * entries (which name pages in passing) are left out.
+ */
 explore.get('/pages/:id/mentions', async (c) => {
   const db = c.env.DB;
   const page = await requirePage(db, c.req.param('id'));
@@ -264,18 +254,32 @@ explore.get('/pages/:id/mentions', async (c) => {
   const phrase = `"${words.join(' ')}"`;
   const rows = await all<{ id: string; title: string; icon: string | null; body: string }>(
     db,
-    `SELECT p.id, p.title, p.icon, p.body FROM pages_fts f JOIN pages p ON p.id = f.page_id
-     WHERE pages_fts MATCH ? AND p.id != ?
-       AND p.id NOT IN (SELECT src FROM links WHERE dst = ?)
-     LIMIT 60`,
+    `WITH RECURSIVE up (id, depth) AS (
+       SELECT parent_id, 1 FROM pages WHERE id = ?2
+       UNION ALL SELECT p.parent_id, up.depth + 1 FROM pages p JOIN up ON p.id = up.id
+       WHERE up.depth < 64
+     ), down (id) AS (
+       SELECT ?2 UNION SELECT p.id FROM pages p JOIN down ON p.parent_id = down.id
+     ), sessions (id) AS (
+       SELECT value FROM settings WHERE key = 'sessions_id'
+     )
+     SELECT p.id, p.title, p.icon, p.body FROM pages_fts f JOIN pages p ON p.id = f.page_id
+     WHERE pages_fts MATCH ?1 AND p.archived_at IS NULL
+       AND p.id NOT IN (SELECT id FROM up WHERE id IS NOT NULL)
+       AND p.id NOT IN (SELECT id FROM down)
+       AND p.id NOT IN (SELECT id FROM sessions)
+       AND (p.parent_id IS NULL OR p.parent_id NOT IN (SELECT id FROM sessions))
+       AND p.id NOT IN (SELECT src FROM links WHERE dst = ?2)
+     LIMIT 100`,
     `body : ${phrase}`,
-    page.id,
     page.id,
   );
   const mentions: Mention[] = rows
-    .filter((r) => findMentions(r.body, title).length)
-    .slice(0, 20)
-    .map((r) => ({
+    .map((r) => ({ r, n: findMentions(r.body, title).length }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.r.title.localeCompare(b.r.title))
+    .slice(0, 5)
+    .map(({ r }) => ({
       id: r.id,
       title: r.title,
       icon: r.icon,
@@ -424,14 +428,16 @@ explore.get('/insights', async (c) => {
                 SUM(created_at >= ?1) AS e7, SUM(created_at >= ?2) AS e30,
                 SUM(created_at >= ?3) AS e90, COUNT(*) AS eall
          FROM page_events WHERE action IN ('create', 'edit', 'restore') GROUP BY page_id
-       ) e ON e.page_id = p.id`,
+       ) e ON e.page_id = p.id
+       WHERE p.archived_at IS NULL`,
       daysAgo(7),
       daysAgo(30),
       daysAgo(90),
     ),
     all<TagCount>(
       db,
-      'SELECT tag, COUNT(*) AS count FROM page_tags GROUP BY tag ORDER BY count DESC, tag',
+      `SELECT t.tag, COUNT(*) AS count FROM page_tags t JOIN pages p ON p.id = t.page_id
+     WHERE p.archived_at IS NULL GROUP BY t.tag ORDER BY count DESC, t.tag`,
     ),
     all<{ query: string; count: number; last: string }>(
       db,

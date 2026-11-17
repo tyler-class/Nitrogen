@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import {
   createPageInput,
   createTreeInput,
+  archiveInput,
   movePageInput,
   pinInput,
   updatePageInput,
@@ -15,11 +16,13 @@ import {
   deletePage,
   getDetail,
   getRevision,
+  listArchived,
   listRevisions,
   listSummaries,
   movePage,
   restoreRevision,
   sessionsRoot,
+  setArchived,
   updatePage,
 } from '../pages';
 import { indexSoon } from '../search';
@@ -32,12 +35,17 @@ export const pages = new Hono<AppEnv>();
 pages.get('/tree', async (c) => {
   // Made from the template the first time, so AI Instructions always has a page to edit.
   const guide = await ensureInstructions(c.env.DB);
-  const [list, sessions] = await Promise.all([listSummaries(c.env.DB), sessionsRoot(c.env.DB)]);
+  const [list, sessions, archived] = await Promise.all([
+    listSummaries(c.env.DB),
+    sessionsRoot(c.env.DB),
+    listArchived(c.env.DB),
+  ]);
   const instructionsId = list.some((p) => p.id === guide) ? guide : null;
   return c.json<TreeResponse>({
     pages: list,
     sessions_id: sessions,
     instructions_id: instructionsId,
+    archived,
   });
 });
 
@@ -46,13 +54,6 @@ pages.get('/ai-instructions', async (c) => c.json({ id: await ensureInstructions
 
 pages.get('/pages/:id', async (c) => {
   const detail = await getDetail(c.env.DB, c.req.param('id'));
-  // The owner opening a page clears it from the inbox; assistants reading it don't.
-  if (!isInternal(c.env))
-    c.executionCtx.waitUntil(
-      c.env.DB.prepare('UPDATE pages SET viewed_at = ? WHERE id = ?')
-        .bind(nowIso(), detail.page.id)
-        .run(),
-    );
   return c.json(detail);
 });
 
@@ -112,6 +113,13 @@ pages.post('/pages/:id/revisions/:rev/restore', async (c) => {
   if (!Number.isInteger(rev)) throw new ApiError(400, 'invalid', 'Bad revision id.');
   const page = await restoreRevision(c.env.DB, c.req.param('id'), rev, actorOf(c.env));
   indexSoon(c.env, c.executionCtx);
+  return c.json(page);
+});
+
+/** Archive a page with everything inside it, or restore it. Not a content change. */
+pages.post('/pages/:id/archive', async (c) => {
+  const { archived } = await body(c, archiveInput);
+  const page = await setArchived(c.env.DB, c.req.param('id'), archived);
   return c.json(page);
 });
 
