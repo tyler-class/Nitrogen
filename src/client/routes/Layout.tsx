@@ -14,7 +14,7 @@ const MAX_W = 460;
 /** The everyday views, as one pill: icons only, the current one with its name. */
 const VIEWS = [
   ['/', 'home', 'Home'],
-  ['/items', 'checks', 'Open items'],
+  ['/items', 'checks', 'Open Items'],
   ['/activity', 'activity', 'Activity'],
 ] as const;
 

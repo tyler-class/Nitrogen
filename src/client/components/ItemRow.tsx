@@ -1,6 +1,6 @@
 // One open item as a row you can act on: check off a to-do or question, answer a question, or edit
 // (type, text, date, time) and delete it from the buttons at the end of its first row. Used on the
-// Open items page and in a page's own Open items box; each change edits that item in its page.
+// Open Items page and in a page's own Open Items box; each change edits that item in its page.
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { ITEM_LABELS, dateWords, isOverdue, type ItemEdit } from '@shared/items';
@@ -20,7 +20,7 @@ export function ItemRow({
   showPage = true,
 }: {
   item: OpenItem;
-  /** The page's name after the item (off inside the page's own Open items box). */
+  /** The page's name after the item (off inside the page's own Open Items box). */
   showPage?: boolean;
   today: string;
   onDone(done: boolean): void;

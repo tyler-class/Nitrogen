@@ -24,7 +24,7 @@ describe('plain markdown export', () => {
         '> **Tip: Remember**',
         '> Text',
         '',
-        '> **To do:** Ship [Roadmap](../Roadmap.md) (@sam, due 2026-11-20)',
+        '> **To Do:** Ship [Roadmap](../Roadmap.md) (@sam, due 2026-11-20)',
         '>',
         '> **Question (done):** Which? **Answer:** This one.',
         '',

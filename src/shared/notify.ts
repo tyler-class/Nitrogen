@@ -212,7 +212,7 @@ export function fingerprint(s: string): string {
 // The badge and the morning digest
 
 /**
- * Where a summary goes: the Open items page (its own page, so hiding a panel on Home can't hide
+ * Where a summary goes: the Open Items page (its own page, so hiding a panel on Home can't hide
  * it) on the tab that lists exactly what the notification was about.
  */
 export const DUE_TODAY_URL = '/items?show=today';
@@ -239,7 +239,7 @@ export function dueToday(items: readonly DatedItem[], today: string): DatedItem[
 
 /**
  * "Due today": "3 to-dos: Send the draft, Call the dentist (2:00 PM), …". Opens the item when
- * there's one, its page when they're all on one page, else the Open items page on Due today.
+ * there's one, its page when they're all on one page, else the Open Items page on Due today.
  * Null when nothing is due today.
  */
 export function digestNotice(items: readonly DatedItem[], today: string): Notice | null {
@@ -283,7 +283,7 @@ export function newlyOverdue(items: readonly DatedItem[], today: string): DatedI
 
 /**
  * "Overdue: Renew the domain (due Nov 10)". Several that morning are one notification: "Overdue:
- * 2 to-dos and 1 reminder (due Nov 10): …", opening Open items on Overdue. Each item is only ever offered on its
+ * 2 to-dos and 1 reminder (due Nov 10): …", opening Open Items on Overdue. Each item is only ever offered on its
  * first overdue day, so it's sent once. Null when nothing became overdue today.
  */
 export function overdueNotice(items: readonly DatedItem[], today: string): Notice | null {
@@ -435,11 +435,11 @@ export const assistantUrl = (w: AssistantWindow) =>
 // ---------------------------------------------------------------------------------------------
 // Open questions
 
-/** The Open items page on its questions tab. */
+/** The Open Items page on its questions tab. */
 export const QUESTIONS_URL = '/items?show=questions';
 
 /**
- * Monday from 8 a.m.: "4 open questions: Which hosting plan?, …", opening the Open items page on
+ * Monday from 8 a.m.: "4 open questions: Which hosting plan?, …", opening the Open Items page on
  * questions. Null on other days, before 8, or when every question is answered.
  */
 export function questionsNotice(items: readonly DatedItem[], now: Clock): Notice | null {

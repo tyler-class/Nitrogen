@@ -23,7 +23,7 @@ export const ITEM_TYPES = ['todo', 'question', 'reminder'] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
 export const ITEM_LABELS: Record<ItemType, string> = {
-  todo: 'To do',
+  todo: 'To Do',
   question: 'Question',
   reminder: 'Reminder',
 };

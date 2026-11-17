@@ -374,3 +374,15 @@
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
+
+/* The grip (and the width/hide tools) line up with the title row, not the title and its subtitle
+   together: everything sits at the top, and the 26px title row is centred in their 32px. */
+.pn-h {
+  align-items: flex-start;
+}
+.pn-t {
+  padding-top: 3px;
+}
+.pn-tools {
+  margin-top: 1px;
+}

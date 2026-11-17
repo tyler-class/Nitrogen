@@ -1,9 +1,9 @@
-// The one filter for open items, the same on Home and on the Open items page: All, Today,
+// The one filter for open items, the same on Home and on the Open Items page: All, Today,
 // Overdue, Questions, each with its count. Plus the empty state for each.
 import { isOverdue } from '@shared/items';
 import type { OpenItem } from '@shared/types';
 import { SlideToggle } from './charts';
-import { Icon } from './Icon';
+import { EmptyState } from './EmptyState';
 
 export const SHOWS = ['all', 'today', 'overdue', 'questions'] as const;
 export type Show = (typeof SHOWS)[number];
@@ -21,7 +21,7 @@ export function showFilter(today: string): Record<Show, (i: OpenItem) => boolean
   };
 }
 
-/** The Open items page for a choice ("View all" from Home lands on the same one). */
+/** The Open Items page for a choice ("View all" from Home lands on the same one). */
 export const showHref = (s: Show) => (s === 'all' ? '/items' : `/items?show=${s}`);
 
 export function OpenItemsToggle({
@@ -63,15 +63,5 @@ const EMPTY: Record<Show, [string, string]> = {
 /** A calm "nothing here" for a choice: a check in a circle, a headline and one line. */
 export function ItemsEmpty({ show }: { show: Show }) {
   const [title, line] = EMPTY[show];
-  return (
-    <div className="items-empty-state">
-      <span className="items-empty-icon" aria-hidden>
-        <Icon name="checks" size={20} />
-      </span>
-      <div>
-        <p className="items-empty-title">{title}</p>
-        <p className="items-empty-line">{line}</p>
-      </div>
-    </div>
-  );
+  return <EmptyState icon="checks" title={title} line={line} />;
 }

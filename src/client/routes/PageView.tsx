@@ -536,8 +536,7 @@ function ReadPage({
       {page.archived_at && (
         <div className="banner archived-banner" role="status">
           <p>
-            <Icon name="archive" size={15} /> Archived {formatWhen(page.archived_at)}. It’s out of
-            the tree, search, open items and assistants’ view.
+            <Icon name="archive" size={15} /> Archived {formatWhen(page.archived_at)}.
           </p>
           <button className="btn small" onClick={() => void archive(false)}>
             <Icon name="unarchive" size={14} /> Restore
@@ -707,14 +706,20 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           });
           setDraft((cur) => ({ ...cur, base: next.version }));
           current.current = { ...current.current, base: next.version };
+          // The tags under the title show at once: the page's own plus #tags in the body.
+          const allTags = [...new Set([...next.tags, ...extractTags(next.body)])].sort();
           qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
-            old ? { ...old, page: next } : old,
+            old ? { ...old, page: next, all_tags: allTags } : old,
           );
           if (!cached || cached.title !== next.title || cached.icon !== next.icon)
             void qc.invalidateQueries({ queryKey: keys.tree });
           // all_tags (incl. #tags in the body) comes from the server; refresh it when viewing.
-          if (!cached || !sameTags(cached.tags, next.tags) || cached.body !== next.body)
+          if (!cached || !sameTags(cached.tags, next.tags) || cached.body !== next.body) {
             void qc.invalidateQueries({ queryKey: keys.page(page.id), refetchType: 'none' });
+            // The Tags view and each tag's page list pages by tag.
+            void qc.invalidateQueries({ queryKey: ['tags'] });
+            void qc.invalidateQueries({ queryKey: ['tag'] });
+          }
           const latest = current.current;
           if (
             latest.body === d.body &&
@@ -954,11 +959,11 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         <span className="toolbar-sep" aria-hidden />
         <button
           onClick={() => editor.current?.wrap('\n- [ ] todo: ', '')}
-          title="To do: - [ ] todo: … @owner due:YYYY-MM-DD (add HH:MM to be notified then)"
+          title="To Do: - [ ] todo: … @owner due:YYYY-MM-DD (add HH:MM to be notified then)"
           aria-label="Insert a to-do"
           className="tb-item item-todo"
         >
-          To do
+          To Do
         </button>
         <button
           onClick={() => editor.current?.wrap('\n- question: ', '')}
@@ -1180,7 +1185,7 @@ function ComparePair({
 }
 
 /**
- * This page's open items, at the top: the same rows as the Open items page, so a to-do can be
+ * This page's open items, at the top: the same rows as the Open Items page, so a to-do can be
  * checked off, a question answered, a date changed or an item deleted right here as well as where
  * it's written. Its header stays pinned while the list scrolls under it, and a tap on the header
  * folds the list away (remembered on this device).
@@ -1220,7 +1225,7 @@ function ItemSummary({
   const today = todayKey();
   const count = list.filter(isOpen).length;
   return (
-    <aside className={`item-summary${open ? ' open' : ''}`} aria-label="Open items on this page">
+    <aside className={`item-summary${open ? ' open' : ''}`} aria-label="Open Items on this page">
       <h2 className="item-summary-title">
         <button
           type="button"
@@ -1229,7 +1234,7 @@ function ItemSummary({
           aria-controls={`items-${page.id}`}
           onClick={toggle}
         >
-          <Icon name="checks" size={16} /> Open items <span className="count">{count}</span>
+          <Icon name="checks" size={16} /> Open Items <span className="count">{count}</span>
           <span className="item-summary-chev" aria-hidden>
             <Icon name="chevron" size={16} />
           </span>
@@ -1351,7 +1356,7 @@ export function formatWhen(iso: string): string {
   const d = new Date(iso);
   const diff = (Date.now() - d.getTime()) / 1000;
   if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }

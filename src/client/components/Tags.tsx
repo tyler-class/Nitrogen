@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { normalizeTag } from '@shared/markdown';
+import { Icon } from './Icon';
 
 /** Tags under a page title, linking to each tag's page. */
 export function TagList({ tags }: { tags: string[] }) {
@@ -55,24 +56,29 @@ export function TagEditor({
           #{t}
         </span>
       ))}
-      <input
-        className="tag-input"
-        value={text}
-        placeholder={tags.length || inline.length ? 'Add tag' : 'Add tags'}
-        aria-label="Add a tag"
-        onChange={(e) => {
-          const v = e.target.value;
-          if (/[,\n]/.test(v)) add(v);
-          else setText(v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && text.trim()) {
-            e.preventDefault();
-            add(text);
-          } else if (e.key === 'Backspace' && !text && tags.length) onChange(tags.slice(0, -1));
-        }}
-        onBlur={() => text.trim() && add(text)}
-      />
+      {/* A dashed "+ Add tag" pill: tap in, type, then Enter (or tap away) makes the tag. */}
+      <label className="tag-add">
+        <Icon name="plus" size={12} />
+        <input
+          className="tag-input"
+          size={Math.max(text.length + 1, 7)}
+          value={text}
+          placeholder="Add tag"
+          aria-label="Add a tag"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (/[,\n]/.test(v)) add(v);
+            else setText(v);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && text.trim()) {
+              e.preventDefault();
+              add(text);
+            } else if (e.key === 'Backspace' && !text && tags.length) onChange(tags.slice(0, -1));
+          }}
+          onBlur={() => text.trim() && add(text)}
+        />
+      </label>
     </div>
   );
 }

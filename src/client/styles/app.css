@@ -3998,7 +3998,7 @@ body.resizing {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
-/* Open items page (where summary notifications go) and Activity's one-hour view. */
+/* Open Items page (where summary notifications go) and Activity's one-hour view. */
 .open-items-page .slide-toggle {
   margin: 4px 0 18px;
 }
@@ -4047,7 +4047,7 @@ body.resizing {
   padding-top: 6px;
 }
 
-/* Open items page: rows you can act on in place. */
+/* Open Items page: rows you can act on in place. */
 .items-full {
   list-style: none;
   margin: 0;
@@ -4353,7 +4353,7 @@ body.resizing {
   flex-basis: 100%;
   margin-top: 6px;
 }
-/* A page's Open items box: the Open items page's rows, a little tighter. */
+/* A page's Open Items box: the Open Items page's rows, a little tighter. */
 .item-summary .item-row {
   padding: 10px 2px;
 }
@@ -4431,7 +4431,7 @@ body.resizing {
   }
 }
 
-/* --- 1.0.4: a page's Open items box. The header (with the box's top edge) stays pinned under
+/* --- 1.0.4: a page's Open Items box. The header (with the box's top edge) stays pinned under
    the page's top bar while the list scrolls beneath it; a tap on it folds the list away. */
 .item-summary {
   --items-top: 56px; /* the page's sticky top row on wide screens */
@@ -4789,8 +4789,14 @@ body.resizing {
 .qa-input {
   flex: 1;
   min-width: 0;
-  padding: 0;
+  /* A little room inside (taken back by the margin, so the text doesn't move): with none, the
+     caret sat on the clipped edge, and iOS's default rounded corners cut it further. */
+  padding: 2px 3px;
+  margin: -2px -3px;
   border: 0;
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -4973,7 +4979,7 @@ body.resizing {
   }
 }
 
-/* --- 1.0.4: "nothing here" for open items (Home and the Open items page). */
+/* --- 1.0.4: "nothing here" for open items (Home and the Open Items page). */
 .items-empty-state {
   display: flex;
   align-items: center;
@@ -5055,7 +5061,7 @@ body.resizing {
   margin: 0.1em 0;
 }
 
-/* Home: an item's date and page wrap rather than run off the edge. In Open items they sit on
+/* Home: an item's date and page wrap rather than run off the edge. In Open Items they sit on
    their own line under the item, left-aligned, for to-dos and reminders alike. */
 .home .dash-meta {
   white-space: normal;
@@ -5071,7 +5077,7 @@ body.resizing {
   white-space: nowrap;
 }
 
-/* Open items on phones: the page goes on its own line under the item, without the dot. */
+/* Open Items on phones: the page goes on its own line under the item, without the dot. */
 @media (max-width: 860px) {
   .item-row-sep {
     display: none;
@@ -5096,38 +5102,6 @@ body.resizing {
 .item-row > .item-editor {
   margin-left: 30px;
 }
-.item-editor-type {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  color: var(--item-fg);
-}
-.item-editor-type select {
-  appearance: none;
-  -webkit-appearance: none;
-  height: 32px;
-  padding: 0 32px 0 14px;
-  border: 1px solid color-mix(in srgb, var(--item-fg) 45%, transparent);
-  border-radius: 999px;
-  background: var(--item-bg);
-  color: var(--item-fg);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.item-editor-type select:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--item-fg) 50%, transparent);
-  outline-offset: 2px;
-}
-.item-editor-type .icon,
-.item-editor-type svg {
-  position: absolute;
-  right: 11px;
-  transform: rotate(90deg);
-  pointer-events: none;
-}
 textarea.item-editor-text {
   display: block;
   resize: none;
@@ -5142,4 +5116,169 @@ textarea.item-editor-text {
     margin-left: 0;
     max-width: none;
   }
+}
+
+/* Open Items rows: a slightly smaller circle, so its hover shade stays clear of the row's line. */
+.item-row .item-acts {
+  margin: -3px -4px -3px auto;
+}
+.item-row .item-act {
+  width: 30px;
+  height: 30px;
+}
+
+/* The item editor's type picker: a pill in the item's colour, opening a themed list. */
+.item-type-picker {
+  position: relative;
+  align-self: flex-start;
+}
+.item-type-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 11px 0 14px;
+  border: 1px solid color-mix(in srgb, var(--item-fg) 45%, transparent);
+  border-radius: 999px;
+  background: var(--item-bg);
+  color: var(--item-fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+.item-type-btn svg {
+  transform: rotate(90deg);
+  transition: transform 0.18s ease;
+}
+.item-type-btn[aria-expanded='true'] svg {
+  transform: rotate(-90deg);
+}
+.item-type-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--item-fg) 50%, transparent);
+  outline-offset: 2px;
+}
+.item-type-menu {
+  left: 0;
+  right: auto;
+  min-width: 170px;
+}
+.item-type-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.item-type-menu button[aria-selected='true'] {
+  font-weight: 600;
+}
+.item-type-menu button svg {
+  margin-left: auto;
+  color: var(--item-fg);
+}
+.item-type-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--item-fg);
+  flex: none;
+}
+
+/* Once the Open Items box has finished opening, let a type list hang out of it instead of being
+   cut off (closing hides the overflow again straight away, for the slide). */
+.item-summary.open .item-summary-inner {
+  animation: items-overflow 0s 0.25s forwards;
+}
+@keyframes items-overflow {
+  to {
+    overflow: visible;
+  }
+}
+
+/* Home's Open Items card uses the Open Items page's rows. */
+.home-items .item-row {
+  padding-inline: 0;
+}
+.home-items .item-row:last-child {
+  border-bottom: 0;
+}
+.home-card > .see-all {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+/* "+ Add tag": a dashed grey pill the size of a tag; solid accent while typing in it. */
+.tag-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 9px 1px 8px;
+  border: 1px dashed color-mix(in srgb, var(--ink) 28%, transparent);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: text;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tag-add:hover {
+    border-color: color-mix(in srgb, var(--ink) 45%, transparent);
+    color: var(--ink);
+  }
+}
+.tag-add:focus-within {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.tag-add .tag-input {
+  flex: none;
+  min-width: 0;
+  width: auto;
+  padding: 1px 0;
+}
+.tag-add .tag-input::placeholder {
+  color: var(--muted);
+}
+
+/* Archived banner: one grey line, with Restore at the top right, level with it. */
+.archived-banner {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+.archived-banner p {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  color: var(--muted);
+}
+.archived-banner .btn {
+  flex: none;
+}
+.archived-banner {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+/* Home in one column (phones): Open Items, then Pinned, then Recently edited and AI sessions.
+   The two columns dissolve so the cards can be ordered; two columns are unchanged. */
+@container home (max-width: 759.98px) {
+  .home-col {
+    display: contents;
+  }
+  .home-open {
+    order: 1;
+  }
+  .home-pinned {
+    order: 2;
+  }
+  .home-recent {
+    order: 3;
+  }
+  .home-ai {
+    order: 4;
+  }
+}
+.items-empty-state.plain .items-empty-icon {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }

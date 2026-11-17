@@ -32,7 +32,7 @@ import { ApiError, body, type AppEnv } from './util';
 
 export const system = new Hono<AppEnv>();
 
-/** Open items across the wiki (or with done ones), soonest due first (by date, then time). */
+/** Open Items across the wiki (or with done ones), soonest due first (by date, then time). */
 system.get('/items', async (c) => {
   const db = c.env.DB;
   await ensureItemsIndexed(db);

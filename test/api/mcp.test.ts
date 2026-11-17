@@ -514,7 +514,7 @@ describe('MCP', () => {
     expect(agentEdit.isError).toBe(true);
     expect((await api.post('/sessions/log', { title: 'x', summary: 'y' })).status).toBe(403);
 
-    // Open items from page bodies and session summaries; check one off in place.
+    // Open Items from page bodies and session summaries; check one off in place.
     const items = await tool(token, 'open_items', { type: 'todo' });
     expect(items.text).toContain('todo: Ship it @sam due 2026-01-02');
     expect(items.text).toContain('todo: Call the vendor due 2026-01-03 09:30');

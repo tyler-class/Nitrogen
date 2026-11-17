@@ -1,7 +1,7 @@
-// The pieces every open item shares, wherever it's shown (in the page, the page's Open items box,
-// the Open items view): its edit and delete buttons, the editor behind the pencil, and a
+// The pieces every open item shares, wherever it's shown (in the page, the page's Open Items box,
+// the Open Items view): its edit and delete buttons, the editor behind the pencil, and a
 // question's answer.
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ITEM_LABELS, ITEM_TYPES, type ItemEdit, type ItemType } from '@shared/items';
 import { useTitleIndex } from '../lib/titles';
 import { DatePicker, TimePicker } from './DateTimePicker';
@@ -91,20 +91,7 @@ export function ItemEditor({
       }}
       onKeyDown={(e) => e.key === 'Escape' && onCancel()}
     >
-      <label className={`item-editor-type item-${type}`}>
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as ItemType)}
-          aria-label="Type"
-        >
-          {ITEM_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {ITEM_LABELS[t]}
-            </option>
-          ))}
-        </select>
-        <Icon name="chevron" size={14} />
-      </label>
+      <TypePicker value={type} onChange={setType} />
       {/* One line in the page, but it wraps here so it's all in view; Enter saves. */}
       <textarea
         ref={textBox}
@@ -153,6 +140,77 @@ export function ItemEditor({
         </button>
       </div>
     </form>
+  );
+}
+
+/** The item's type: a pill in its colour that opens a small themed list of the three. */
+function TypePicker({ value, onChange }: { value: ItemType; onChange(t: ItemType): void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+  const pick = (t: ItemType) => {
+    onChange(t);
+    setOpen(false);
+    box.current?.querySelector<HTMLButtonElement>('.item-type-btn')?.focus();
+  };
+  return (
+    <div
+      ref={box}
+      className="item-type-picker"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          // Close the list, not the whole editor.
+          e.stopPropagation();
+          setOpen(false);
+        } else if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault();
+          const opts = [
+            ...(box.current?.querySelectorAll<HTMLButtonElement>('[role=option]') ?? []),
+          ];
+          const at = opts.indexOf(document.activeElement as HTMLButtonElement);
+          const next = e.key === 'ArrowDown' ? at + 1 : at - 1;
+          opts[(next + opts.length) % opts.length]?.focus();
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={`item-type-btn item-${value}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Type: ${ITEM_LABELS[value]}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {ITEM_LABELS[value]}
+        <Icon name="chevron" size={14} />
+      </button>
+      {open && (
+        <div className="menu item-type-menu" role="listbox" aria-label="Type">
+          {ITEM_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="option"
+              aria-selected={t === value}
+              className={`item-${t}`}
+              autoFocus={t === value}
+              onClick={() => pick(t)}
+            >
+              <span className="item-type-dot" aria-hidden />
+              {ITEM_LABELS[t]}
+              {t === value && <Icon name="check" size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

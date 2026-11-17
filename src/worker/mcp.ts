@@ -99,7 +99,7 @@ How to work with it:
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
 - AI Instructions: the owner keeps one page of house rules for assistants (where things go, naming, tags, style). It's at the end of these instructions; follow it over the general advice here. It is identified by the app, not by its title: always read it with get_ai_instructions and change it with update_ai_instructions, never by searching for a page called "AI Instructions" (a page with that title elsewhere in the wiki is an ordinary page, not your instructions). When the owner asks you to add or change a rule, use update_ai_instructions.
-- Open items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
+- Open Items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
 
 Markdown format:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
@@ -1148,7 +1148,7 @@ function buildServer(
   server.registerTool(
     'open_items',
     {
-      title: 'Open items',
+      title: 'Open Items',
       description:
         'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- reminder: … due:YYYY-MM-DD [HH:MM]"), from an index kept up to date on every save, soonest first. Reminders whose moment has passed are left out (they were nudges). Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
       inputSchema: z.object({

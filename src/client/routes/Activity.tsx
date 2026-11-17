@@ -92,7 +92,8 @@ export function Activity() {
       <WhoToggle value={filter} onChange={setFilter} label="Show" />
       {window_ && (
         <p className="act-window">
-          Showing {formatTime(window_.from)}–{formatTime(window_.to)} on {formatDay(window_.from)}.{' '}
+          Showing {formatTime(window_.from)} to {formatTime(window_.to)} on{' '}
+          {formatDay(window_.from)}.{' '}
           <button
             className="link"
             onClick={() => setParams(filter === 'all' ? {} : { who: filter }, { replace: true })}
@@ -115,8 +116,8 @@ export function Activity() {
                 <strong>{actorLabel(s.actor)}</strong>
                 <span className="muted">
                   {formatTime(s.start)}
-                  {formatTime(s.start) !== formatTime(s.end) && `–${formatTime(s.end)}`} · {pages}{' '}
-                  page{pages === 1 ? '' : 's'}
+                  {formatTime(s.start) !== formatTime(s.end) && ` to ${formatTime(s.end)}`} ·{' '}
+                  {pages} page{pages === 1 ? '' : 's'}
                 </span>
                 {isAgent(s.actor) && (
                   <button
