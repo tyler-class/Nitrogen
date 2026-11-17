@@ -7,12 +7,13 @@ import { ToastProvider } from './components/Toast';
 import { Activity } from './routes/Activity';
 import { Home } from './routes/Home';
 import { Insights } from './routes/Insights';
+import { OpenItems } from './routes/OpenItems';
 import { Layout } from './routes/Layout';
 import { Login, SetupNeeded } from './routes/Login';
 import { PageView } from './routes/PageView';
 import { SearchPage } from './routes/SearchPage';
 import { Sessions } from './routes/Sessions';
-import { Conventions } from './routes/Conventions';
+import { AiInstructions } from './routes/AiInstructions';
 import { Settings } from './routes/Settings';
 import { Tags } from './routes/Tags';
 
@@ -38,8 +39,9 @@ const router = createBrowserRouter([
       // Home used to be called the dashboard; old links still land there.
       { path: '/dashboard', element: <Navigate to="/" replace /> },
       { path: '/activity', element: <Activity /> },
+      { path: '/items', element: <OpenItems /> },
       { path: '/insights', element: <Insights /> },
-      { path: '/conventions', element: <Conventions /> },
+      { path: '/instructions', element: <AiInstructions /> },
       { path: '/sessions', element: <Sessions /> },
       { path: '/sessions/:id', element: <Sessions /> },
       { path: '/tags', element: <Tags /> },

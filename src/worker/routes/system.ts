@@ -1,12 +1,14 @@
 // Typed items (the open-items index and checking items off) and the protected Sessions section.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { extractItems, ITEM_TYPES, setItemAnswer, setItemDone } from '@shared/items';
+import { ITEM_TYPES, reminderPast, setItemAnswer, setItemDone, setItemDue } from '@shared/items';
+import { localClock } from '@shared/notify';
 import { plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
 import type { OpenItem, SessionEntry } from '@shared/types';
 import { actorOf, isInternal } from '../auth';
-import { all } from '../db';
+import { all, getSetting } from '../db';
+import { isTimeZone } from '../kit/push';
 import {
   ConflictError,
   listSummaries,
@@ -56,14 +58,19 @@ system.get('/items', async (c) => {
   if (under) scope = new Set(await subtreeIds(db, (await requirePage(db, under)).id));
   const pages = await listSummaries(db);
   const byId = new Map(pages.map((p) => [p.id, p]));
+  // The owner's clock (the zone the app last reported): past reminders are left out, since a
+  // reminder is a nudge with nothing left to do once its moment has gone by.
+  const tz = await getSetting(db, 'tz');
+  const now = localClock(new Date(), isTimeZone(tz) ? tz : 'UTC');
   const items: OpenItem[] = rows
     .filter((r) => !scope || scope.has(r.page_id))
+    .filter((r) => includeDone || !reminderPast(r, now))
     .map((r) => ({
       ...r,
       done: !!r.done,
       path: ancestorsOf(r.page_id, byId).map((a) => a.title),
     }));
-  return c.json({ items });
+  return c.json({ items, today: now.date });
 });
 
 /** Check an item off (or back on) where it's written. */
@@ -77,6 +84,50 @@ system.post('/pages/:id/items/toggle', async (c) => {
     const page = await requirePage(db, c.req.param('id'));
     const next = setItemDone(page.body, line, done);
     if (next === null) throw new ApiError(409, 'conflict', 'That item has moved. Reload the page.');
+    try {
+      const saved = await updatePage(
+        db,
+        page.id,
+        { body: next, base_version: page.version },
+        { actor: actorOf(c.env) },
+      );
+      indexSoon(c.env, c.executionCtx);
+      return c.json(saved);
+    } catch (e) {
+      if (e instanceof ConflictError && attempt < 2) continue;
+      throw e;
+    }
+  }
+});
+
+/** Change a to-do's or reminder's due date (and time), or clear a to-do's. */
+system.post('/pages/:id/items/due', async (c) => {
+  const { line, due, time } = await body(
+    c,
+    z.object({
+      line: z.number().int().min(1),
+      due: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .nullable(),
+      time: z
+        .string()
+        .regex(/^\d{1,2}:\d{2}$/)
+        .nullable()
+        .optional(),
+    }),
+  );
+  const db = c.env.DB;
+  for (let attempt = 0; ; attempt++) {
+    const page = await requirePage(db, c.req.param('id'));
+    const next = setItemDue(page.body, line, due, due ? (time ?? null) : null);
+    if (next === null)
+      throw new ApiError(
+        409,
+        'conflict',
+        due ? 'That item has moved. Reload the page.' : 'Reminders need a due date.',
+      );
+    if (next === page.body) return c.json(page);
     try {
       const saved = await updatePage(
         db,
@@ -132,7 +183,6 @@ system.get('/sessions', async (c) => {
       ended_at: r.last_at ?? r.updated_at,
       summary: summary.length > 240 ? `${summary.slice(0, 237)}…` : summary,
       pages: (touched.match(/^- (?!\(no page)/gm) ?? []).length,
-      open_items: extractItems(r.body).filter((i) => !i.done).length,
     };
   });
   return c.json({ root_id: root, entries });

@@ -169,7 +169,7 @@ describe('MCP', () => {
         'create_pages',
         'delete_page',
         'edit_page',
-        'get_conventions',
+        'get_ai_instructions',
         'get_started',
         'get_tree',
         'list_revisions',
@@ -183,7 +183,7 @@ describe('MCP', () => {
         'recent_changes',
         'restore_revision',
         'search',
-        'update_conventions',
+        'update_ai_instructions',
         'update_page',
       ].sort(),
     );
@@ -436,7 +436,7 @@ describe('MCP', () => {
     expect(recent.text).toContain('Test Assistant');
   });
 
-  it('records sessions automatically, protects them, and indexes open items', async () => {
+  it('records sessions automatically, protects them, and keeps items off them', async () => {
     const token = await connect();
     const api = await session();
 
@@ -479,7 +479,11 @@ describe('MCP', () => {
       title: 'Proved sessions',
       summary: 'Checked auto logging.\n- question: Keep the gap at an hour?',
     });
-    expect(logged.text).toContain('1 open item');
+    expect(logged.text).toContain('Logged as');
+    // A "question:" in a summary stays plain text: session entries hold no items.
+    expect((await tool(token, 'open_items', { type: 'question' })).text).not.toContain(
+      'Keep the gap at an hour?',
+    );
     const after = (await api.get<PageDetail>(`/pages/${mine.id}`)).data.page;
     expect(after.title).toMatch(/· Proved sessions$/);
     expect(after.body).toContain('[[Session Proof]]');
@@ -507,9 +511,7 @@ describe('MCP', () => {
     expect(items.text).toContain('todo: Call the vendor due 2026-01-03 09:30');
     expect(items.text.indexOf('Ship it')).toBeLessThan(items.text.indexOf('Call the vendor'));
     expect(items.text).toContain('[overdue]');
-    expect((await tool(token, 'open_items', { type: 'question' })).text).toContain(
-      'Keep the gap at an hour?',
-    );
+
     const toggled = await api.post<{ body: string }>(`/pages/${id}/items/toggle`, {
       line: 1,
       done: true,
@@ -530,7 +532,6 @@ describe('MCP', () => {
     expect(listed).toMatchObject({ title: 'Proved sessions', actor: 'agent:Test Assistant' });
     expect(listed.summary).toContain('Checked auto logging.');
     expect(listed.pages).toBeGreaterThan(0);
-    expect(listed.open_items).toBe(1);
 
     // There is no way to delete an entry, not even for the owner.
     expect((await api.del(`/sessions/${mine.id}`)).status).not.toBe(200);
@@ -538,41 +539,43 @@ describe('MCP', () => {
     expect((await api.get(`/pages/${mine.id}`)).status).toBe(200);
   });
 
-  it('reads and writes the conventions, kept out of the page tree in the app', async () => {
+  it('reads and writes the AI Instructions, found by its role and never by its title', async () => {
     const token = await connect();
     const api = await session();
 
-    // Assistants are told how conventions work, and can create them.
+    // Assistants are told how AI Instructions work, and that a look-alike title isn't it.
     const init = await rpc(token, 'initialize', {
       protocolVersion: '2025-06-18',
       capabilities: {},
       clientInfo: { name: 'test', version: '1' },
     });
-    expect(init.result?.instructions).toContain('update_conventions');
-    const none = await tool(token, 'get_conventions', {});
-    if (none.text.startsWith('There are no conventions')) {
-      const made = await tool(token, 'update_conventions', {
-        body: '- Meeting notes go under their project.',
-      });
-      expect(made.isError).toBe(false);
-      expect(made.text).toMatch(/Created the conventions/);
-    }
+    expect(init.result?.instructions).toContain('update_ai_instructions');
+    expect(init.result?.instructions).toContain('never by searching for a page called');
+
+    // A page someone writes and calls "AI Instructions" is an ordinary page.
+    const decoy = (
+      await api.post<{ id: string }>('/pages', {
+        title: 'AI Instructions',
+        parent_id: null,
+        body: 'Decoy: not the real one.',
+      })
+    ).data;
 
     const tree = (await api.get<TreeResponse>('/tree')).data;
-    expect(tree.conventions_id).toBeTruthy();
-    const read = await tool(token, 'get_conventions', {});
-    expect(read.text).toContain('/conventions');
+    expect(tree.instructions_id).toBeTruthy();
+    const read = await tool(token, 'get_ai_instructions', {});
+    expect(read.text).toContain('/instructions');
     const version = Number(/version: (\d+)/.exec(read.text)![1]);
 
     // Changing them needs the version that was read.
-    const stale = await tool(token, 'update_conventions', { body: 'x' });
+    const stale = await tool(token, 'update_ai_instructions', { body: 'x' });
     expect(stale.isError).toBe(true);
-    const saved = await tool(token, 'update_conventions', {
+    const saved = await tool(token, 'update_ai_instructions', {
       body: '- Meeting notes go under their project.\n- Tag decisions #decision.',
       base_version: version,
     });
     expect(saved.isError).toBe(false);
-    const page = (await api.get<PageDetail>(`/pages/${tree.conventions_id}`)).data.page;
+    const page = (await api.get<PageDetail>(`/pages/${tree.instructions_id}`)).data.page;
     expect(page.body).toContain('#decision');
 
     // New connections get them in their instructions.
@@ -583,5 +586,12 @@ describe('MCP', () => {
       clientInfo: { name: 'test', version: '1' },
     });
     expect(init2.result?.instructions).toContain('Tag decisions #decision.');
+    expect(init2.result?.instructions).not.toContain('Decoy');
+    expect(tree.instructions_id).not.toBe(decoy.id);
+    expect((await tool(token, 'get_ai_instructions', {})).text).not.toContain('Decoy');
+
+    // The real one can be edited but not deleted; the look-alike deletes like any page.
+    expect((await api.del(`/pages/${tree.instructions_id}`)).status).toBe(403);
+    expect((await api.del(`/pages/${decoy.id}`)).status).toBe(200);
   });
 });

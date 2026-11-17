@@ -6,6 +6,7 @@ import { useTree } from '../lib/queries';
 import { useNotifications } from '../lib/notifications';
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
+import { Bell } from '../components/Bell';
 import { Tree } from '../components/Tree';
 
 const MIN_W = 200;
@@ -14,6 +15,7 @@ const MAX_W = 460;
 /** The four views, as one pill: icons only, the current one with its name. */
 const VIEWS = [
   ['/', 'home', 'Home'],
+  ['/items', 'checks', 'Open items'],
   ['/activity', 'activity', 'Activity'],
   ['/insights', 'insights', 'Insights'],
   ['/tags', 'tag', 'Tags'],
@@ -87,19 +89,19 @@ export function Layout() {
   const [nav, setNav] = useState(false);
   const [palette, setPalette] = useState(false);
   const [about, setAbout] = useState(false);
-  // Sessions and Conventions live outside the page tree (Conventions inside AI Sessions).
+  // Sessions and AI Instructions live outside the page tree (AI Instructions inside AI Sessions).
   const sessionsId = tree.data?.sessions_id ?? null;
-  const conventionsId = tree.data?.conventions_id ?? null;
-  // Conventions sit inside AI Sessions, so AI Sessions stays lit there.
-  const conventionsOpen = !!useMatch('/conventions');
+  const instructionsId = tree.data?.instructions_id ?? null;
+  // AI Instructions sits inside AI Sessions, so AI Sessions stays lit there.
+  const instructionsOpen = !!useMatch('/instructions');
   const pages = useMemo(
     () =>
       (tree.data?.pages ?? []).filter(
         (p) =>
-          p.id !== conventionsId &&
+          p.id !== instructionsId &&
           (!sessionsId || (p.id !== sessionsId && p.parent_id !== sessionsId)),
       ),
-    [tree.data, sessionsId, conventionsId],
+    [tree.data, sessionsId, instructionsId],
   );
   const location = useLocation();
 
@@ -171,13 +173,14 @@ export function Layout() {
             <img src="/favicon.svg" alt="" width={22} height={22} />
             <span>Nitrogen</span>
           </Link>
+          <Bell className="desktop-only" size={20} />
           <button
             className="side-toggle desktop-only"
             onClick={toggleCollapsed}
             aria-label="Hide sidebar"
             title={'Hide sidebar (⌘\\)'}
           >
-            <Icon name="panelLeft" size={17} />
+            <Icon name="panelLeft" size={20} />
           </button>
           <button
             className="side-close mobile-only"
@@ -213,12 +216,12 @@ export function Layout() {
         ) : (
           <p className="tree-empty">{tree.isError ? 'Could not load pages.' : 'Loading…'}</p>
         )}
-        {/* One rule above the footer links: AI Sessions (with Conventions inside it), Settings. */}
+        {/* One rule above the footer links: AI Sessions (with AI Instructions inside it), Settings. */}
         <div className="sidebar-foot">
           <NavLink
             to="/sessions"
             className={({ isActive }) =>
-              `foot-link sessions-link${isActive || conventionsOpen ? ' active' : ''}`
+              `foot-link sessions-link${isActive || instructionsOpen ? ' active' : ''}`
             }
           >
             <Icon name="sparkle" size={15} /> AI Sessions
@@ -247,7 +250,7 @@ export function Layout() {
           aria-label="Show sidebar"
           title={'Show sidebar (⌘\\)'}
         >
-          <Icon name="panelLeft" size={17} />
+          <Icon name="panelLeft" size={20} />
         </button>
       )}
       <button
@@ -265,13 +268,16 @@ export function Layout() {
             <img src="/favicon.svg" alt="" width={22} height={22} />
             Nitrogen
           </Link>
-          <button
-            onClick={() => setPalette(true)}
-            aria-label="Search"
-            className="menu-btn search-btn"
-          >
-            <Icon name="search" size={24} />
-          </button>
+          <span className="mobile-bar-end">
+            <Bell className="menu-btn" size={24} />
+            <button
+              onClick={() => setPalette(true)}
+              aria-label="Search"
+              className="menu-btn search-btn"
+            >
+              <Icon name="search" size={24} />
+            </button>
+          </span>
         </header>
         <Outlet />
       </div>

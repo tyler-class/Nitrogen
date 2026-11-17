@@ -3,8 +3,8 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
 import { ancestorsOf } from '@shared/tree';
-import { ITEM_TYPES, extractItems, todayKey } from '@shared/items';
-import { extractTags, pageHref, plainText } from '@shared/markdown';
+import { extractItems, nowMoment, reminderPast, todayKey } from '@shared/items';
+import { extractTags, pageHref } from '@shared/markdown';
 import type {
   Mention,
   Page,
@@ -19,8 +19,9 @@ import { keys, useCreatePage, useDeletePage, usePage, useTree } from '../lib/que
 import { readLocal, writeLocal } from '../lib/storage';
 import type { EditorHandle, LinkTarget } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
+import { ItemRow } from '../components/ItemRow';
 import { Icon, PageGlyph } from '../components/Icon';
-import { formatDue, Markdown, type TitleIndex } from '../components/Markdown';
+import { Markdown, type TitleIndex } from '../components/Markdown';
 import { DiffView } from '../components/Diff';
 import { downloadPage } from '../lib/exportMarkdown';
 import { TagEditor, TagList } from '../components/Tags';
@@ -60,7 +61,7 @@ export function useTitleIndex(): { index: TitleIndex; titles: string[] } {
 
 /**
  * A wiki page. `pageId` and `header` let another view show a page in its own frame (the
- * Conventions view): `header` replaces the breadcrumbs (and the ⋯ menu: only Edit and
+ * AI Instructions view): `header` replaces the breadcrumbs (and the ⋯ menu: only Edit and
  * History), `titleAddon` sits after the title, and the URL stays where it is.
  */
 export function PageView({
@@ -80,7 +81,7 @@ export function PageView({
   const detail = q.data;
   useEffect(() => {
     if (!detail || pageId) return;
-    if (detail.page.id === tree.data?.conventions_id) return;
+    if (detail.page.id === tree.data?.instructions_id) return;
     const sid = tree.data?.sessions_id;
     if (sid && (detail.page.id === sid || detail.page.parent_id === sid)) return;
     const want = pageHref(detail.page.id, detail.page.title);
@@ -88,9 +89,9 @@ export function PageView({
       navigate(`${want}${window.location.search}${window.location.hash}`, { replace: true });
   }, [detail, navigate, tree.data, pageId]);
 
-  // Sessions and Conventions have their own views, outside the wiki.
-  if (!pageId && detail && detail.page.id === tree.data?.conventions_id)
-    return <Navigate to={`/conventions${window.location.search}`} replace />;
+  // Sessions and AI Instructions have their own views, outside the wiki.
+  if (!pageId && detail && detail.page.id === tree.data?.instructions_id)
+    return <Navigate to={`/instructions${window.location.search}`} replace />;
   const sessionsId = tree.data?.sessions_id;
   if (sessionsId && detail) {
     if (detail.page.id === sessionsId) return <Navigate to="/sessions" replace />;
@@ -189,6 +190,21 @@ function ReadPage({
     async (line: number, done: boolean) => {
       try {
         const next = await api.post<Page>(`/pages/${page.id}/items/toggle`, { line, done });
+        qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
+          old ? { ...old, page: next } : old,
+        );
+        void qc.invalidateQueries({ queryKey: ['items'] });
+      } catch (e) {
+        toast(errorMessage(e));
+      }
+    },
+    [page.id, qc, toast],
+  );
+
+  const dueItem = useCallback(
+    async (line: number, due: string | null, time: string | null) => {
+      try {
+        const next = await api.post<Page>(`/pages/${page.id}/items/due`, { line, due, time });
         qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
           old ? { ...old, page: next } : old,
         );
@@ -334,18 +350,6 @@ function ReadPage({
                     role="menuitem"
                     onClick={() => {
                       setMenu(false);
-                      void navigator.clipboard?.writeText(
-                        `Use the Nitrogen review_page prompt on “${page.title}” (id ${page.id}): check it against newer pages and list anything stale or contradicted.`,
-                      );
-                      toast('Copied. Paste it into Claude to check this page.');
-                    }}
-                  >
-                    <Icon name="question" size={15} /> Copy prompt
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(false);
                       downloadPage(page);
                     }}
                   >
@@ -388,7 +392,9 @@ function ReadPage({
             : 'Recorded automatically from what the assistant did. Read-only.'}
         </p>
       )}
-      <ItemSummary body={page.body} />
+      {!locked && (
+        <ItemSummary page={page} onDone={toggleItem} onAnswer={answerItem} onDue={dueItem} />
+      )}
       <div className="prose">
         {page.body.trim() ? (
           <Markdown
@@ -396,6 +402,8 @@ function ReadPage({
             titles={index}
             onToggleItem={locked ? undefined : toggleItem}
             onAnswerItem={locked ? undefined : answerItem}
+            onDueItem={locked ? undefined : dueItem}
+            noItems={!!locked}
           />
         ) : locked ? null : (
           <button className="empty-body" onClick={onEdit}>
@@ -772,7 +780,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         <span className="toolbar-sep" aria-hidden />
         <button
           onClick={() => editor.current?.wrap('\n- [ ] todo: ', '')}
-          title="To do: - [ ] todo: … @owner due:YYYY-MM-DD (add HH:MM for a timed reminder)"
+          title="To do: - [ ] todo: … @owner due:YYYY-MM-DD (add HH:MM to be notified then)"
           aria-label="Insert a to-do"
           className="tb-item item-todo"
         >
@@ -787,8 +795,8 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           Question
         </button>
         <button
-          onClick={() => editor.current?.wrap(`\n- [ ] reminder: due:${inAWeek()} `, '')}
-          title="Reminder: - [ ] reminder: … due:YYYY-MM-DD (add HH:MM to be notified then)"
+          onClick={() => editor.current?.wrap(`\n- reminder: due:${inAWeek()} `, '')}
+          title="Reminder: - reminder: … due:YYYY-MM-DD (add HH:MM to be notified then). A nudge, not a task: no checkbox, never overdue."
           aria-label="Insert a reminder"
           className="tb-item item-reminder"
         >
@@ -996,55 +1004,55 @@ function ComparePair({
   return <DiffView older={o} newer={n} olderLabel={label(older)} newerLabel={label(newer)} />;
 }
 
-/** Open items on this page, grouped by type; generated from the markers, never edited. */
-function ItemSummary({ body }: { body: string }) {
-  const open = useMemo(() => extractItems(body).filter((i) => !i.done), [body]);
+/**
+ * This page's open items, at the top: the same rows as the Open items page, so a to-do can be
+ * checked off, a question answered and a date changed right here as well as where it's written.
+ */
+function ItemSummary({
+  page,
+  onDone,
+  onAnswer,
+  onDue,
+}: {
+  page: Page;
+  onDone(line: number, done: boolean): Promise<void>;
+  onAnswer(line: number, answer: string): Promise<void>;
+  onDue(line: number, due: string | null, time: string | null): Promise<void>;
+}) {
+  // Open to-dos and questions, and reminders still ahead (past ones were just nudges).
+  const open = useMemo(() => {
+    const now = nowMoment();
+    return extractItems(page.body).filter((i) => !i.done && !reminderPast(i, now));
+  }, [page.body]);
   if (!open.length) return null;
   const today = todayKey();
   return (
-    <aside className="item-summary" aria-label="Action items on this page">
+    <aside className="item-summary" aria-label="Open items on this page">
       <h2 className="item-summary-title">
-        Action items <span className="count">{open.length}</span>
+        <Icon name="checks" size={16} /> Open items <span className="count">{open.length}</span>
       </h2>
-      {ITEM_TYPES.filter((t) => open.some((i) => i.type === t)).map((t) => (
-        <div key={t} className={`item-group item-${t}`}>
-          <h3>
-            {ITEM_PLURAL[t]}{' '}
-            <span className="count">{open.filter((i) => i.type === t).length}</span>
-          </h3>
-          <ul>
-            {open
-              .filter((i) => i.type === t)
-              .map((i) => (
-                <li key={i.line}>
-                  <a
-                    href={`#item-${i.line}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      document
-                        .getElementById(`item-${i.line}`)
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }}
-                  >
-                    {plainText(i.text)}
-                  </a>
-                  {i.owner && <span className="muted"> · @{i.owner}</span>}
-                  {i.due && (
-                    <span className={i.due < today ? 'overdue' : 'muted'}>
-                      {' '}
-                      · {i.due < today ? 'overdue' : 'due'} {formatDue(i.due, i.due_time)}
-                    </span>
-                  )}
-                </li>
-              ))}
-          </ul>
-        </div>
-      ))}
+      <ul className="items-full">
+        {open.map((i) => (
+          <ItemRow
+            key={`${i.line}:${i.text}`}
+            item={{
+              ...i,
+              page_id: page.id,
+              page_title: page.title,
+              page_icon: page.icon,
+              path: [],
+            }}
+            today={today}
+            showPage={false}
+            onDone={(d) => void onDone(i.line, d)}
+            onAnswer={(t) => onAnswer(i.line, t)}
+            onDue={(d, t) => onDue(i.line, d, t)}
+          />
+        ))}
+      </ul>
     </aside>
   );
 }
-
-const ITEM_PLURAL = { todo: 'Todos', question: 'Questions', reminder: 'Reminders' } as const;
 
 /** Pages that name this one without linking to it, with a one-click "link it". */
 function Mentions({ page }: { page: Page }) {

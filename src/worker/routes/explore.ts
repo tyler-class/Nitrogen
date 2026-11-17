@@ -1,5 +1,6 @@
 // The dashboard, inbox, activity log (with undo by session), insights, tags, and the ways pages
 // connect beyond the tree: related pages, unlinked mentions and the local graph.
+import { instructionsId } from '../instructions';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isAgent } from '@shared/actor';
@@ -20,7 +21,7 @@ import type {
   TagCount,
 } from '@shared/types';
 import { actorOf } from '../auth';
-import { all, first, getSetting, nowIso } from '../db';
+import { all, first, nowIso } from '../db';
 import {
   ConflictError,
   deletePage,
@@ -369,12 +370,12 @@ explore.get('/pages/:id/related', async (c) => {
 
 // ---------------------------------------------------------------- insights
 
-/** Marks AI Sessions (and every page inside it) and Conventions, which Tidy up leaves out. */
+/** Marks AI Sessions (and every page inside it) and AI Instructions, which Tidy up leaves out. */
 async function markSystem<T extends { id: string; parent_id: string | null }>(
   db: D1Database,
   pages: T[],
 ): Promise<(T & { system?: boolean })[]> {
-  const [sessions, guide] = await Promise.all([sessionsRoot(db), getSetting(db, 'guide_id')]);
+  const [sessions, guide] = await Promise.all([sessionsRoot(db), instructionsId(db)]);
   const byId = new Map(pages.map((p) => [p.id, p]));
   const inSessions = (p: T) => {
     const seen = new Set<string>();

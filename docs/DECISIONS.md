@@ -60,7 +60,7 @@ design; the earlier entries are kept for history.
   which destroys diffs and makes idempotency hard to prove. Source edits keep untouched markdown
   byte-identical; idempotency and fingerprint equality are property-tested.
 
-## ADR-007 (2026-11-02) The GFM "lead title" convention for callouts
+## ADR-007 (2026-11-02) The GFM "lead title" style for callouts
 
 - **Decision:** GFM alerts cannot carry a title, so normalized output writes
   `> [!WARNING]\n> **Title**` and extended types as `> [!NOTE]\n> **Decision: Title**`. An

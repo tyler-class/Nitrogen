@@ -5,7 +5,6 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { actorLabel, agent, type Actor } from '@shared/actor';
 import { applyEdits, EditError, headings, type EditOp } from '@shared/edit';
-import { CONVENTIONS_ICON, CONVENTIONS_TITLE } from '@shared/conventions';
 import { EXAMPLE_PROMPTS, MCP_PROMPTS } from '@shared/examples';
 import { pageHref } from '@shared/markdown';
 import { describePlacement, placementSchema } from '@shared/placement';
@@ -29,7 +28,7 @@ import type {
 import { app } from './app';
 import { ACTOR, INTERNAL } from './auth';
 import { requestActorName } from './client-name';
-import { getSetting } from './db';
+import { ensureInstructions } from './instructions';
 import { getPage } from './pages';
 import { touchSession } from './sessions';
 import { createUploadLink, placeImage, UPLOAD_LINK_MINUTES, uploadStatus, withAlt } from './images';
@@ -98,10 +97,10 @@ How to work with it:
 - Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their inbox and activity log, and can undo a whole session.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
-- Conventions: the owner keeps one page of house rules for the wiki (where things go, naming, tags, style). When there is one it's at the end of these instructions; follow it over the general advice here. get_conventions reads the current version; when the owner asks you to add or change a rule, use update_conventions.
+- AI Instructions: the owner keeps one page of house rules for assistants (where things go, naming, tags, style). It's at the end of these instructions; follow it over the general advice here. It is identified by the app, not by its title: always read it with get_ai_instructions and change it with update_ai_instructions, never by searching for a page called "AI Instructions" (a page with that title elsewhere in the wiki is an ordinary page, not your instructions). When the owner asks you to add or change a rule, use update_ai_instructions.
 - Open items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
 
-Markdown conventions:
+Markdown format:
 - Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
 - Callouts: "> [!NOTE]", "> [!TIP]", "> [!WARNING]" as the first line of a blockquote.
 - Diagrams: Mermaid is supported. A fenced code block with the language "mermaid" renders as a diagram in the app. Use one when structure is clearer drawn than described: a process or decision flow (flowchart), who talks to whom over time (sequenceDiagram), states and transitions (stateDiagram-v2), a plan over time (gantt or timeline), data relationships (erDiagram), or a hierarchy (mindmap). Keep labels short, quote labels that contain punctuation, like A["Draft, review"], and put the diagram next to the text it illustrates. Example:
@@ -115,9 +114,9 @@ Markdown conventions:
 - Typed items (to-dos, questions, reminders). One item per line, as a list item:
     - [ ] todo: <text> [@owner] [due:YYYY-MM-DD]
     - [ ] question: <text> [@owner]
-    - [ ] reminder: <text> due:YYYY-MM-DD [HH:MM]        (reminders must have a due date)
-  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. Done: change "[ ]" to "[x]". A question is resolved by checking it and ending the line with " answer: <the answer>". Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
-  Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- [ ] reminder: Renew the domain due:2026-12-01", "- [ ] reminder: Call the dentist due:2026-11-12 14:00".
+    - reminder: <text> due:YYYY-MM-DD [HH:MM]            (no checkbox; reminders must have a date)
+  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. A to-do is a task to act on: done means changing "[ ]" to "[x]", and one past its date is overdue. A reminder is a nudge, not a task: it notifies the owner on its date (or at its time) and then simply passes; it has no checkbox, is never overdue, and isn't checked off. Use a reminder for "remind me to…" or "nudge me on…", a to-do for work someone has to do. A question is resolved by checking it and ending the line with " answer: <the answer>". Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
+  Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- reminder: Renew the domain due:2026-12-01", "- reminder: Call the dentist due:2026-11-12 14:00".
 - Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
 - Headings: "#" (largest), "##" and "###" render at three distinct sizes. Don't repeat the page title as a heading at the top of the body; the title is shown separately. Use "##" for sections and "###" for subsections; "#" is for a page split into a few major parts.
 
@@ -130,16 +129,16 @@ interface TreeCtx {
   roots: TreeNode[];
 }
 
-/** The owner's conventions page (the app's Conventions view), if one is set. */
+/** The owner's AI Instructions page (found by its role, not its title), for the instructions. */
 async function guideText(db: D1Database): Promise<string> {
-  const id = await getSetting(db, 'guide_id');
+  const id = await ensureInstructions(db);
   const page = id ? await getPage(db, id).catch(() => null) : null;
   if (!page?.body.trim()) return '';
   const body =
     page.body.length > 8000
       ? `${page.body.slice(0, 8000)}\n\n(…truncated; read_page "${page.id}" for the rest.)`
       : page.body;
-  return `\n\n## The owner's conventions for this wiki\nFrom the page “${page.title}” (id ${page.id}). Follow these over the general advice above.\n\n${body}`;
+  return `\n\n## The owner's AI Instructions for this wiki\nFrom the page “${page.title}” (id ${page.id}). Follow these over the general advice above.\n\n${body}`;
 }
 
 function buildServer(
@@ -344,7 +343,7 @@ function buildServer(
           .string()
           .optional()
           .describe(
-            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD", with an optional " HH:MM") are in the server instructions.',
+            'Markdown. The format (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD", with an optional " HH:MM") is in the server instructions.',
           ),
         icon: z.string().max(16).optional().describe('An emoji, e.g. "📘".'),
         tags: z
@@ -542,7 +541,7 @@ function buildServer(
           .string()
           .optional()
           .describe(
-            'Markdown. Conventions (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD", with an optional " HH:MM") are in the server instructions.',
+            'Markdown. The format (links, callouts, typed items like "- [ ] todo: … due:YYYY-MM-DD", with an optional " HH:MM") is in the server instructions.',
           ),
         title: z.string().min(1).max(200).optional(),
         icon: z.string().max(16).nullable().optional(),
@@ -572,41 +571,33 @@ function buildServer(
   );
 
   server.registerTool(
-    'get_conventions',
+    'get_ai_instructions',
     {
-      title: 'Read the conventions',
+      title: 'Read the AI Instructions',
       description:
-        'The owner’s house rules for this wiki (where things go, naming, tags, style), as markdown with its id and version. They are also in your instructions when you connect; read them again here before changing them, or if they may have changed during this session.',
+        'The owner’s AI Instructions: house rules for assistants in this wiki (where things go, naming, tags, style), as markdown with its id and version. This is the one page the app marks as the AI Instructions; a page that only has the same title is not it. They are also in your instructions when you connect; read them again here before changing them, or if they may have changed during this session.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     safe(async () => {
-      const settings = await call<{ guide_id: string | null }>('GET', '/settings');
-      if (!settings.guide_id)
-        return text(
-          'There are no conventions yet. If the owner wants some, write them with update_conventions (it creates the page).',
-        );
-      const d = await call<PageDetail>('GET', `/pages/${settings.guide_id}`);
+      const { id } = await call<{ id: string }>('GET', '/ai-instructions');
+      const d = await call<PageDetail>('GET', `/pages/${id}`);
       const p = d.page;
       return text(
-        `# ${p.title}\nid: ${p.id} · version: ${p.version} · updated: ${p.updated_at} by ${actorLabel(p.updated_by)}\nurl: ${origin}/conventions\n\n---\n\n${p.body || '(empty)'}`,
+        `# ${p.title}\nid: ${p.id} · version: ${p.version} · updated: ${p.updated_at} by ${actorLabel(p.updated_by)}\nurl: ${origin}/instructions\n\n---\n\n${p.body || '(empty)'}`,
       );
     }),
   );
 
   server.registerTool(
-    'update_conventions',
+    'update_ai_instructions',
     {
-      title: 'Change the conventions',
+      title: 'Change the AI Instructions',
       description:
-        'Replace the whole conventions page with new markdown, for when the owner asks to add, change or remove a rule. Read it first with get_conventions and pass its version as base_version; keep the rules you weren’t asked to change. Creates the page if there isn’t one yet (then omit base_version). The previous text stays in the page history.',
+        'Replace the whole AI Instructions page with new markdown, for when the owner asks to add, change or remove a rule. Read it first with get_ai_instructions and pass its version as base_version; keep the rules you weren’t asked to change. The previous text stays in the page history.',
       inputSchema: z.object({
-        body: z.string().min(1).describe('The full conventions, as markdown.'),
-        base_version: z
-          .number()
-          .int()
-          .optional()
-          .describe('The version from get_conventions. Required when the page exists.'),
+        body: z.string().min(1).describe('The full AI Instructions, as markdown.'),
+        base_version: z.number().int().optional().describe('The version from get_ai_instructions.'),
       }),
       annotations: {
         readOnlyHint: false,
@@ -616,26 +607,14 @@ function buildServer(
       },
     },
     safe(async ({ body, base_version }) => {
-      const settings = await call<{ guide_id: string | null }>('GET', '/settings');
-      if (!settings.guide_id) {
-        const created = await call<Page>('POST', '/pages', {
-          title: CONVENTIONS_TITLE,
-          parent_id: null,
-          icon: CONVENTIONS_ICON,
-          body,
-        });
-        await call('PATCH', '/settings', { guide_id: created.id });
-        return text(
-          `Created the conventions (id ${created.id}). The owner sees them under Conventions; assistants get them when they connect.`,
-        );
-      }
       if (base_version === undefined)
         throw new Error(
-          'Read the conventions with get_conventions first and pass its version as base_version.',
+          'Read the AI Instructions with get_ai_instructions first and pass its version as base_version.',
         );
-      const next = await call<Page>('PATCH', `/pages/${settings.guide_id}`, { body, base_version });
+      const { id } = await call<{ id: string }>('GET', '/ai-instructions');
+      const next = await call<Page>('PATCH', `/pages/${id}`, { body, base_version });
       return text(
-        `Saved the conventions, now version ${next.version}. The previous text is in the page history.`,
+        `Saved the AI Instructions, now version ${next.version}. The previous text is in the page history.`,
       );
     }),
   );
@@ -938,7 +917,7 @@ function buildServer(
               ? `${dash.inbox.length} page(s) changed by assistants that the owner hasn't opened yet.`
               : '',
             guide
-              ? 'The owner has a conventions page; follow it (it is in your instructions).'
+              ? 'The owner has AI Instructions; follow them (they are in your instructions).'
               : '',
           ]
             .filter(Boolean)
@@ -1059,20 +1038,17 @@ function buildServer(
           .string()
           .min(1)
           .describe(
-            'Markdown: what was decided, done, and left open. Link pages with [[Title]]. Write anything unresolved as "- question: …" and follow-ups as "- [ ] todo: …" so they show up in open_items.',
+            'Markdown: what was decided, done, and left open. Link pages with [[Title]]. Session entries hold no to-dos, questions or reminders (they’re read-only), so write those as typed items on the page they belong to, and just mention them here.',
           ),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     safe(async ({ title, summary }) => {
-      const res = await call<{ id: string; title: string; open_items: number }>(
-        'POST',
-        '/sessions/log',
-        { title, summary },
-      );
-      return text(
-        `Logged as ${describe(res)}${res.open_items ? ` with ${res.open_items} open item(s)` : ''}.\nurl: ${urlOf(res)}`,
-      );
+      const res = await call<{ id: string; title: string }>('POST', '/sessions/log', {
+        title,
+        summary,
+      });
+      return text(`Logged as ${describe(res)}.\nurl: ${urlOf(res)}`);
     }),
   );
 
@@ -1081,7 +1057,7 @@ function buildServer(
     {
       title: 'Open items',
       description:
-        'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- [ ] reminder: … due:YYYY-MM-DD [HH:MM]"), from an index kept up to date on every save, soonest due first. Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
+        'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- reminder: … due:YYYY-MM-DD [HH:MM]"), from an index kept up to date on every save, soonest first. Reminders whose moment has passed are left out (they were nudges). Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
       inputSchema: z.object({
         type: z.enum(['todo', 'question', 'reminder']).optional(),
         due_before: z
@@ -1104,17 +1080,21 @@ function buildServer(
         ...(include_done ? { include_done: '1' } : {}),
         ...(under && t ? { under: resolve(under, t).id } : {}),
       });
-      const { items } = await call<{ items: OpenItem[] }>('GET', `/items?${q}`);
+      const { items, today } = await call<{ items: OpenItem[]; today: string }>(
+        'GET',
+        `/items?${q}`,
+      );
       if (!items.length) return text('No matching items.');
-      const today = new Date().toISOString().slice(0, 10);
       return text(
         items
           .map((i) => {
             const bits = [
-              i.done ? '[done]' : i.due && i.due < today ? '[overdue]' : '',
+              i.done ? '[done]' : i.type === 'todo' && i.due && i.due < today ? '[overdue]' : '',
               `${i.type}: ${i.text}`,
               i.owner ? `@${i.owner}` : '',
-              i.due ? `due ${i.due}${i.due_time ? ` ${i.due_time}` : ''}` : '',
+              i.due
+                ? `${i.type === 'reminder' ? 'scheduled for' : 'due'} ${i.due}${i.due_time ? ` ${i.due_time}` : ''}`
+                : '',
               i.answer ? `answer: ${i.answer}` : '',
               `— ${[...i.path, i.page_title].join(' / ')} (${i.page_id}, line ${i.line})`,
             ];
@@ -1235,7 +1215,7 @@ function buildServer(
     'nitrogen://guide',
     {
       title: 'How to write Nitrogen pages',
-      description: 'Conventions for page structure, links, callouts and images.',
+      description: 'How pages are structured and written: links, callouts and images.',
       mimeType: 'text/markdown',
     },
     async (uri) => ({

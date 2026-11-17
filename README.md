@@ -24,10 +24,11 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
   (from a page's ⋯ menu), recent activity and a few numbers. Drag panels to arrange them, make them
   half or full width, or hide them.
 - **To-dos, questions and reminders anywhere.** Write `- [ ] todo: … @owner due:2026-11-20`,
-  `- question: …` or `- [ ] reminder: … due:…` on any page. Add a 24-hour time to be notified then:
-  `due:2026-11-20 14:00` (or `due:2026-11-20T14:00`), on your phone's own clock. They show as cards
-  you can check off, a summary at the top of the page, and an Open items panel on Home; assistants
-  list them with `open_items`.
+  `- question: …` or `- reminder: … due:…` on any page. Add a 24-hour time to be notified then:
+  `due:2026-11-20 14:00` (or `due:2026-11-20T14:00`), on your phone's own clock. To-dos are tasks
+  you check off (and go overdue); reminders are nudges, scheduled for a day or time, that simply
+  pass. They show as cards, a summary at the top of the page, and on the Open items page, where you
+  can check them off, change dates and answer questions; assistants list them with `open_items`.
 - **Sessions.** Every assistant session that changes the wiki is recorded automatically under a
   protected, read-only Sessions section, with the pages it touched and the assistant's own summary.
 - **Exports.** A full backup that restores everything, and a Markdown export (per page or the whole
@@ -62,7 +63,7 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 **The page menu (⋯):** pin a page to Home, copy its wiki link, or download it as Markdown.
 
-![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy wiki link, Copy prompt, Download as Markdown and Delete](docs/screenshots/page-menu.png)
+![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy wiki link, Download as Markdown and Delete](docs/screenshots/page-menu.png)
 
 **Search (⌘K):** jump to any page by title or keyword, or press Enter to search by meaning.
 
@@ -88,9 +89,9 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 ![AI Sessions listing sessions by Claude and ChatGPT](docs/screenshots/sessions.png)
 
-**Conventions:** how you like things filed. Every assistant reads it when it connects.
+**AI Instructions:** how you like things filed. Every assistant reads it when it connects.
 
-![A Conventions page with sections for where things go, before writing, tags and style](docs/screenshots/conventions.png)
+![The AI Instructions page with sections for where things go, before writing, tags and style](docs/screenshots/ai-instructions.png)
 
 **On your phone:** Home with open items (overdue and timed ones included), the page tree with its emoji, and a page.
 
@@ -229,13 +230,13 @@ Once a day your copy tells Nitrogen's developer that it exists: a random id it m
 
 Turn notifications on as described in [Notifications](#notifications), then pick what this phone gets in **Settings → Notifications**. Each kind has its own switch, all on to start.
 
-- **Morning digest:** at 8 a.m., the to-dos and reminders due that day.
-- **Overdue:** at 8 a.m. on the first day a to-do or reminder is overdue, once per item ("Overdue: Renew the domain (due Nov 10)").
-- **Timed reminders:** at the time on an item written with one, like `- [ ] reminder: Call the dentist due:2026-11-12 14:00`, within about 15 minutes ("Reminder: Call the dentist (2:00 PM)"). Items without a time are only in the morning digest.
+- **Morning digest:** at 8 a.m., the to-dos due and reminders scheduled that day.
+- **Overdue:** at 8 a.m. on the first day a to-do is overdue, once per item ("Overdue: Renew the domain (due Nov 10)"). Reminders are never overdue.
+- **Timed reminders:** at the time on an item written with one, like `- reminder: Call the dentist due:2026-11-12 14:00`, within about 15 minutes ("Reminder: Call the dentist (2:00 PM)"); skipped if that time was more than half an hour ago. Items without a time are only in the morning digest.
 - **Assistant changes:** when an assistant creates or edits pages over MCP, at most once an hour ("Claude updated 3 pages: Trip ideas, Garden, …"). Your own edits never notify, and nothing comes between midnight and 8 a.m.
 - **Open questions:** Monday at 8 a.m., the `question:` items still unanswered. Skipped in weeks with none.
 
-Times are your phone's own clock. The app icon shows how many to-dos and reminders are due today or overdue.
+Morning notifications go out between 8 and 10 a.m. only; anything that turns up later in the day waits for the next morning. Times are your phone's own clock. Every notification is also in the bell in the app, and the app icon shows how many of those you haven't read.
 
 ![Settings on a phone: Appearance, then Notifications with a switch for each kind and Send a test](docs/screenshots/notifications.png)
 
@@ -277,8 +278,8 @@ Ready-made prompts appear in Claude’s **+** menu: **Save this conversation to 
 (`research_brief`), **Tidy up a section** (`tidy_section`) and **Check a page for stale claims**
 (`review_page`). Settings → Connect an AI assistant has a “Try asking” list of example requests.
 
-Set a **conventions page** in Settings (or create the starter one) and every assistant reads it when
-it connects, so it files things the way you like.
+Edit your **AI Instructions** (under AI Sessions; it starts as a sensible default) and every
+assistant reads it when it connects, so it files things the way you like.
 
 Images go exactly where the assistant asks: under a heading, at the end of a section, before or
 after some text, in place of a placeholder like `[photo]`, or at the top or bottom of the page.

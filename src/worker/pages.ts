@@ -2,6 +2,7 @@
 import type { z } from 'zod';
 import { encodeActor, type Actor } from '@shared/actor';
 import { extractItems } from '@shared/items';
+import { INSTRUCTIONS_ROLE } from '@shared/instructions';
 import { extractFileKeys, extractLinks, extractTags, wordCount } from '@shared/markdown';
 import {
   MAX_BULK_PAGES,
@@ -28,7 +29,7 @@ export const MAX_REVISIONS = 100;
 
 export const SUMMARY_COLS =
   'id, parent_id, position, title, icon, updated_at, updated_by, pinned_at';
-const PAGE_COLS = `${SUMMARY_COLS}, body, version, created_at, created_by, tags, words`;
+const PAGE_COLS = `${SUMMARY_COLS}, body, version, created_at, created_by, tags, words, role`;
 /** SUMMARY_COLS prefixed with a table alias. */
 export const summaryCols = (alias: string) =>
   SUMMARY_COLS.split(', ')
@@ -481,7 +482,10 @@ export interface DeleteResult {
 }
 
 export async function deletePage(db: D1Database, id: string, actor: Actor): Promise<DeleteResult> {
-  await requirePage(db, id);
+  const target = await requirePage(db, id);
+  // AI Instructions can be edited but not deleted: assistants and the app rely on it existing.
+  if (target.role === INSTRUCTIONS_ROLE)
+    throw new ApiError(403, 'protected', 'AI Instructions can’t be deleted. Edit it instead.');
   const prot = await protection(db, id);
   // AI Sessions and its entries are permanent: nobody deletes them, not even the owner.
   if (prot) throw protectedError(prot);

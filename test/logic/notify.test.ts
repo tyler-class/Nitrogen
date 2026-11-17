@@ -4,6 +4,7 @@ import {
   addDays,
   assistantNotice,
   assistantWindow,
+  assistantUrl,
   badgeCount,
   digestNotice,
   dueToday,
@@ -112,7 +113,7 @@ describe('the morning digest', () => {
     });
     expect(digestNotice([...plans, ...home], '2031-06-03')).toMatchObject({
       body: '2 to-dos and 1 reminder: Water the plants, Send the draft to legal, Renew the domain',
-      url: '/',
+      url: '/items?show=today',
     });
   });
 
@@ -169,16 +170,17 @@ describe('overdue nudges', () => {
     'p1',
     'Plans',
     [
-      '- [ ] reminder: Renew the domain due:2026-11-10',
+      '- [ ] todo: Renew the domain due:2026-11-10',
       '- [ ] todo: Pay the bill due:2026-11-10 09:00',
       '- [ ] todo: Older due:2026-11-09',
       '- [x] todo: Done due:2026-11-10',
       '- [ ] question: Asked due:2026-11-10',
       '- [ ] todo: Today due:2026-11-11',
+      '- reminder: Call mom due:2026-11-10',
     ].join('\n'),
   );
 
-  it('picks only open to-dos and reminders on their first overdue day', () => {
+  it('picks only open to-dos on their first overdue day (reminders are never overdue)', () => {
     expect(newlyOverdue(items, '2026-11-11').map((i) => i.text)).toEqual([
       'Renew the domain',
       'Pay the bill',
@@ -200,8 +202,8 @@ describe('overdue nudges', () => {
 
   it('makes several one notification that opens Home', () => {
     expect(overdueNotice(items, '2026-11-11')).toMatchObject({
-      body: '1 to-do and 1 reminder (due Nov 10): Renew the domain, Pay the bill',
-      url: '/',
+      body: '2 to-dos (due Nov 10): Renew the domain, Pay the bill',
+      url: '/items?show=overdue',
     });
   });
 });
@@ -230,15 +232,16 @@ describe('timed items', () => {
       url: '/p/p1/plans#item-1',
       tag: 'timed-p1-1',
     });
-    // Still offered for two hours (a missed run, a failed send); the kit sends it once that day.
-    expect(timedNotices(items, ny('2026-11-12T20:59Z')).map((x) => x.body)).toEqual([
+    // Still offered for half an hour (a missed run, a failed send); the kit sends it once that
+    // day. After that it's skipped rather than arriving late.
+    expect(timedNotices(items, ny('2026-11-12T19:30Z')).map((x) => x.body)).toEqual([
       'Call the dentist (2:00 PM)',
     ]);
-    expect(timedNotices(items, ny('2026-11-12T21:00Z'))).toEqual([]);
-    // The same instant in Los Angeles is 11 a.m.: not the dentist yet, but the 9:15 stand-up
-    // (still within its two hours).
+    expect(timedNotices(items, ny('2026-11-12T19:31Z'))).toEqual([]);
+    // At 17:20Z it's 12:20 in New York (nothing) but 9:20 in Los Angeles: the 9:15 stand-up.
+    expect(timedNotices(items, ny('2026-11-12T17:20Z'))).toEqual([]);
     expect(
-      timedNotices(items, at('2026-11-12T19:00Z', 'America/Los_Angeles')).map((x) => x.body),
+      timedNotices(items, at('2026-11-12T17:20Z', 'America/Los_Angeles')).map((x) => x.body),
     ).toEqual(['Stand-up (9:15 AM)']);
     // A to-do with a time is titled as one.
     expect(timedNotices(items, ny('2026-11-12T14:15Z'))).toMatchObject([
@@ -355,7 +358,7 @@ describe('assistant changes', () => {
       key: '2026-11-12T19',
       title: 'Assistant changes',
       body: 'Claude updated 8 pages: Trip ideas, Garden, Budget, Recipes, Reading list with a very long title indeed, Another page with a fairly long title, …',
-      url: '/activity',
+      url: assistantUrl(w),
       tag: 'assistant-changes',
     });
     expect(assistantNotice([ev('c', 'Mine', 'you')], w)).toBeNull();
@@ -368,7 +371,7 @@ describe('assistant changes', () => {
       url: '/p/a/trip-ideas',
     });
     expect(assistantNotice([ev('a', 'Gone', 'agent:Claude', 'delete', false)], w)!.url).toBe(
-      '/activity',
+      assistantUrl(w),
     );
     expect(
       assistantNotice([ev('a', 'A', 'agent:Claude'), ev('b', 'B', 'agent:ChatGPT')], w)!.body,
@@ -404,7 +407,7 @@ describe('open questions', () => {
       key: 'week',
       title: 'Open questions',
       body: '3 open questions: Raised beds?, Which hosting plan?, Who pays?',
-      url: '/?items=question',
+      url: '/items?show=questions',
       tag: 'open-questions',
     });
     expect(questionsNotice(items, { ...monday, minutes: 7 * 60 + 59 })).toBeNull();
@@ -415,7 +418,7 @@ describe('open questions', () => {
 });
 
 describe('everything due now', () => {
-  it('holds the morning kinds until 8 but sends a timed item at its time', () => {
+  it('sends the morning kinds from 8 to 10 only, and a timed item at its time', () => {
     const items = page(
       'p1',
       'Plans',
@@ -430,8 +433,13 @@ describe('everything due now', () => {
       noticesNow(items, { date: '2026-11-09', minutes, weekday: 1 }).map((n) => n.kind);
     expect(kinds(6 * 60 + 50)).toEqual([]);
     expect(kinds(6 * 60 + 55)).toEqual(['timed']);
-    expect(kinds(7 * 60 + 59)).toEqual(['timed']);
-    expect(kinds(8 * 60)).toEqual(['digest', 'overdue', 'questions', 'timed']);
+    expect(kinds(7 * 60 + 30)).toEqual(['timed']);
+    expect(kinds(7 * 60 + 31)).toEqual([]);
+    expect(kinds(8 * 60)).toEqual(['digest', 'overdue', 'questions']);
+    expect(kinds(9 * 60 + 59)).toEqual(['digest', 'overdue', 'questions']);
+    // Something that turns up later waits for the next morning.
+    expect(kinds(10 * 60)).toEqual([]);
+    expect(kinds(21 * 60)).toEqual([]);
     const w = assistantWindow(new Date('2026-11-09T19:07Z'), 'UTC')!;
     expect(
       noticesNow(

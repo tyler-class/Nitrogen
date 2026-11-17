@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { actorLabel, isAgent } from '@shared/actor';
 import { pageHref } from '@shared/markdown';
 import type { RevertResult, Session } from '@shared/types';
@@ -14,7 +14,16 @@ import { useToast } from '../components/Toast';
 type Filter = 'all' | 'you' | 'agents';
 
 export function Activity() {
-  const [filter, setFilter] = useState<Filter>('all');
+  // "Assistant changes" notifications open /activity?who=agents&from=…&to=… (their hour).
+  const [params, setParams] = useSearchParams();
+  const [filter, setFilter] = useState<Filter>(() => {
+    const w = params.get('who');
+    return w === 'agents' || w === 'you' ? w : 'all';
+  });
+  const from = params.get('from');
+  const to = params.get('to');
+  const window_ =
+    from && to && !isNaN(Date.parse(from)) && !isNaN(Date.parse(to)) ? { from, to } : null;
   const q = useQuery({
     queryKey: ['activity'],
     queryFn: () => api.get<{ sessions: Session[] }>('/activity?limit=500'),
@@ -59,9 +68,15 @@ export function Activity() {
     }
   }
 
-  const sessions = (q.data?.sessions ?? []).filter((s) =>
-    filter === 'all' ? true : filter === 'agents' ? isAgent(s.actor) : !isAgent(s.actor),
-  );
+  const inWindow = (iso: string) =>
+    !window_ ||
+    (Date.parse(iso) >= Date.parse(window_.from) && Date.parse(iso) < Date.parse(window_.to));
+  const sessions = (q.data?.sessions ?? [])
+    .filter((s) =>
+      filter === 'all' ? true : filter === 'agents' ? isAgent(s.actor) : !isAgent(s.actor),
+    )
+    .map((s) => (window_ ? { ...s, events: s.events.filter((e) => inWindow(e.created_at)) } : s))
+    .filter((s) => s.events.length > 0);
 
   return (
     <div className="page activity">
@@ -69,6 +84,14 @@ export function Activity() {
         <Icon name="activity" size={26} /> Activity
       </h1>
       <WhoToggle value={filter} onChange={setFilter} label="Show" />
+      {window_ && (
+        <p className="act-window">
+          Showing {formatTime(window_.from)}–{formatTime(window_.to)} on {formatDay(window_.from)}.{' '}
+          <button className="link" onClick={() => setParams({}, { replace: true })}>
+            Show all
+          </button>
+        </p>
+      )}
       {q.isPending && <p className="muted">Loading…</p>}
       {q.data && !sessions.length && <p className="muted">Nothing yet.</p>}
       {sessions.map((s, i) => {

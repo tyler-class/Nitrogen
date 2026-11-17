@@ -31,7 +31,16 @@ export function Tree({
     () => new Set(readLocal<string[]>('n2.tree.open', [])),
   );
   const [drag, setDrag] = useState<string | null>(null);
-  const [drop, setDrop] = useState<Drop>(null);
+  const [drop, setDropState] = useState<Drop>(null);
+  // The drop target is also kept in a ref, so the drop handler always sees the latest one (state
+  // read inside drag events can be a render behind).
+  const dropRef = useRef<Drop>(null);
+  const setDrop = (d: Drop) => {
+    const cur = dropRef.current;
+    if (cur?.id === d?.id && cur?.where === d?.where) return;
+    dropRef.current = d;
+    setDropState(d);
+  };
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -97,12 +106,15 @@ export function Tree({
     e.preventDefault();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const y = (e.clientY - r.top) / r.height;
-    const where = y < 0.28 ? 'before' : y > 0.72 ? 'after' : 'inside';
-    if (drop?.id !== node.page.id || drop.where !== where) setDrop({ id: node.page.id, where });
+    // Top quarter: drop above it; bottom quarter: below it; the middle: inside it (a subpage).
+    const where = y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
+    e.dataTransfer.dropEffect = 'move';
+    setDrop({ id: node.page.id, where });
   }
 
   async function onDrop(e: DragEvent) {
     e.preventDefault();
+    const drop = dropRef.current;
     const target = drop && byId.get(drop.id);
     const dragged = drag;
     setDrag(null);
@@ -156,7 +168,11 @@ export function Tree({
               setDrop(null);
             }}
             onDragOver={(e) => (locked ? undefined : onDragOver(e, node))}
-            onDragLeave={() => drop?.id === p.id && setDrop(null)}
+            onDragLeave={(e) => {
+              // Moving onto the row's own name or arrow isn't leaving it.
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              if (dropRef.current?.id === p.id) setDrop(null);
+            }}
             onDrop={onDrop}
           >
             <button

@@ -16,7 +16,7 @@ import {
   type PushDevice,
 } from '../../src/worker/kit/push';
 import { nitrogenPush, runNotifications } from '../../src/worker/notifications';
-import type { Page } from '../../src/shared/types';
+import type { InboxNotice, Page } from '../../src/shared/types';
 import { ORIGIN, session } from './helpers';
 
 const txt = new TextDecoder();
@@ -113,6 +113,7 @@ async function clearDevices() {
   for (const d of await listDevices(env.DB))
     await env.DB.prepare('DELETE FROM selfhost_push_devices WHERE id = ?').bind(d.id).run();
   await env.DB.prepare('DELETE FROM selfhost_push_sent').run();
+  await env.DB.prepare('DELETE FROM notifications').run();
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -289,7 +290,7 @@ describe('the notification run', () => {
     expect((await listDevices(env.DB)).map((d) => d.prefs.enabled)).toEqual([false]);
   });
 
-  it('sends Nitrogen’s morning digest with the due badge, by each device’s own date', async () => {
+  it('sends Nitrogen’s morning digest with the unread badge, by each device’s own date', async () => {
     await clearDevices();
     const api = await session();
     const plans = (
@@ -311,8 +312,8 @@ describe('the notification run', () => {
     const akl = await device('Pacific/Auckland', DIGEST_ONLY);
     const la = await device('America/Los_Angeles', DIGEST_ONLY);
     const svc = pushService();
-    // 7:41 in Auckland (NZST), 12:41 the day before in Los Angeles.
-    await runNotifications(env.DB, { now: new Date('2031-06-02T19:41Z'), fetcher: svc.fetcher });
+    // 8:41 on the 2nd in Los Angeles (PDT), 3:41 on the 3rd in Auckland (NZST).
+    await runNotifications(env.DB, { now: new Date('2031-06-02T15:41Z'), fetcher: svc.fetcher });
     const first = svc.got.splice(0);
     expect(first.map((r) => r.url)).toEqual([la.d.endpoint]);
     expect(await decrypt(la.b, first[0]!.body)).toEqual({
@@ -321,7 +322,8 @@ describe('the notification run', () => {
       url: `/p/${plans.id}/push-test-plans#item-5`,
       tag: 'digest-today',
       icon: '/icons/icon-192.png',
-      badge: 2,
+      // The badge is the bell's unread count: LA's digest, overdue and open questions.
+      badge: 3,
     });
     // 8:41 in Auckland on the 3rd.
     await runNotifications(env.DB, { now: new Date('2031-06-02T20:41Z'), fetcher: svc.fetcher });
@@ -333,7 +335,8 @@ describe('the notification run', () => {
       url: `/p/${plans.id}/push-test-plans`,
       tag: 'digest-today',
       icon: '/icons/icon-192.png',
-      badge: 4,
+      // Plus Auckland's digest and overdue for the 3rd.
+      badge: 5,
     });
     // Once a day: later runs that day send nothing more.
     await runNotifications(env.DB, { now: new Date('2031-06-03T02:11Z'), fetcher: svc.fetcher });
@@ -343,36 +346,54 @@ describe('the notification run', () => {
     await api.patch('/push/prefs', { endpoint: la.d.endpoint, prefs: { digest: false } });
     await runNotifications(env.DB, { now: new Date('2031-06-03T20:41Z'), fetcher: svc.fetcher });
     expect(svc.got).toHaveLength(0);
-    // Ticking an item off lowers the badge.
+    // The bell lists them newest first (with Auckland's overdue on the 4th, from the run above);
+    // reading one lowers the badge, and so does read-all.
     const badge = (d: PushDevice) =>
       nitrogenPush(env.DB).badge!(d, new Date('2031-06-02T20:41Z'), env.DB);
-    expect(await badge(akl.d)).toBe(4);
-    await api.post(`/pages/${plans.id}/items/toggle`, { line: 3, done: true });
-    expect(await badge(akl.d)).toBe(3);
+    const list = await api.get<{ items: InboxNotice[]; unread: number }>('/notifications');
+    expect(list.data.unread).toBe(6);
+    expect(list.data.items.map((n) => n.title)).toContain('Due today');
+    expect(await badge(akl.d)).toBe(6);
+    const one = list.data.items[0]!;
+    expect((await api.post(`/notifications/${one.id}/read`, { read: true })).data).toEqual({
+      unread: 5,
+    });
+    expect(await badge(akl.d)).toBe(5);
+    await api.post(`/notifications/${one.id}/read`, { read: false });
+    expect(await badge(akl.d)).toBe(6);
+    expect((await api.post('/notifications/read-all', {})).data).toEqual({ unread: 0 });
+    expect(await badge(akl.d)).toBe(0);
     await api.del(`/pages/${plans.id}`);
   });
 
-  it('sends today’s digest to a device turned on late in the evening, but nothing before 8', async () => {
+  it('sends morning notifications from 8 to 10 only; later ones wait for the next morning', async () => {
     await clearDevices();
     const api = await session();
+    const svc = pushService();
+    const utc = await device('UTC', DIGEST_ONLY);
+    const run = (iso: string) =>
+      runNotifications(env.DB, { now: new Date(iso), fetcher: svc.fetcher });
+    // Nothing is due on the 8th at 8 a.m., so no digest goes out.
+    await run('2031-07-08T08:11Z');
+    expect(svc.got).toHaveLength(0);
+    // A to-do for today written at 1 p.m. doesn't send a "morning" digest in the afternoon or
+    // evening, and isn't listed in the bell either.
     const plans = (
       await api.post<Page>('/pages', {
         title: 'Late push plans',
         parent_id: null,
-        body: '- [ ] todo: File the report due:2031-07-08',
+        body: '- [ ] todo: File the report due:2031-07-09',
       })
     ).data;
-    const svc = pushService();
-    const utc = await device('UTC', DIGEST_ONLY);
-    // 7:41 local: too early.
-    await runNotifications(env.DB, { now: new Date('2031-07-08T07:41Z'), fetcher: svc.fetcher });
+    await run('2031-07-08T13:11Z');
+    await run('2031-07-08T22:11Z');
     expect(svc.got).toHaveLength(0);
-    // Off all day; turned on at 22:00, it gets the 22:11 run's digest straight away.
-    await env.DB.prepare('DELETE FROM selfhost_push_devices WHERE id = ?').bind(utc.d.id).run();
-    const late = await device('UTC', DIGEST_ONLY);
-    await runNotifications(env.DB, { now: new Date('2031-07-08T22:11Z'), fetcher: svc.fetcher });
-    expect(svc.got.map((r) => r.url)).toEqual([late.d.endpoint]);
-    expect(await decrypt(late.b, svc.got[0]!.body)).toMatchObject({
+    // 7:41 the next day: still too early. 8:11: the digest.
+    await run('2031-07-09T07:41Z');
+    expect(svc.got).toHaveLength(0);
+    await run('2031-07-09T08:11Z');
+    expect(svc.got.map((r) => r.url)).toEqual([utc.d.endpoint]);
+    expect(await decrypt(utc.b, svc.got[0]!.body)).toMatchObject({
       title: 'Due today',
       body: '1 to-do: File the report',
     });
@@ -388,10 +409,12 @@ describe('the notification run', () => {
         title: 'Kinds plans',
         parent_id: null,
         body: [
-          '- [ ] reminder: Renew the domain due:2031-09-07',
+          '- [ ] todo: Renew the domain due:2031-09-07',
           '- [ ] todo: Call the dentist due:2031-09-08 14:00',
           '- [ ] question: Which hosting plan?',
           '- [x] question: Which colour? answer: Blue',
+          // A reminder is a nudge: never overdue.
+          '- reminder: Call mom due:2031-09-07',
         ].join('\n'),
       })
     ).data;
@@ -407,7 +430,7 @@ describe('the notification run', () => {
     const morning = await run('2031-09-08T12:05Z');
     expect(morning.map((m) => [m.title, m.body, m.url])).toEqual([
       ['Overdue', 'Renew the domain (due Sep 7)', `/p/${plans.id}/kinds-plans#item-1`],
-      ['Open questions', '1 open question: Which hosting plan?', '/?items=question'],
+      ['Open questions', '1 open question: Which hosting plan?', '/items?show=questions'],
     ]);
     expect(await run('2031-09-08T12:20Z')).toEqual([]);
     // 1:50 p.m.: still 10 minutes early. 1:53: the run nearest 2:00 sends it, once.
@@ -448,7 +471,11 @@ describe('the notification run', () => {
     expect(await run('2031-09-09T19:50Z')).toEqual([]);
     const hourly = await run('2031-09-09T20:02Z');
     expect(hourly.map((m) => [m.title, m.body, m.url])).toEqual([
-      ['Assistant changes', 'Claude updated 2 pages: Kinds plans, Garden', '/activity'],
+      [
+        'Assistant changes',
+        'Claude updated 2 pages: Kinds plans, Garden',
+        '/activity?who=agents&from=2031-09-09T19%3A00%3A00.000Z&to=2031-09-09T20%3A00%3A00.000Z',
+      ],
     ]);
     expect(await run('2031-09-09T20:17Z')).toEqual([]);
     await api.del(`/pages/${plans.id}`);

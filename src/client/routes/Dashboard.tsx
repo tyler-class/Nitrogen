@@ -3,7 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { actorLabel, isAgent } from '@shared/actor';
 import { pageHref } from '@shared/markdown';
-import { ITEM_LABELS, todayKey } from '@shared/items';
+import {
+  ITEM_LABELS,
+  dateWords,
+  isOverdue,
+  nowMoment,
+  reminderPast,
+  todayKey,
+} from '@shared/items';
 import { plainText } from '@shared/markdown';
 import type { Dashboard as DashboardData, OpenItem } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
@@ -57,8 +64,12 @@ export function Dashboard() {
   if (!d || !layout.ready) return <div className="page-loading" aria-busy="true" />;
 
   const today = todayKey();
-  const open = (items.data?.items ?? []).filter((i) => kind === 'all' || i.type === kind);
-  const dueNow = open.filter((i) => i.due && i.due <= today).length;
+  const now = nowMoment();
+  const open = (items.data?.items ?? []).filter(
+    (i) => (kind === 'all' || i.type === kind) && !reminderPast(i, now),
+  );
+  // To-dos due today or overdue (reminders are nudges, not due).
+  const dueNow = open.filter((i) => i.type === 'todo' && i.due && i.due <= today).length;
 
   const panels: PanelDef[] = [
     {
@@ -94,15 +105,20 @@ export function Dashboard() {
               </Link>
               <span className="dash-meta">
                 {i.due && (
-                  <span className={i.due < today ? 'overdue' : undefined}>
-                    {i.due < today ? 'Overdue' : 'Due'} {formatDue(i.due, i.due_time)} ·{' '}
+                  <span className={isOverdue(i, today) ? 'overdue' : undefined}>
+                    {dateWords(i, today).replace(' ·', '')} {formatDue(i.due, i.due_time)} ·{' '}
                   </span>
                 )}
                 {i.page_title}
               </span>
             </li>
           ))}
-          {open.length > 12 && <li className="muted">and {open.length - 12} more</li>}
+          <li className="see-all">
+            {open.length > 12 && <span className="muted">and {open.length - 12} more · </span>}
+            <Link to={kind === 'question' ? '/items?show=questions' : '/items'}>
+              See all open items
+            </Link>
+          </li>
         </ul>
       ) : (
         <p className="pn-empty">

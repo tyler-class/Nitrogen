@@ -4,14 +4,15 @@ const PATHS: Record<string, string> = {
   menu: 'M3 5h14M3 10h14M3 15h14',
   search: 'M9 15A6 6 0 1 0 9 3a6 6 0 0 0 0 12zm4.5-1.5L17 17',
   edit: 'M4 14.5V17h2.5L15 8.5 12.5 6 4 14.5zM14 4.5 15.5 3 18 5.5 16.5 7',
+  checks: 'M14.5 5 6 13.5 2 9.5M18 8.5l-6.5 6.5-1.6-1.6',
+  clock: 'M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM10 6v4l2.5 2.5',
+  calendar: 'M4 5.5h12V17H4zM4 9h12M7.5 3.5v3M12.5 3.5v3',
   // Small rings that the stroke fills in: about twice the size of the old dots.
   more: 'M3.9 10a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0M8.9 10a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0M13.9 10a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0',
   close: 'M5 5l10 10M15 5L5 15',
   folder: 'M3 6.5V15a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H9.5L8 5H4a1 1 0 0 0-1 1.5z',
   page: 'M6 3h6l4 4v10H6zM12 3v4h4',
   link: 'M8 12l4-4M6.5 8.5l-2 2a3.2 3.2 0 0 0 4.5 4.5l2-2M13.5 11.5l2-2a3.2 3.2 0 0 0-4.5-4.5l-2 2',
-  question:
-    'M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM7.8 7.9a2.3 2.3 0 0 1 4.5.7c0 1.6-2.3 1.9-2.3 3.4M10 14.6v.1',
   copy: 'M7 7h9v9H7zM4 13V4h9',
   expand: 'M4 8V4h4M16 12v4h-4M4 4l5 5M16 16l-5-5',
   download: 'M10 3v10M6 9l4 4 4-4M4 16h12',
@@ -21,8 +22,9 @@ const PATHS: Record<string, string> = {
   history: 'M3 10a7 7 0 1 0 2-4.9M3 4v3h3M10 6v4l3 2',
   // Two documents with +/− between them: compare versions.
   diff: 'M4 3h5v14H4zM11 3h5v14h-5M6.5 7.5v3M5 9h3M12.5 9h2',
-  // A ruled page with a check: the wiki's conventions.
-  rules: 'M5 3h10v14H5zM8 7h5M8 10h5M7.5 13.5l1.2 1.2 2.3-2.4',
+  // A page with an AI sparkle: AI Instructions.
+  rules:
+    'M9.5 3H5.5A1.5 1.5 0 0 0 4 4.5v11A1.5 1.5 0 0 0 5.5 17h8a1.5 1.5 0 0 0 1.5-1.5V11M7 10h3M7 13.5h5M14.5 1.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z',
   sun: 'M10 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM10 1v2M10 17v2M1 10h2M17 10h2',
   table: 'M3 4h14v12H3zM3 8h14M3 12h14M8 4v12',
   plus: 'M10 4v12M4 10h12',

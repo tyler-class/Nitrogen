@@ -2596,7 +2596,7 @@ body.resizing {
 
 /* ===================================================== modern shape layer
    Pills for actions and navigation, rounder surfaces with soft shadows
-   (same conventions as Ratio). Kept together so the look is easy to tune. */
+   (the same approach as Ratio). Kept together so the look is easy to tune. */
 
 :root {
   --radius: 12px;
@@ -2897,10 +2897,8 @@ body.resizing {
   }
 }
 .infotip-pop {
-  position: absolute;
-  top: 100%;
-  right: -8px;
-  z-index: 40;
+  position: fixed;
+  z-index: 70;
   padding-top: 6px;
 }
 .infotip-card {
@@ -3343,26 +3341,13 @@ body.resizing {
   }
 }
 
-/* ------------------------------------------------------------- Conventions */
+/* --------------------------------------------------------- AI Instructions */
 
-.conventions-link {
+.instructions-link {
   margin-top: 6px;
 }
-.conventions-link + .sessions-link {
+.instructions-link + .sessions-link {
   margin-top: 0;
-}
-.conv-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 14px;
-  max-width: 560px;
-}
-.conv-empty p {
-  margin: 0;
-}
-.conv-empty .field {
-  width: 100%;
 }
 
 /* ------------------------------------------------------ Connect an assistant */
@@ -3578,7 +3563,7 @@ body.resizing {
 .title-addon .infotip-card {
   font-weight: 400;
 }
-/* AI Sessions: its title, with Conventions (which lives inside it) on the right. */
+/* AI Sessions: its title, with AI Instructions (which lives inside it) on the right. */
 .sessions-head {
   display: flex;
   align-items: center;
@@ -3586,7 +3571,7 @@ body.resizing {
   gap: 12px;
   flex-wrap: wrap;
 }
-.conv-link {
+.instructions-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3616,7 +3601,7 @@ body.resizing {
 .page-head .locked-note {
   margin-top: 10px;
 }
-.conventions > .page-title {
+.instructions > .page-title {
   margin-bottom: 16px;
 }
 
@@ -3811,4 +3796,555 @@ body.resizing {
 .side-close,
 .side-open {
   border-radius: 50%;
+}
+
+/* --- 1.0.3: the bell (notifications in the app). */
+.bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--muted);
+  flex: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bell:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+  }
+}
+.bell[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.bell-count {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--paper);
+}
+.mobile-bar-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.mobile-bar .bell {
+  width: auto;
+  height: auto;
+}
+.mobile-bar .bell .bell-count {
+  top: 4px;
+  right: 3px;
+}
+.bell-pop {
+  position: fixed;
+  z-index: 80;
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.bell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 8px;
+}
+.bell-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.bell-all {
+  font-size: 13px;
+  color: var(--accent);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.bell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 6px;
+  overflow-y: auto;
+}
+.bell-list li {
+  display: flex;
+  align-items: flex-start;
+  border-radius: 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* The row lights up for the part that opens it; the read dot has its own round hover. */
+  .bell-item:hover {
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+  }
+  .bell-all:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+.bell-item {
+  border-radius: 12px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 9px 4px 9px 10px;
+  text-align: left;
+}
+.bell-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.bell-when {
+  flex: none;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--faint);
+}
+.bell-body {
+  font-size: 13px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bell-list li.read .bell-title {
+  font-weight: 500;
+  color: var(--muted);
+}
+.bell-dot {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 4px 2px 0 0;
+  border-radius: 50%;
+}
+.bell-dot span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.bell-list li.read .bell-dot span {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--faint);
+}
+@media (hover: hover) and (pointer: fine) {
+  .bell-dot:hover {
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+}
+.bell-empty {
+  margin: 0;
+  padding: 8px 14px 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+/* A clearer round hover for the bell, and the same round target as search in the phone header. */
+@media (hover: hover) and (pointer: fine) {
+  .bell:hover {
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+}
+.mobile-bar .bell {
+  padding: 9px;
+  border-radius: 50%;
+}
+.mobile-bar .bell:active {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+/* Open items page (where summary notifications go) and Activity's one-hour view. */
+.open-items-page .slide-toggle {
+  margin: 4px 0 18px;
+}
+.items-full li {
+  padding-block: 4px;
+}
+.items-empty {
+  padding: 8px 2px;
+}
+.act-window {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+/* One bell at a time: the sidebar's on desktop, the header's on phones. */
+.sidebar .bell {
+  width: 34px;
+  height: 34px;
+}
+.sidebar .bell .bell-count {
+  top: 2px;
+  right: 1px;
+}
+@media (max-width: 860px) {
+  .sidebar .bell {
+    display: none;
+  }
+}
+/* The sidebar's show/hide button: always visible, the same size as the bell beside it. */
+.side-toggle,
+.side-open {
+  width: 34px;
+  height: 34px;
+}
+.side-toggle,
+.sidebar:hover .side-toggle {
+  opacity: 1;
+}
+
+.bell-list .bell-dot,
+.bell-list .bell-dot:focus-visible {
+  border-radius: 50%;
+}
+.open-items .see-all {
+  font-size: 13px;
+  padding-top: 6px;
+}
+
+/* Open items page: rows you can act on in place. */
+.items-full {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+.item-row .item-check {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+}
+.item-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.item-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.item-row-text {
+  color: var(--ink);
+  font-weight: 550;
+  text-decoration: none;
+}
+.item-row-text:hover {
+  text-decoration: underline;
+}
+.item-row.is-done .item-row-text {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+.item-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.item-due-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.item-due-btn.overdue {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .item-due-btn:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+}
+.item-answer {
+  color: var(--muted);
+}
+.item-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.item-edit input {
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--paper);
+  padding: 5px 9px;
+  font-size: 14px;
+}
+.item-edit .item-answer-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+/* Reminders are nudges: a bell where a to-do has its checkbox, and muted once they've passed. */
+.item-bell {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 0.3em;
+  color: var(--item-fg);
+}
+.item-row .item-bell {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+}
+.item-past {
+  opacity: 0.55;
+}
+.item-row-page {
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.item-row-page {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.item-row-page:hover {
+  color: var(--ink);
+}
+.item-row-page:hover .item-row-page-title {
+  text-decoration: underline;
+}
+.item-row-sep {
+  color: var(--faint);
+  font-size: 14px;
+  margin: 0 -2px;
+}
+
+/* --- Date and time pickers (themed; the browsers' own are not used). */
+.dt-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.dt-field svg {
+  color: var(--muted);
+}
+.dt-field.muted {
+  color: var(--muted);
+}
+.dt-field[aria-expanded='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dt-field:hover {
+    background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  }
+}
+.dt-pop {
+  position: fixed;
+  z-index: 90;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+}
+.cal {
+  width: 266px;
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cal-title {
+  font-weight: 650;
+  font-size: 14px;
+}
+.cal-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.cal-nav:not(.next) svg {
+  transform: rotate(180deg);
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-dow {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  padding: 4px 0;
+}
+.cal-day {
+  aspect-ratio: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.cal-day.today {
+  color: var(--accent);
+  font-weight: 700;
+}
+.cal-day.on {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 650;
+}
+.cal-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.cal-today {
+  font-size: 13px;
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.time-list {
+  width: 150px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+}
+.time-opt {
+  justify-content: flex-start;
+  text-align: left;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.time-opt.none {
+  color: var(--muted);
+}
+.time-opt.on {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cal-nav:hover,
+  .cal-day:not(.on):hover,
+  .time-opt:not(.on):hover,
+  .cal-today:hover {
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+  }
+}
+@media (pointer: coarse) {
+  .cal {
+    width: 296px;
+  }
+  .time-opt {
+    padding: 10px 14px;
+  }
+}
+/* The ⓘ beside a page title (AI Instructions): grey, like the other quiet controls. */
+.title-addon .infotip > button,
+.title-addon .infotip > button.on {
+  color: var(--muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .title-addon .infotip > button:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+  }
+}
+
+/* Phones: no iOS link-preview pop-up (or image callout) on a long press; a tap opens the link. */
+@media (pointer: coarse) {
+  a,
+  img {
+    -webkit-touch-callout: none;
+  }
+}
+/* A date pill and its pickers inside an item card on a page. */
+.item-meta .item-due-btn {
+  font-size: 12px;
+  padding: 1px 8px;
+}
+.item-meta .item-edit {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+/* A page's Open items box: the Open items page's rows, a little tighter. */
+.item-summary .item-row {
+  padding: 10px 2px;
+}
+.item-summary .item-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+.item-summary-title svg {
+  color: var(--muted);
 }

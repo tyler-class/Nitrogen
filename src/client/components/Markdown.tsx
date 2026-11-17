@@ -30,7 +30,10 @@ import {
   DUE_RE,
   ITEM_LABELS,
   ITEM_TYPES,
+  isOverdue,
+  nowMoment,
   parseItemLine,
+  reminderPast,
   todayKey,
   type ItemType,
 } from '@shared/items';
@@ -38,6 +41,8 @@ import {
 /** Every "due:…" (with its time) in a text node, to move it out of the item's text. */
 const DUE_ALL = new RegExp(DUE_RE.source, 'gi');
 import { pageHref, slugify, splitTags, WIKILINK_RE } from '@shared/markdown';
+import { Icon } from './Icon';
+import { DatePicker, TimePicker } from './DateTimePicker';
 
 const CALLOUTS = ['note', 'tip', 'important', 'warning', 'caution', 'info', 'question'];
 
@@ -52,7 +57,7 @@ function headingText(node: { children?: unknown[] }): string {
   return out;
 }
 
-function transform(tree: Root, titles: TitleIndex, source: string) {
+function transform(tree: Root, titles: TitleIndex, source: string, items = true) {
   // [[Wikilinks]] inside text nodes become links (or "missing" markers).
   visit(tree, 'text', (node: Text, index, parent) => {
     if (!parent || index === undefined || parent.type === 'link') return;
@@ -142,14 +147,17 @@ function transform(tree: Root, titles: TitleIndex, source: string) {
     };
     return true;
   };
-  visit(tree, 'listItem', (node: ListItem) => {
-    const para = node.children[0];
-    if (para?.type === 'paragraph') markItem(node, para);
-  });
-  visit(tree, 'paragraph', (node: Paragraph, _i, parent) => {
-    if (parent?.type === 'listItem') return;
-    markItem(node, node);
-  });
+  // Pages that can't hold items (AI session entries) show the lines as written.
+  if (items) {
+    visit(tree, 'listItem', (node: ListItem) => {
+      const para = node.children[0];
+      if (para?.type === 'paragraph') markItem(node, para);
+    });
+    visit(tree, 'paragraph', (node: Paragraph, _i, parent) => {
+      if (parent?.type === 'listItem') return;
+      markItem(node, node);
+    });
+  }
 
   // > [!NOTE] Optional title  →  <aside class="callout callout-note">
   visit(tree, 'blockquote', (node: Blockquote) => {
@@ -300,7 +308,91 @@ type ItemProps = { className?: string; children?: ReactNode } & Record<
 type Handlers = {
   onToggle?: (line: number, done: boolean) => void;
   onAnswer?: (line: number, answer: string) => void;
+  onDue?: (line: number, due: string | null, time: string | null) => Promise<void>;
 };
+
+/**
+ * A to-do's or reminder's date, as a pill that opens the date and time pickers in place (the same
+ * as on the Open items page). Without a handler (read-only views) it's plain text.
+ */
+function DueControl({
+  line,
+  type,
+  due,
+  time,
+  words,
+  late,
+  onDue,
+}: {
+  line: number;
+  type: ItemType;
+  due: string | undefined;
+  time: string | undefined;
+  words: string;
+  late: boolean;
+  onDue?: Handlers['onDue'];
+}) {
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState(due ?? todayKey());
+  const [at, setAt] = useState(time ?? '');
+  const [busy, setBusy] = useState(false);
+  const text = due ? `${words}${formatDue(due, time)}` : 'Add a date';
+  if (!onDue) return due ? <span className={late ? 'overdue' : undefined}>{text}</span> : null;
+  const save = async (d: string | null, t: string | null) => {
+    setBusy(true);
+    await onDue(line, d, t);
+    setBusy(false);
+    setEditing(false);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={`item-due-btn${late ? ' overdue' : ''}`}
+        aria-expanded={editing}
+        onClick={() => {
+          setDate(due ?? todayKey());
+          setAt(time ?? '');
+          setEditing((e) => !e);
+        }}
+      >
+        <Icon name="calendar" size={13} />
+        {text}
+      </button>
+      {editing && (
+        <span className="item-edit">
+          <DatePicker
+            value={date}
+            onChange={setDate}
+            label={type === 'reminder' ? 'Scheduled for' : 'Due date'}
+          />
+          <TimePicker value={at} onChange={setAt} label="Time (optional)" />
+          <button
+            type="button"
+            className="btn small primary"
+            disabled={busy}
+            onClick={() => void save(date, at || null)}
+          >
+            Save
+          </button>
+          {type === 'todo' && due && (
+            <button
+              type="button"
+              className="btn small"
+              disabled={busy}
+              onClick={() => void save(null, null)}
+            >
+              Remove date
+            </button>
+          )}
+          <button type="button" className="btn small" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </span>
+      )}
+    </>
+  );
+}
 
 /** A question's answer, typed in place: a small grey label and an underline to write on. */
 function AnswerField({
@@ -348,7 +440,7 @@ function AnswerField({
   );
 }
 
-function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer }: Handlers) {
+function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer, onDue }: Handlers) {
   return function ItemOrPlain(props: ItemProps) {
     const { className, children, ...rest } = props as ItemProps & Record<string, unknown>;
     if (!className?.split(' ').includes('item'))
@@ -361,30 +453,57 @@ function itemCard(Tag: 'li' | 'div', { onToggle, onAnswer }: Handlers) {
     const line = Number(props['data-line']);
     const done = props['data-done'] === '1';
     const due = props['data-due'];
-    const overdue = !done && !!due && due < todayKey();
+    const dueTime = props['data-due-time'];
+    const reminder = type === 'reminder';
+    // Reminders are nudges: no checkbox, never overdue; once their moment passes they're "Past".
+    const past =
+      reminder && reminderPast({ type, due: due ?? null, due_time: dueTime }, nowMoment());
+    const overdue = !done && isOverdue({ type, due: due ?? null }, todayKey());
     const label = ITEM_LABELS[type] ?? type;
     return (
-      <Tag className={className} id={`item-${line}`}>
-        <button
-          type="button"
-          className="item-check"
-          role="checkbox"
-          aria-checked={done}
-          aria-label={`${done ? 'Reopen' : type === 'question' ? 'Resolve' : 'Complete'}: ${label}`}
-          disabled={!onToggle}
-          onClick={() => onToggle?.(line, !done)}
-        />
+      <Tag className={`${className}${past ? ' item-past' : ''}`} id={`item-${line}`}>
+        {reminder ? (
+          <span className="item-bell" aria-hidden>
+            <Icon name="bell" size={14} />
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="item-check"
+            role="checkbox"
+            aria-checked={done}
+            aria-label={`${done ? 'Reopen' : type === 'question' ? 'Resolve' : 'Complete'}: ${label}`}
+            disabled={!onToggle}
+            onClick={() => onToggle?.(line, !done)}
+          />
+        )}
         <div className="item-main">
           <span className="item-label">{type}</span>
           <div className="item-text">{children}</div>
-          {(props['data-owner'] || due || props['data-invalid']) && (
+          {(props['data-owner'] ||
+            due ||
+            props['data-invalid'] ||
+            (onDue && type === 'todo' && !done)) && (
             <span className="item-meta">
               {props['data-owner'] && <span>@{props['data-owner']}</span>}
-              {due && (
-                <span className={overdue ? 'overdue' : undefined}>
-                  {overdue ? 'Overdue · ' : 'Due '}
-                  {formatDue(due, props['data-due-time'])}
-                </span>
+              {type !== 'question' && (due || (onDue && !done)) && (
+                <DueControl
+                  line={line}
+                  type={type}
+                  due={due}
+                  time={dueTime}
+                  words={
+                    reminder
+                      ? past
+                        ? 'Past · '
+                        : 'Scheduled for '
+                      : overdue
+                        ? 'Overdue · '
+                        : 'Due '
+                  }
+                  late={overdue}
+                  onDue={done ? undefined : onDue}
+                />
               )}
               {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
             </span>
@@ -415,20 +534,26 @@ export const Markdown = memo(function Markdown({
   titles,
   onToggleItem,
   onAnswerItem,
+  onDueItem,
+  noItems = false,
 }: {
   source: string;
   titles: TitleIndex;
+  /** Show todo:/question:/reminder: lines as plain text (AI session entries can't hold items). */
+  noItems?: boolean;
   /** Lets readers check items off; without it the checkboxes are shown but disabled. */
   onToggleItem?: (line: number, done: boolean) => void;
   /** Lets readers answer questions in place. */
   onAnswerItem?: (line: number, answer: string) => void;
+  /** Lets readers change a to-do's or reminder's date and time in place. */
+  onDueItem?: (line: number, due: string | null, time: string | null) => Promise<void>;
 }): ReactNode {
   return useMemo(() => {
     const tree = fromMarkdown(source, {
       extensions: [gfm()],
       mdastExtensions: [gfmFromMarkdown()],
     });
-    transform(tree, titles, source);
+    transform(tree, titles, source, !noItems);
     const hast = sanitize(toHast(tree), schema);
     return toJsxRuntime(hast, {
       Fragment,
@@ -439,9 +564,9 @@ export const Markdown = memo(function Markdown({
         img: Img,
         table: TableWrap,
         pre: Pre,
-        li: itemCard('li', { onToggle: onToggleItem, onAnswer: onAnswerItem }),
-        div: itemCard('div', { onToggle: onToggleItem, onAnswer: onAnswerItem }),
+        li: itemCard('li', { onToggle: onToggleItem, onAnswer: onAnswerItem, onDue: onDueItem }),
+        div: itemCard('div', { onToggle: onToggleItem, onAnswer: onAnswerItem, onDue: onDueItem }),
       },
     });
-  }, [source, titles, onToggleItem, onAnswerItem]);
+  }, [source, titles, onToggleItem, onAnswerItem, onDueItem, noItems]);
 });

@@ -6,7 +6,6 @@
 // touched in that session only, are regenerated from the activity log, and can't be edited by
 // anyone. Entries are permanent: nothing deletes one.
 import { encodeActor, type Actor } from '@shared/actor';
-import { extractItems } from '@shared/items';
 import { wordCount } from '@shared/markdown';
 import { all, first, nowIso, setSettingStmt } from './db';
 import { createPage, itemStatements, linkStatements, sessionsRoot } from './pages';
@@ -93,7 +92,9 @@ async function render(db: D1Database, root: string, e: Entry, actor: Actor) {
       )
       .bind(title, body, wordCount(body), nowIso(), encodeActor(actor), e.page_id),
     ...(await linkStatements(db, e.page_id, body)),
-    ...itemStatements(db, e.page_id, body),
+    // Session entries hold no items: nothing on them can be checked off or answered, so a
+    // "todo:" in a summary stays plain text and the index keeps none for the entry.
+    ...itemStatements(db, e.page_id, ''),
   ]);
 }
 
@@ -156,7 +157,7 @@ export async function logSession(
   actor: Actor,
   title: string,
   summary: string,
-): Promise<{ id: string; title: string; open_items: number }> {
+): Promise<{ id: string; title: string }> {
   const root = await ensureSessionsRoot(db);
   const e = await currentEntry(db, root, actor);
   await db
@@ -173,14 +174,19 @@ export async function logSession(
   return {
     id: page!.id,
     title: page!.title,
-    open_items: extractItems(summary).filter((i) => !i.done).length,
   };
 }
 
 /** Typed items were added in v0.7; index existing pages once. */
 export async function ensureItemsIndexed(db: D1Database): Promise<void> {
   if (await first(db, "SELECT 1 FROM settings WHERE key = 'items_indexed'")) return;
-  const pages = await all<{ id: string; body: string }>(db, 'SELECT id, body FROM pages');
+  // AI Sessions and its entries hold no items (see render above).
+  const root = (await sessionsRoot(db)) ?? '';
+  const pages = await all<{ id: string; body: string }>(
+    db,
+    'SELECT id, body FROM pages WHERE id != ?1 AND (parent_id IS NULL OR parent_id != ?1)',
+    root,
+  );
   for (let i = 0; i < pages.length; i += 20)
     await db.batch(pages.slice(i, i + 20).flatMap((p) => itemStatements(db, p.id, p.body)));
   await setSettingStmt(db, 'items_indexed', '1').run();

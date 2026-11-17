@@ -149,6 +149,8 @@ describe('backup', () => {
   it('round-trips through restore', async () => {
     const api = await session();
     await api.post('/pages', { title: 'Keep me', body: 'hello' });
+    // Opening the app makes the AI Instructions page (from the template) if there isn't one yet.
+    await api.get('/tree');
     const backup = (await api.get<{ pages: Page[] }>('/backup')).data;
     const n = backup.pages.length;
     expect((await api.post('/restore', backup)).status).toBe(200);

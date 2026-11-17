@@ -1,18 +1,25 @@
 // Notifications on this device (Selfhost Kit: src/client/kit/push.ts): taps on a notification
-// route in-app, and the app-icon badge follows the open to-dos and reminders.
+// route in-app, and the app-icon badge follows the bell's unread count.
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { onPushOpen, syncBadge } from '../kit/push';
 
-/** Queries whose data can change what's due: a page's body (its items) and the items index. */
-const WATCHED = new Set(['page', 'items']);
+/** Queries whose data can change the badge (the unread count): the bell's list. */
+const WATCHED = new Set(['notifications']);
 
 /** Mount once inside the router. */
 export function useNotifications() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  useEffect(() => onPushOpen((url) => nav(url)), [nav]);
+  useEffect(
+    () =>
+      onPushOpen((url) => {
+        nav(url);
+        void qc.invalidateQueries({ queryKey: ['notifications'] });
+      }),
+    [nav, qc],
+  );
   useEffect(() => {
     void syncBadge();
     let timer: ReturnType<typeof setTimeout> | undefined;

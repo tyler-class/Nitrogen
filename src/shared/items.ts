@@ -2,11 +2,15 @@
 //
 //   - [ ] todo: Draft the decision-log page @tyler due:2026-11-20
 //   - [x] todo: Check the repo for export features
-//   - [ ] reminder: Renew the domain due:2026-12-01        (reminders need a due date)
-//   - [ ] reminder: Call the dentist due:2026-11-12 14:00  (an optional 24-hour local time;
+//   - reminder: Renew the domain due:2026-12-01            (reminders need a date)
+//   - reminder: Call the dentist due:2026-11-12 14:00      (an optional 24-hour local time;
 //                                                          "due:2026-11-12T14:00" works too)
 //   - question: One marker with a type, or three?          (no checkbox = open)
 //   - [x] question: One marker or three? answer: One, with a type word.
+//
+// A to-do is a task: you check it off, and it goes overdue if you don't. A reminder is a nudge:
+// it's scheduled for a day (and maybe a time), notifies you then, and simply passes; it has no
+// checkbox and is never overdue. (A "[ ]" written on a reminder is ignored; "[x]" still hides it.)
 //
 // One shape for every type, so a new type (decision, risk) is just a new word in ITEM_TYPES.
 // The markdown stays plain; the app renders these as cards and the server indexes them on save.
@@ -127,6 +131,44 @@ export function setItemDone(md: string, line: number, done: boolean): string | n
   return lines.join('\n');
 }
 
+/**
+ * Set (or clear) a to-do's or reminder's due date, with an optional time ("HH:MM"). The rest of
+ * the line (text, @owner, checkbox, answer) is kept. null if that line isn't a to-do or reminder,
+ * or when clearing a reminder's date (reminders need one).
+ */
+export function setItemDue(
+  md: string,
+  line: number,
+  due: string | null,
+  time: string | null = null,
+): string | null {
+  const lines = md.split('\n');
+  const raw = lines[line - 1];
+  const item =
+    raw === undefined ? null : parseItemLine(stripCode(md).split('\n')[line - 1] ?? '', line);
+  if (!item || item.type === 'question') return null;
+  if (!due && item.type === 'reminder') return null;
+  if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return null;
+  const at = time ? dueTime(time) : null;
+  if (time && !at) return null;
+  const m = ITEM_LINE_RE.exec(raw!)!;
+  let rest = m[4]!;
+  let tail = '';
+  const a = ANSWER_RE.exec(rest);
+  if (a) {
+    tail = rest.slice(a.index);
+    rest = rest.slice(0, a.index);
+  }
+  rest = rest
+    .replace(DUE_RE, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  const tag = due ? ` due:${due}${at ? ` ${at}` : ''}` : '';
+  const box = m[2] !== undefined ? `[${m[2]}] ` : '';
+  lines[line - 1] = `${m[1]}${box}${m[3]}: ${rest}${tag}${tail}`;
+  return lines.join('\n');
+}
+
 /** Set (or clear) a question's answer. Answering resolves it; clearing reopens it. */
 export function setItemAnswer(md: string, line: number, answer: string): string | null {
   const lines = md.split('\n');
@@ -143,7 +185,46 @@ export function setItemAnswer(md: string, line: number, answer: string): string 
   return lines.join('\n');
 }
 
-/** Today in UTC as YYYY-MM-DD. */
 /** Today as YYYY-MM-DD on this device's clock (in a Worker, which runs on UTC, that's the UTC date). */
 export const todayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** A moment on a clock: its date and minutes since midnight. */
+export interface Moment {
+  date: string;
+  minutes: number;
+}
+
+/** Now on this device's clock. */
+export function nowMoment(d = new Date()): Moment {
+  return { date: todayKey(d), minutes: d.getHours() * 60 + d.getMinutes() };
+}
+
+/**
+ * A reminder whose moment has gone by: its day is over, or (with a time) its time has passed.
+ * Past reminders drop out of open lists; they were nudges, so there's nothing left to do.
+ */
+export function reminderPast(
+  i: { type: string; due: string | null; due_time?: string | null },
+  now: Moment,
+): boolean {
+  if (i.type !== 'reminder' || !i.due) return false;
+  if (i.due !== now.date) return i.due < now.date;
+  if (!i.due_time) return false;
+  return now.minutes >= Number(i.due_time.slice(0, 2)) * 60 + Number(i.due_time.slice(3, 5));
+}
+
+/** A to-do (not a reminder or question) whose due date has gone by. */
+export const isOverdue = (
+  i: { type: string; due: string | null; done?: boolean },
+  today: string,
+): boolean => i.type === 'todo' && !i.done && !!i.due && i.due < today;
+
+/** The words before a date: "Scheduled for" (reminders), "Overdue ·" or "Due" (to-dos). */
+export function dateWords(
+  i: { type: string; due: string | null; done?: boolean },
+  today: string,
+): string {
+  if (i.type === 'reminder') return 'Scheduled for';
+  return isOverdue(i, today) ? 'Overdue ·' : 'Due';
+}

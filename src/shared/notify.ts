@@ -1,13 +1,15 @@
 // What Nitrogen's notifications say and when, as pure functions (the Worker only loads data and
 // hands it here; see src/worker/notifications.ts). Five kinds, each with its own switch:
 //
-//   digest     8 a.m.: the to-dos and reminders due today.
-//   overdue    8 a.m. on the first day an open to-do or reminder is overdue (once per item).
+//   digest     8 a.m.: the to-dos due and reminders scheduled today.
+//   overdue    8 a.m. on the first day an open to-do is overdue (once per item). Reminders are
+//              nudges, never overdue.
 //   timed      At an item's own time ("due:2026-11-12 14:00"), to the nearest cron run.
 //   assistant  At most hourly: pages an assistant (MCP) created or edited.
 //   questions  Monday 8 a.m.: questions still unanswered.
 //
-// Plus the app-icon count (open to-dos and reminders due today or overdue). Items come from the
+// Each one is also kept in the app's list (the bell); the app-icon count is how many of those are
+// unread (src/worker/notifications.ts). Items come from the
 // typed items index (items.ts). Sending and the once-a-day log are the Selfhost Kit's
 // (src/worker/kit/push.ts); "once per item" comes from only offering an item on one local date.
 // Every time here is the device's own clock (its IANA zone), so DST is the zone's business.
@@ -19,23 +21,23 @@ export const NOTIFY_KINDS = [
   {
     id: 'digest',
     label: 'Morning digest',
-    description: 'At 8 a.m., what’s due that day.',
+    description: 'At 8 a.m., what’s on for that day.',
     detail:
-      'Open to-dos and reminders due today, in one notification. Skipped when nothing is due.',
+      'To-dos due and reminders scheduled today, in one notification. Skipped when there’s nothing.',
   },
   {
     id: 'overdue',
     label: 'Overdue',
     description: 'At 8 a.m. the day after something is due.',
     detail:
-      'Once for each open to-do or reminder, on the first morning it’s overdue. Several that morning come as one.',
+      'Once for each open to-do, on the first morning it’s overdue. Several that morning come as one. Reminders are never overdue.',
   },
   {
     id: 'timed',
     label: 'Timed reminders',
     description: 'At the time written on an item.',
     detail:
-      'For to-dos and reminders with a time, like “due:2026-11-12 14:00”, on this device’s clock. Sent within about 15 minutes of it, once.',
+      'For reminders and to-dos with a time, like “due:2026-11-12 14:00”, on this device’s clock. Sent once, within about 15 minutes of it; not at all if it was more than half an hour ago.',
   },
   {
     id: 'assistant',
@@ -55,13 +57,18 @@ export const NOTIFY_KINDS = [
 export type NotifyKind = (typeof NOTIFY_KINDS)[number]['id'];
 
 /** What the app-icon count counts, for the ⓘ in Settings. */
-export const BADGE_MEANS = 'how many to-dos and reminders are due today or overdue';
+export const BADGE_MEANS = 'how many notifications you haven’t read (the bell in the app)';
 
 /** The item types with a date that notifications and the badge follow (not questions). */
 export const DATED_TYPES = ['todo', 'reminder'] as const;
 
-/** Morning notifications (digest, overdue, questions) go out from this hour, local time. */
+/**
+ * Morning notifications (digest, overdue, questions) go out from this hour, local time, until
+ * MORNING_UNTIL (two hours, so a missed cron run is made up). Something that turns up later in
+ * the day waits for the next morning instead of arriving in the afternoon or evening.
+ */
 export const MORNING_HOUR = 8;
+export const MORNING_UNTIL = 10;
 
 /** An item from the index, with its page. */
 export interface DatedItem {
@@ -155,7 +162,10 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export const formatDay = (date: string) =>
   `${MONTHS[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8, 10))}`;
 
-const isMorning = (c: Clock) => c.minutes >= MORNING_HOUR * 60;
+/** Awake hours: from 8 a.m. until midnight (assistant changes wait out the night). */
+const isAwake = (c: Clock) => c.minutes >= MORNING_HOUR * 60;
+/** The morning window, 8–10 a.m., when the morning notifications go out. */
+const isMorning = (c: Clock) => isAwake(c) && c.minutes < MORNING_UNTIL * 60;
 
 // ---------------------------------------------------------------------------------------------
 // Words
@@ -197,6 +207,13 @@ export function fingerprint(s: string): string {
 // ---------------------------------------------------------------------------------------------
 // The badge and the morning digest
 
+/**
+ * Where a summary goes: the Open items page (its own page, so hiding a panel on Home can't hide
+ * it) on the tab that lists exactly what the notification was about.
+ */
+export const DUE_TODAY_URL = '/items?show=today';
+export const OVERDUE_URL = '/items?show=overdue';
+
 const isDated = (i: DatedItem) =>
   !i.done && !!i.due && (DATED_TYPES as readonly string[]).includes(i.type);
 
@@ -218,8 +235,8 @@ export function dueToday(items: readonly DatedItem[], today: string): DatedItem[
 
 /**
  * "Due today": "3 to-dos: Send the draft, Call the dentist (2:00 PM), …". Opens the item when
- * there's one, its page when they're all on one page, else Home (whose Open items panel lists
- * them). Null when nothing is due today.
+ * there's one, its page when they're all on one page, else the Open items page on Due today.
+ * Null when nothing is due today.
  */
 export function digestNotice(items: readonly DatedItem[], today: string): Notice | null {
   const due = dueToday(items, today);
@@ -231,7 +248,7 @@ export function digestNotice(items: readonly DatedItem[], today: string): Notice
       ? itemHref(first)
       : pages.size === 1
         ? pageHref(first.page_id, first.page_title)
-        : '/';
+        : DUE_TODAY_URL;
   return {
     kind: 'digest',
     key: 'today',
@@ -249,15 +266,15 @@ export function digestNotice(items: readonly DatedItem[], today: string): Notice
 // ---------------------------------------------------------------------------------------------
 // Overdue
 
-/** Open to-dos and reminders whose first overdue day is `today` (due yesterday). */
+/** Open to-dos whose first overdue day is `today` (due yesterday). Reminders never go overdue. */
 export function newlyOverdue(items: readonly DatedItem[], today: string): DatedItem[] {
   const yesterday = addDays(today, -1);
-  return items.filter((i) => isDated(i) && i.due === yesterday).sort(byPage);
+  return items.filter((i) => isDated(i) && i.type === 'todo' && i.due === yesterday).sort(byPage);
 }
 
 /**
  * "Overdue: Renew the domain (due Nov 10)". Several that morning are one notification: "Overdue:
- * 2 to-dos and 1 reminder (due Nov 10): …", opening Home. Each item is only ever offered on its
+ * 2 to-dos and 1 reminder (due Nov 10): …", opening Open items on Overdue. Each item is only ever offered on its
  * first overdue day, so it's sent once. Null when nothing became overdue today.
  */
 export function overdueNotice(items: readonly DatedItem[], today: string): Notice | null {
@@ -272,7 +289,7 @@ export function overdueNotice(items: readonly DatedItem[], today: string): Notic
     body: one
       ? `${words(late[0]!)} (due ${day})`
       : `${countWords(late)} (due ${day}): ${listUpTo(late.map(words), ', ', 150)}`,
-    url: one ? itemHref(late[0]!) : '/',
+    url: one ? itemHref(late[0]!) : OVERDUE_URL,
     tag: 'overdue',
   };
 }
@@ -282,14 +299,17 @@ export function overdueNotice(items: readonly DatedItem[], today: string): Notic
 
 /** How early a timed item may go: half the 15-minute cron, so it's the run nearest the time. */
 export const TIMED_EARLY_MIN = 7.5;
-/** How late it may still go (a missed run, a failed send): after that it's skipped. */
-export const TIMED_LATE_MIN = 120;
+/**
+ * How late it may still go (a missed run, a failed send): after that it's skipped, so an item
+ * written for a time that's already gone doesn't notify long after it.
+ */
+export const TIMED_LATE_MIN = 30;
 /** The last cron run of a day: a time after 23:52 goes then rather than not at all. */
 const LAST_RUN_MIN = 23 * 60 + 44;
 
 /**
  * Whether a timed item is due to go out now: on its due date (the device's clock), from the
- * cron run nearest its time until two hours after. DST is the zone's: a time skipped by a
+ * cron run nearest its time until half an hour after. DST is the zone's: a time skipped by a
  * spring-forward goes at the first run after the jump, and a time that happens twice in the
  * autumn goes the first time (the same date and key, so the kit won't send it again).
  */
@@ -297,7 +317,7 @@ export function timedDue(item: DatedItem, now: Clock): boolean {
   if (!isDated(item) || !item.due_time || item.due !== now.date) return false;
   const at = minutesOf(item.due_time);
   const from = Math.min(at - TIMED_EARLY_MIN, LAST_RUN_MIN);
-  return now.minutes >= from && now.minutes < at + TIMED_LATE_MIN;
+  return now.minutes >= from && now.minutes <= at + TIMED_LATE_MIN;
 }
 
 /**
@@ -351,7 +371,7 @@ const HOUR = 3_600_000;
  */
 export function assistantWindow(now: Date, tz: string): AssistantWindow | null {
   const to = new Date(Math.floor(now.getTime() / HOUR) * HOUR);
-  const sendable = (t: Date) => isMorning(localClock(t, tz));
+  const sendable = (t: Date) => isAwake(localClock(t, tz));
   if (!sendable(to) || localClock(to, tz).date !== localClock(now, tz).date) return null;
   let from = new Date(to.getTime() - HOUR);
   for (let n = 0; n < 24 && !sendable(from); n++) from = new Date(from.getTime() - HOUR);
@@ -368,7 +388,7 @@ function whoWords(actors: string[]): string {
 
 /**
  * "Claude updated 3 pages: Trip ideas, Garden, …" ("created" when every change was a new page).
- * Opens the page when there's one still there, else Activity. Null when no assistant changed
+ * Opens the page when there's one still there, else Activity filtered to that hour's assistant edits. Null when no assistant changed
  * anything. `events` is newest first.
  */
 export function assistantNotice(
@@ -394,19 +414,23 @@ export function assistantNotice(
           ', ',
           150,
         )}`,
-    url: one?.live ? pageHref(one.page_id, one.title) : '/activity',
+    url: one?.live ? pageHref(one.page_id, one.title) : assistantUrl(window),
     tag: 'assistant-changes',
   };
 }
 
+/** Activity showing only assistants' edits in the notification's hour. */
+export const assistantUrl = (w: AssistantWindow) =>
+  `/activity?who=agents&from=${encodeURIComponent(w.from.toISOString())}&to=${encodeURIComponent(w.to.toISOString())}`;
+
 // ---------------------------------------------------------------------------------------------
 // Open questions
 
-/** Where Home's Open items panel shows questions only. */
-export const QUESTIONS_URL = '/?items=question';
+/** The Open items page on its questions tab. */
+export const QUESTIONS_URL = '/items?show=questions';
 
 /**
- * Monday from 8 a.m.: "4 open questions: Which hosting plan?, …", opening Home's Open items on
+ * Monday from 8 a.m.: "4 open questions: Which hosting plan?, …", opening the Open items page on
  * questions. Null on other days, before 8, or when every question is answered.
  */
 export function questionsNotice(items: readonly DatedItem[], now: Clock): Notice | null {

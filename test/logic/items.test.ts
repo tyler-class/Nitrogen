@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dueTime, extractItems, parseItemLine, setItemDone } from '@shared/items';
+import { dueTime, extractItems, parseItemLine, setItemDone, setItemDue } from '@shared/items';
 
 describe('typed items', () => {
   it('parses type, done, owner, due and answer', () => {
@@ -92,5 +92,42 @@ describe('answers', () => {
     );
     expect(setItemAnswer(a, 2, '  ')).toBe('x\n- [ ] question: Which vendor? @sam\n- [ ] todo: y');
     expect(setItemAnswer(md, 3, 'no')).toBeNull();
+  });
+});
+
+describe('setItemDue', () => {
+  const md = [
+    '- [ ] todo: Send the draft @maria due:2026-11-20',
+    '- [ ] reminder: Renew the domain due:2026-12-01 09:00',
+    '- question: Which vendor?',
+    '- [x] todo: Plain',
+  ].join('\n');
+  const line = (s: string | null, n: number) => s!.split('\n')[n - 1];
+
+  it('changes the date and keeps the owner and checkbox', () => {
+    expect(line(setItemDue(md, 1, '2026-11-25'), 1)).toBe(
+      '- [ ] todo: Send the draft @maria due:2026-11-25',
+    );
+    expect(line(setItemDue(md, 4, '2026-11-25', '14:00'), 4)).toBe(
+      '- [x] todo: Plain due:2026-11-25 14:00',
+    );
+  });
+
+  it('sets, changes and drops a time; clears a to-do’s date', () => {
+    expect(line(setItemDue(md, 2, '2026-12-02', '9:30'), 2)).toBe(
+      '- [ ] reminder: Renew the domain due:2026-12-02 09:30',
+    );
+    expect(line(setItemDue(md, 2, '2026-12-02'), 2)).toBe(
+      '- [ ] reminder: Renew the domain due:2026-12-02',
+    );
+    expect(line(setItemDue(md, 1, null), 1)).toBe('- [ ] todo: Send the draft @maria');
+  });
+
+  it('refuses questions, a reminder without a date, bad dates and times', () => {
+    expect(setItemDue(md, 3, '2026-11-25')).toBeNull();
+    expect(setItemDue(md, 2, null)).toBeNull();
+    expect(setItemDue(md, 1, '25/11/2026')).toBeNull();
+    expect(setItemDue(md, 1, '2026-11-25', '25:00')).toBeNull();
+    expect(setItemDue(md, 9, '2026-11-25')).toBeNull();
   });
 });

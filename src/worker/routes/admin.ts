@@ -25,14 +25,12 @@ export async function panelLayout(db: D1Database, key: string): Promise<PanelLay
 }
 
 admin.get('/settings', async (c) => {
-  const [guide, dashboard_layout, insights_layout, kit] = await Promise.all([
-    getSetting(c.env.DB, 'guide_id'),
+  const [dashboard_layout, insights_layout, kit] = await Promise.all([
     panelLayout(c.env.DB, 'dashboard_layout'),
     panelLayout(c.env.DB, 'insights_layout'),
     kitState(c.env.DB),
   ]);
   return c.json({
-    guide_id: guide,
     dashboard_layout,
     insights_layout,
     updates_set_up: kit.updates_set_up,
@@ -43,8 +41,6 @@ admin.get('/settings', async (c) => {
 admin.patch('/settings', async (c) => {
   const input = await body(c, settingsInput);
   const stmts = [];
-  if (input.guide_id !== undefined)
-    stmts.push(setSettingStmt(c.env.DB, 'guide_id', input.guide_id));
   for (const key of ['dashboard_layout', 'insights_layout'] as const)
     if (input[key] !== undefined)
       stmts.push(setSettingStmt(c.env.DB, key, JSON.stringify(input[key])));
@@ -116,7 +112,7 @@ admin.get('/search', async (c) => {
 admin.get('/backup', async (c) => {
   const pages = await all(
     c.env.DB,
-    'SELECT id, parent_id, position, title, icon, body, version, created_at, updated_at, created_by, updated_by, pinned_at, tags, words FROM pages ORDER BY created_at',
+    'SELECT id, parent_id, position, title, icon, body, version, created_at, updated_at, created_by, updated_by, pinned_at, tags, words, role FROM pages ORDER BY created_at',
   ).then((rows) => rows.map((r) => hydrate(r as never)));
   const files = await all<Backup['files'][number]>(
     c.env.DB,
@@ -173,8 +169,8 @@ admin.post('/restore', async (c) => {
         db
           .prepare(
             `INSERT INTO pages (id, parent_id, position, title, icon, body, version, created_at, updated_at,
-               created_by, updated_by, viewed_at, pinned_at, tags, words)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               created_by, updated_by, viewed_at, pinned_at, tags, words, role)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             p.id,
@@ -191,6 +187,7 @@ admin.post('/restore', async (c) => {
             p.pinned_at ?? null,
             JSON.stringify(p.tags ?? []),
             wordCount(p.body),
+            p.role ?? null,
           ),
       ),
     );

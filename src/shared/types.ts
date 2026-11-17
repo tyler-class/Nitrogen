@@ -19,6 +19,8 @@ export interface Page extends PageSummary {
   /** Tags set on the page itself. #tags in the body are in PageDetail.tags too. */
   tags: string[];
   words: number;
+  /** "ai_instructions" for the AI Instructions page (unique); null for every other page. */
+  role?: string | null;
 }
 
 export interface PageDetail {
@@ -35,8 +37,8 @@ export interface TreeResponse {
   pages: PageSummary[];
   /** The protected Sessions section, if it exists. */
   sessions_id: string | null;
-  /** The conventions page (shown at /conventions, outside the tree), if there is one. */
-  conventions_id: string | null;
+  /** The AI Instructions page (shown at /instructions, outside the tree). */
+  instructions_id: string | null;
 }
 
 /** One AI session in the Sessions log. */
@@ -50,7 +52,6 @@ export interface SessionEntry {
   /** Plain text, shortened. */
   summary: string;
   pages: number;
-  open_items: number;
 }
 
 export interface OpenItem {
@@ -209,7 +210,7 @@ export interface PageStat {
   created_at: string;
   updated_at: string;
   backlinks: number;
-  /** AI Sessions (the page and everything in it) and Conventions: left out of Tidy up. */
+  /** AI Sessions (the page and everything in it) and AI Instructions: left out of Tidy up. */
   system?: boolean;
   /** Edits (create/edit/restore events) in the last 7, 30 and 90 days, and ever. */
   e7: number;
@@ -227,4 +228,16 @@ export interface Insights {
   /** Assistant searches that found nothing (last 90 days). */
   misses: { query: string; count: number; last: string }[];
   links: number;
+}
+
+/** One notification in the bell's list. */
+export interface InboxNotice {
+  id: number;
+  kind: string;
+  title: string;
+  body: string;
+  /** In-app path it opens. */
+  url: string;
+  created_at: string;
+  read: boolean;
 }

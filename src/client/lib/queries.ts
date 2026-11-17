@@ -76,7 +76,6 @@ export function useDeletePage() {
 }
 
 export interface SettingsData {
-  guide_id: string | null;
   dashboard_layout: PanelLayout[];
   insights_layout: PanelLayout[];
 }

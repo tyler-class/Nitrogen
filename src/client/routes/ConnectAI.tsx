@@ -6,7 +6,6 @@ import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EXAMPLE_PROMPTS } from '@shared/examples';
 import { api, errorMessage } from '../lib/api';
-import { useTree } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toast';
 import { SlideToggle } from '../components/charts';
@@ -41,7 +40,6 @@ function CopyRow({ text, label }: { text: string; label?: string }) {
 
 export function ConnectAISection() {
   const url = `${window.location.origin}/mcp`;
-  const tree = useTree();
   const list = assistants('Nitrogen', 'nitrogen', url);
   const [open, setOpen] = useState<AssistantSetup['id'] | null>(null);
   const [examples, setExamples] = useState(false);
@@ -56,8 +54,7 @@ export function ConnectAISection() {
       <CopyRow text={url} label="Connector URL" />
       <p className="muted">{signInNote('Nitrogen')}</p>
       <p className="muted">
-        Assistants read your <Link to="/conventions">Conventions</Link> before anything else
-        {tree.data?.conventions_id ? '.' : ' (none yet).'}
+        Assistants read your <Link to="/instructions">AI Instructions</Link> before anything else.
       </p>
 
       <h3 className="ai-h">{CONNECTED_TEXT.heading}</h3>

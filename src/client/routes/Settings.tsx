@@ -36,7 +36,6 @@ export function Settings() {
     queryKey: keys.settings,
     queryFn: () =>
       api.get<{
-        guide_id: string | null;
         updates_set_up: boolean;
         telemetry: boolean;
       }>('/settings'),

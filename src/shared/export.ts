@@ -1,4 +1,4 @@
-// Plain markdown export: Nitrogen's conventions downgraded to markdown any app (or Google Docs)
+// Plain markdown export: Nitrogen's markdown extras downgraded to markdown any app (or Google Docs)
 // reads well. The full archive (Settings → Download backup) keeps everything as is instead.
 import { ITEM_LABELS, ITEM_LINE_RE, parseItemLine } from './items';
 import { WIKILINK_RE } from './markdown';

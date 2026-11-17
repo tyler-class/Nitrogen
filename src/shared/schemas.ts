@@ -60,8 +60,6 @@ export const panelLayoutInput = z
   .refine((l) => new Set(l.map((s) => s.id)).size === l.length, 'Each panel once.');
 
 export const settingsInput = z.object({
-  /** The page assistants read first for your conventions. */
-  guide_id: z.string().min(1).nullable().optional(),
   /** Panel order, width and visibility; unknown or missing panels use defaults. */
   dashboard_layout: panelLayoutInput.optional(),
   insights_layout: panelLayoutInput.optional(),
@@ -95,6 +93,7 @@ export const restoreInput = z.object({
         created_by: z.string().max(100).nullable().optional(),
         updated_by: z.string().max(100).nullable().optional(),
         pinned_at: z.string().max(40).nullable().optional(),
+        role: z.string().max(40).nullable().optional(),
         created_at: z.string(),
         updated_at: z.string(),
       }),

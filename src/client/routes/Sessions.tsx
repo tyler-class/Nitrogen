@@ -48,9 +48,9 @@ function SessionLog() {
         <h1 className="page-title view-title">
           <Icon name="sparkle" size={26} /> AI Sessions
         </h1>
-        {/* Conventions live here: the house rules assistants read first. */}
-        <Link to="/conventions" className="btn small conv-link">
-          <Icon name="rules" size={15} /> Conventions
+        {/* AI Instructions live here: the house rules assistants read first. */}
+        <Link to="/instructions" className="btn small instructions-btn">
+          <Icon name="rules" size={15} /> AI Instructions
         </Link>
       </div>
       <p className="sessions-sub">What assistants did in your wiki, recorded automatically.</p>
@@ -80,8 +80,6 @@ function SessionLog() {
                 {e.summary && <p className="session-summary">{e.summary}</p>}
                 <div className="session-meta">
                   {e.pages} page{e.pages === 1 ? '' : 's'} touched
-                  {e.open_items > 0 &&
-                    ` · ${e.open_items} open item${e.open_items === 1 ? '' : 's'}`}
                 </div>
               </div>
               <Icon name="chevron" size={14} />

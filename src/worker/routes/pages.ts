@@ -1,3 +1,4 @@
+import { ensureInstructions } from '../instructions';
 import { Hono } from 'hono';
 import {
   createPageInput,
@@ -7,7 +8,7 @@ import {
   updatePageInput,
 } from '@shared/schemas';
 import type { TreeResponse } from '@shared/types';
-import { getSetting, nowIso } from '../db';
+import { nowIso } from '../db';
 import {
   createPage,
   createTree,
@@ -29,18 +30,19 @@ import { ApiError, body, type AppEnv } from './util';
 export const pages = new Hono<AppEnv>();
 
 pages.get('/tree', async (c) => {
-  const [list, sessions, guide] = await Promise.all([
-    listSummaries(c.env.DB),
-    sessionsRoot(c.env.DB),
-    getSetting(c.env.DB, 'guide_id'),
-  ]);
-  const conventionsId = guide && list.some((p) => p.id === guide) ? guide : null;
+  // Made from the template the first time, so AI Instructions always has a page to edit.
+  const guide = await ensureInstructions(c.env.DB);
+  const [list, sessions] = await Promise.all([listSummaries(c.env.DB), sessionsRoot(c.env.DB)]);
+  const instructionsId = list.some((p) => p.id === guide) ? guide : null;
   return c.json<TreeResponse>({
     pages: list,
     sessions_id: sessions,
-    conventions_id: conventionsId,
+    instructions_id: instructionsId,
   });
 });
+
+/** The AI Instructions page's id (found by its role, made from the template if needed). */
+pages.get('/ai-instructions', async (c) => c.json({ id: await ensureInstructions(c.env.DB) }));
 
 pages.get('/pages/:id', async (c) => {
   const detail = await getDetail(c.env.DB, c.req.param('id'));

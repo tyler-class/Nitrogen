@@ -241,4 +241,4 @@ Paste this doc, then this prompt, filling in the first line:
 > 1. If `package.json`'s `deploy` script runs `wrangler deploy` before migrating, switch to database-first: add `scripts/release.ts` from the appendix and set the `deploy` and `release` scripts as described. Check `tsx` is a dev dependency and `scripts` is in `tsconfig.node.json`.
 > 2. Add or update `.github/workflows/update.yml` from the appendix with every placeholder replaced. If the repo already has one, keep anything project-specific and add the keep-alive step and `actions: write`.
 > 3. Check `wrangler.jsonc` has no resource ids (`database_id`, KV `id`, `bucket_name`) and that the README's Deploy button and “Update your copy” section match.
-> 4. Bump the version per this repo's convention, run typecheck, lint and tests, and commit. Don't push: pushing to main may deploy. Tell me what you changed and anything that didn't fit.
+> 4. Bump the version the way this repo does it, run typecheck, lint and tests, and commit. Don't push: pushing to main may deploy. Tell me what you changed and anything that didn't fit.
