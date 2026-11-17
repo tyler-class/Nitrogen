@@ -203,7 +203,7 @@ export function setItemDue(
   const raw = lines[line - 1];
   const item =
     raw === undefined ? null : parseItemLine(stripCode(md).split('\n')[line - 1] ?? '', line);
-  if (!item || item.type === 'question') return null;
+  if (!item) return null;
   if (!due && item.type === 'reminder') return null;
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return null;
   const at = time ? dueTime(time) : null;
@@ -286,7 +286,7 @@ export function setItemAnswer(md: string, line: number, answer: string): string 
   return lines.join('\n');
 }
 
-/** What the item editor can change: its type, text, and (not for questions) date and time. */
+/** What the item editor can change: its type, text, date and time. */
 export interface ItemEdit {
   type: ItemType;
   text: string;
@@ -304,8 +304,7 @@ export function editItem(md: string, line: number, edit: ItemEdit): string | nul
   if (!item) return null;
   const text = edit.text.replace(/\s+/g, ' ').trim();
   if (!text || !(ITEM_TYPES as readonly string[]).includes(edit.type)) return null;
-  const dated = edit.type !== 'question';
-  const due = dated ? edit.due : null;
+  const due = edit.due;
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return null;
   if (edit.type === 'reminder' && !due) return null;
   const at = due && edit.time ? dueTime(edit.time) : null;
@@ -369,13 +368,13 @@ export function reminderPast(
   return now.minutes >= Number(i.due_time.slice(0, 2)) * 60 + Number(i.due_time.slice(3, 5));
 }
 
-/** A to-do (not a reminder or question) whose due date has gone by. */
+/** A to-do or question (not a reminder) whose due date has gone by. */
 export const isOverdue = (
   i: { type: string; due: string | null; done?: boolean },
   today: string,
-): boolean => i.type === 'todo' && !i.done && !!i.due && i.due < today;
+): boolean => i.type !== 'reminder' && !i.done && !!i.due && i.due < today;
 
-/** The words before a date: "Scheduled for" (reminders), "Overdue ·" or "Due" (to-dos). */
+/** The words before a date: "Scheduled for" (reminders), "Overdue ·" or "Due" (to-dos, questions). */
 export function dateWords(
   i: { type: string; due: string | null; done?: boolean },
   today: string,

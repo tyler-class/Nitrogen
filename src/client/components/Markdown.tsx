@@ -416,7 +416,7 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
   const overdue = !done && isOverdue({ type, due: due ?? null }, todayKey());
   const label = ITEM_LABELS[type] ?? type;
   const words = reminder ? (past ? 'Past · ' : 'Scheduled for ') : overdue ? 'Overdue · ' : 'Due ';
-  const dated = type !== 'question' && !!due;
+  const dated = !!due;
   return (
     <Tag
       className={`${className}${past ? ' item-past' : ''}`}
@@ -466,21 +466,6 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
             {props['data-invalid'] && <span className="overdue">{props['data-invalid']}</span>}
           </span>
         )}
-        {editing && onEdit && (
-          <ItemEditor
-            item={{
-              type,
-              text: props['data-text'] ?? '',
-              due: due ?? null,
-              due_time: dueTime ?? null,
-            }}
-            onCancel={() => setEditing(false)}
-            onSave={async (edit) => {
-              await onEdit(line, edit);
-              setEditing(false);
-            }}
-          />
-        )}
         {type === 'question' && (
           <AnswerBox
             answer={props['data-answer'] ?? null}
@@ -494,6 +479,22 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
         onEdit={onEdit ? () => setEditing((e) => !e) : undefined}
         onDelete={onDelete ? () => onDelete(line) : undefined}
       />
+      {/* Under the whole item (full width on phones), not squeezed beside its buttons. */}
+      {editing && onEdit && (
+        <ItemEditor
+          item={{
+            type,
+            text: props['data-text'] ?? '',
+            due: due ?? null,
+            due_time: dueTime ?? null,
+          }}
+          onCancel={() => setEditing(false)}
+          onSave={async (edit) => {
+            await onEdit(line, edit);
+            setEditing(false);
+          }}
+        />
+      )}
     </Tag>
   );
 }

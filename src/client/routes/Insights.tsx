@@ -125,6 +125,7 @@ export function Insights() {
   const panels: PanelDef[] = [
     {
       id: 'glance',
+      icon: 'eye',
       title: 'At a glance',
       size: 'full',
       body: (
@@ -158,6 +159,7 @@ export function Insights() {
     },
     {
       id: 'calendar',
+      icon: 'calendar',
       title: 'Your wiki calendar',
       sub: `Last ${weeks} weeks. Darker days had more edits.`,
       size: 'full',
@@ -168,19 +170,21 @@ export function Insights() {
     },
     {
       id: 'weekly',
+      icon: 'activity',
       title: 'Edits per week',
       sub: 'Last 12 weeks',
       size: 'half',
       actions: <WhoToggle value={weeklyWho} onChange={setWeeklyWho} />,
       body: (
         <>
-          <Columns data={weekly} />
+          <Columns data={weekly} angled />
           {weeklyWho === 'all' && <Legend />}
         </>
       ),
     },
     {
       id: 'authors',
+      icon: 'edit',
       title: 'Who writes your wiki',
       size: 'half',
       actions: (
@@ -220,6 +224,7 @@ export function Insights() {
     },
     {
       id: 'explorer',
+      icon: 'table',
       title: 'Page explorer',
       size: 'full',
       actions: (
@@ -238,6 +243,7 @@ export function Insights() {
     },
     {
       id: 'months',
+      icon: 'page',
       title: 'New pages per month',
       sub: 'Pages that still exist, by when they were created',
       size: 'half',
@@ -245,6 +251,7 @@ export function Insights() {
     },
     {
       id: 'tags',
+      icon: 'tag',
       title: 'Top tags',
       sub: 'Pages per tag',
       size: 'half',
@@ -266,6 +273,7 @@ export function Insights() {
     },
     {
       id: 'misses',
+      icon: 'search',
       title: 'What assistants couldn’t find',
       sub: 'Searches with no results, last 90 days. Pages worth writing.',
       size: 'half',
@@ -287,6 +295,7 @@ export function Insights() {
     },
     {
       id: 'attention',
+      icon: 'archive',
       title: 'Tidy up',
       sub: 'Pages that might need a link, an update or deleting.',
       size: 'half',

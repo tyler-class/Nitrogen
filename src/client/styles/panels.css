@@ -354,3 +354,23 @@
   display: flex;
   justify-content: center;
 }
+
+/* Panel headings: a little larger, with their icon in a tinted circle (as on Home). */
+.pn-t h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 16px;
+}
+.pn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}

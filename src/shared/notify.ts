@@ -59,8 +59,8 @@ export type NotifyKind = (typeof NOTIFY_KINDS)[number]['id'];
 /** What the app-icon count counts, for the ⓘ in Settings. */
 export const BADGE_MEANS = 'how many notifications you haven’t read (the bell in the app)';
 
-/** The item types with a date that notifications and the badge follow (not questions). */
-export const DATED_TYPES = ['todo', 'reminder'] as const;
+/** The item types with a date that notifications and the badge follow (all of them). */
+export const DATED_TYPES = ['todo', 'question', 'reminder'] as const;
 
 /**
  * Morning notifications (digest, overdue, questions) go out from this hour, local time, until
@@ -183,13 +183,17 @@ export function listUpTo(items: string[], sep: string, max: number): string {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** "3 to-dos", "1 reminder", "2 to-dos and 1 reminder". */
+/** "3 to-dos", "1 reminder", "2 to-dos and 1 reminder", "1 to-do, 2 questions and 1 reminder". */
 function countWords(due: readonly DatedItem[]): string {
-  const todos = due.filter((i) => i.type === 'todo').length;
-  const reminders = due.length - todos;
-  return [todos && plural(todos, 'to-do'), reminders && plural(reminders, 'reminder')]
-    .filter(Boolean)
-    .join(' and ');
+  const n = (t: string) => due.filter((i) => i.type === t).length;
+  const parts = [
+    n('todo') && plural(n('todo'), 'to-do'),
+    n('question') && plural(n('question'), 'question'),
+    n('reminder') && plural(n('reminder'), 'reminder'),
+  ].filter(Boolean) as string[];
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+    : (parts[0] ?? '');
 }
 
 const words = (i: DatedItem) => plainText(i.text) || i.text;
@@ -266,10 +270,15 @@ export function digestNotice(items: readonly DatedItem[], today: string): Notice
 // ---------------------------------------------------------------------------------------------
 // Overdue
 
-/** Open to-dos whose first overdue day is `today` (due yesterday). Reminders never go overdue. */
+/**
+ * Open to-dos and questions whose first overdue day is `today` (due yesterday). Reminders never
+ * go overdue.
+ */
 export function newlyOverdue(items: readonly DatedItem[], today: string): DatedItem[] {
   const yesterday = addDays(today, -1);
-  return items.filter((i) => isDated(i) && i.type === 'todo' && i.due === yesterday).sort(byPage);
+  return items
+    .filter((i) => isDated(i) && i.type !== 'reminder' && i.due === yesterday)
+    .sort(byPage);
 }
 
 /**
@@ -331,7 +340,7 @@ export function timedNotices(items: readonly DatedItem[], now: Clock): Notice[] 
     .map((i) => ({
       kind: 'timed',
       key: `${i.page_id}:${i.due}T${i.due_time}:${fingerprint(i.text)}`,
-      title: i.type === 'reminder' ? 'Reminder' : 'To-do',
+      title: i.type === 'reminder' ? 'Reminder' : i.type === 'question' ? 'Question' : 'To-do',
       body: `${words(i)} (${formatClock(i.due_time!)})`,
       url: itemHref(i),
       tag: `timed-${i.page_id}-${i.line}`,

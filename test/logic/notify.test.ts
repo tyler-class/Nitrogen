@@ -47,7 +47,7 @@ const plans = page(
     '- [x] todo: Already done due:2031-06-03',
     '- [ ] todo: Next week due:2031-06-10',
     '- [ ] todo: No date',
-    '- [ ] question: Which vendor? due:2031-06-02', // questions don't count
+    '- [ ] question: Which vendor?', // no date: doesn't count
     '```',
     '- [ ] todo: In a code block due:2031-06-03',
     '```',
@@ -62,6 +62,12 @@ describe('the badge', () => {
     expect(badgeCount(plans, '2031-06-02')).toBe(1);
     expect(badgeCount(plans, '2031-05-31')).toBe(0);
     expect(badgeCount(plans, '2031-06-10')).toBe(4);
+  });
+
+  it('counts a question with a date like a to-do', () => {
+    const q = page('p3', 'Q', '- [ ] question: Which vendor? due:2031-06-02');
+    expect(badgeCount(q, '2031-06-02')).toBe(1);
+    expect(badgeCount(q, '2031-06-01')).toBe(0);
   });
 });
 
@@ -180,10 +186,11 @@ describe('overdue nudges', () => {
     ].join('\n'),
   );
 
-  it('picks only open to-dos on their first overdue day (reminders are never overdue)', () => {
+  it('picks open to-dos and questions on their first overdue day (reminders never are)', () => {
     expect(newlyOverdue(items, '2026-11-11').map((i) => i.text)).toEqual([
       'Renew the domain',
       'Pay the bill',
+      'Asked',
     ]);
     expect(newlyOverdue(items, '2026-11-12').map((i) => i.text)).toEqual(['Today']);
     expect(overdueNotice(items, '2026-11-13')).toBeNull();
@@ -202,7 +209,7 @@ describe('overdue nudges', () => {
 
   it('makes several one notification that opens Home', () => {
     expect(overdueNotice(items, '2026-11-11')).toMatchObject({
-      body: '2 to-dos (due Nov 10): Renew the domain, Pay the bill',
+      body: '2 to-dos and 1 question (due Nov 10): Renew the domain, Pay the bill, Asked',
       url: '/items?show=overdue',
     });
   });

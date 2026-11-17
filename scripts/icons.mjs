@@ -5,7 +5,7 @@ import { writeFileSync } from 'node:fs';
 
 // Background: a subtle azure gradient, darker at the bottom, lighter at the top.
 const TOP = '#2fabf5';
-const BOTTOM = '#0f8ae0';
+const BOTTOM = '#0a74c8';
 
 // N is 19.6 × 23. The 2 tucks over the N's lower-right corner, with a cut-out ring in the
 // background colour so the two white shapes read as separate.

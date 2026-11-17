@@ -118,8 +118,8 @@ export function Dashboard() {
   const now = nowMoment();
   const live = items.data?.items.filter((i) => !reminderPast(i, now));
   const open = (live ?? []).filter(showFilter(today)[show]);
-  // To-dos due today or overdue (reminders are nudges, not due).
-  const dueNow = open.filter((i) => i.type === 'todo' && i.due && i.due <= today).length;
+  // To-dos and questions due today or overdue (reminders are nudges, not due).
+  const dueNow = open.filter((i) => i.type !== 'reminder' && i.due && i.due <= today).length;
   const latestSessions = (sessions.data?.entries ?? []).slice(0, SESSIONS_SHOWN);
 
   return (

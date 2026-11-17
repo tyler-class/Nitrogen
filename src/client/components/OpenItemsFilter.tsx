@@ -14,7 +14,7 @@ export const parseShow = (v: string | null): Show =>
 /** Which items each choice shows. */
 export function showFilter(today: string): Record<Show, (i: OpenItem) => boolean> {
   return {
-    today: (i) => i.type !== 'question' && i.due === today,
+    today: (i) => i.due === today,
     overdue: (i) => isOverdue(i, today),
     questions: (i) => i.type === 'question',
     all: () => true,

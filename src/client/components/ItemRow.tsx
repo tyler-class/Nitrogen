@@ -32,7 +32,7 @@ export function ItemRow({
   const late = isOverdue(i, today);
   const question = i.type === 'question';
   const reminder = i.type === 'reminder';
-  const dated = !question && !!i.due;
+  const dated = !!i.due;
 
   return (
     <li className={`item-row item-${i.type}${i.done ? ' is-done' : ''}`}>
@@ -112,21 +112,21 @@ export function ItemRow({
             {i.owner && <span className="muted">@{i.owner}</span>}
           </div>
         )}
-        {editing && (
-          <ItemEditor
-            item={i}
-            onCancel={() => setEditing(false)}
-            onSave={async (edit) => {
-              await onEdit(edit);
-              setEditing(false);
-            }}
-          />
-        )}
         {question && (
           <AnswerBox answer={i.answer} onAnswer={i.done && !i.answer ? undefined : onAnswer} />
         )}
       </div>
       <ItemActions onEdit={() => setEditing((e) => !e)} onDelete={onDelete} />
+      {editing && (
+        <ItemEditor
+          item={i}
+          onCancel={() => setEditing(false)}
+          onSave={async (edit) => {
+            await onEdit(edit);
+            setEditing(false);
+          }}
+        />
+      )}
     </li>
   );
 }

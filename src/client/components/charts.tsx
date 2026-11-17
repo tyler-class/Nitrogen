@@ -50,22 +50,27 @@ export function Columns({
   data,
   height = 150,
   tones = TONES,
+  angled = false,
 }: {
   data: Col[];
   height?: number;
   tones?: string[];
+  /** Labels slanted at 45° under each bar, so longer ones ("Nov 10") never run together. */
+  angled?: boolean;
 }) {
   // Drawn about as wide as a half-width card, so labels stay readable.
   const [box, W] = useWidth<HTMLDivElement>(380);
-  const H = height,
-    pl = 2,
-    pb = 22,
+  // Slanted labels need more room below the axis.
+  const pb = angled ? 46 : 22;
+  const H = height + (angled ? pb - 22 : 0),
+    // …and to the left, where the first one hangs past its bar.
+    pl = angled ? 20 : 2,
     pt = 18;
   const total = (d: Col) => d.values.reduce((a, b) => a + b, 0);
   const max = Math.max(1, ...data.map(total));
   const bw = (W - pl * 2) / Math.max(1, data.length);
   // Narrow charts label every other bar.
-  const every = bw < 26 ? 2 : 1;
+  const every = angled ? (bw < 14 ? 2 : 1) : bw < 26 ? 2 : 1;
   return (
     <div ref={box} className="chart-box">
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img">
@@ -99,11 +104,21 @@ export function Columns({
                   {t}
                 </text>
               )}
-              {(i % every === 0 || i === data.length - 1) && (
-                <text x={mid} y={H - 7} textAnchor="middle">
-                  {d.label}
-                </text>
-              )}
+              {(i % every === 0 || i === data.length - 1) &&
+                (angled ? (
+                  <text
+                    x={mid + 4}
+                    y={H - pb + 14}
+                    textAnchor="end"
+                    transform={`rotate(-45 ${mid + 4} ${H - pb + 14})`}
+                  >
+                    {d.label}
+                  </text>
+                ) : (
+                  <text x={mid} y={H - 7} textAnchor="middle">
+                    {d.label}
+                  </text>
+                ))}
             </g>
           );
         })}

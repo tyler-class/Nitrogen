@@ -31,6 +31,8 @@ import '../styles/panels.css';
 export interface PanelDef {
   id: string;
   title: string;
+  /** An icon name (see Icon), shown in a tinted circle before the title. */
+  icon?: string;
   /** A small link right after the title, such as "View all". */
   link?: { to: string; label: string };
   sub?: ReactNode;
@@ -280,6 +282,11 @@ function Panel({
         )}
         <div className="pn-t">
           <h3>
+            {def.icon && (
+              <span className="pn-icon" aria-hidden>
+                <Icon name={def.icon} size={15} />
+              </span>
+            )}
             {def.title}
             {def.link && (
               <Link to={def.link.to} className="pn-link">

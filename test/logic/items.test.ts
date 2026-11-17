@@ -123,8 +123,13 @@ describe('setItemDue', () => {
     expect(line(setItemDue(md, 1, null), 1)).toBe('- [ ] todo: Send the draft @maria');
   });
 
-  it('refuses questions, a reminder without a date, bad dates and times', () => {
-    expect(setItemDue(md, 3, '2026-11-25')).toBeNull();
+  it('dates a question too', () => {
+    expect(line(setItemDue(md, 3, '2026-11-25'), 3)).toBe(
+      '- question: Which vendor? due:2026-11-25',
+    );
+  });
+
+  it('refuses a reminder without a date, bad dates and times', () => {
     expect(setItemDue(md, 2, null)).toBeNull();
     expect(setItemDue(md, 1, '25/11/2026')).toBeNull();
     expect(setItemDue(md, 1, '2026-11-25', '25:00')).toBeNull();
@@ -188,7 +193,7 @@ describe('editItem', () => {
     ).toBe('- reminder: Call Sam back @tyler due:2026-11-21 09:30');
     expect(
       editItem(md, 1, { type: 'question', text: 'Call Sam?', due: '2026-11-21', time: null }),
-    ).toBe('- question: Call Sam? @tyler');
+    ).toBe('- question: Call Sam? @tyler due:2026-11-21');
     expect(editItem(md, 1, { type: 'todo', text: 'Call Sam', due: null, time: null })).toBe(
       '- [ ] todo: Call Sam @tyler',
     );

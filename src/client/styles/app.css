@@ -5054,3 +5054,92 @@ body.resizing {
 .qa-md li {
   margin: 0.1em 0;
 }
+
+/* Home: an item's date and page wrap rather than run off the edge. In Open items they sit on
+   their own line under the item, left-aligned, for to-dos and reminders alike. */
+.home .dash-meta {
+  white-space: normal;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.home .open-items .dash-meta {
+  flex-basis: 100%;
+  margin-left: 0;
+  font-size: 13px;
+}
+.home .dash-meta .overdue {
+  white-space: nowrap;
+}
+
+/* Open items on phones: the page goes on its own line under the item, without the dot. */
+@media (max-width: 860px) {
+  .item-row-sep {
+    display: none;
+  }
+  .item-row-page {
+    flex-basis: 100%;
+  }
+}
+
+/* --- The item editor sits under the whole item: full width on phones, lined up with the item's
+   text on wider screens. Its type is a dropdown in the item's colour; its text wraps. */
+.prose li.item,
+.prose div.item,
+.item-row {
+  flex-wrap: wrap;
+}
+.item-editor {
+  flex-basis: 100%;
+  align-items: stretch;
+  margin-left: 25px;
+}
+.item-row > .item-editor {
+  margin-left: 30px;
+}
+.item-editor-type {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  color: var(--item-fg);
+}
+.item-editor-type select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 32px;
+  padding: 0 32px 0 14px;
+  border: 1px solid color-mix(in srgb, var(--item-fg) 45%, transparent);
+  border-radius: 999px;
+  background: var(--item-bg);
+  color: var(--item-fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.item-editor-type select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--item-fg) 50%, transparent);
+  outline-offset: 2px;
+}
+.item-editor-type .icon,
+.item-editor-type svg {
+  position: absolute;
+  right: 11px;
+  transform: rotate(90deg);
+  pointer-events: none;
+}
+textarea.item-editor-text {
+  display: block;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 860px) {
+  .item-editor,
+  .item-row > .item-editor {
+    margin-left: 0;
+    max-width: none;
+  }
+}

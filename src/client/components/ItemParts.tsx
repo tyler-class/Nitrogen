@@ -45,8 +45,8 @@ export function ItemActions({ onEdit, onDelete }: { onEdit?(): void; onDelete?()
 }
 
 /**
- * Behind the pencil: change the item's type, its text, and (for to-dos and reminders) its date and
- * time. A to-do's date is optional; a reminder must have one; questions have none.
+ * Behind the pencil: change the item's type, its text, and its date and time. A to-do's or
+ * question's date is optional (when it should be done or answered by); a reminder must have one.
  */
 export function ItemEditor({
   item,
@@ -62,7 +62,13 @@ export function ItemEditor({
   const [due, setDue] = useState<string | null>(item.due);
   const [time, setTime] = useState(item.due_time ?? '');
   const [busy, setBusy] = useState(false);
-  const dated = type !== 'question';
+  const textBox = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = textBox.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
   // A reminder always has a date: switching to one starts it on today.
   const date = type === 'reminder' ? (due ?? today()) : due;
   const save = async () => {
@@ -71,8 +77,8 @@ export function ItemEditor({
     await onSave({
       type,
       text,
-      due: dated ? date : null,
-      time: dated && date && time ? time : null,
+      due: date,
+      time: date && time ? time : null,
     });
     setBusy(false);
   };
@@ -85,51 +91,59 @@ export function ItemEditor({
       }}
       onKeyDown={(e) => e.key === 'Escape' && onCancel()}
     >
-      <div className="seg item-editor-types" role="radiogroup" aria-label="Type">
-        {ITEM_TYPES.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="radio"
-            aria-checked={type === t}
-            className={`item-${t}${type === t ? ' on' : ''}`}
-            onClick={() => setType(t)}
-          >
-            {ITEM_LABELS[t]}
-          </button>
-        ))}
-      </div>
-      <input
+      <label className={`item-editor-type item-${type}`}>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as ItemType)}
+          aria-label="Type"
+        >
+          {ITEM_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {ITEM_LABELS[t]}
+            </option>
+          ))}
+        </select>
+        <Icon name="chevron" size={14} />
+      </label>
+      {/* One line in the page, but it wraps here so it's all in view; Enter saves. */}
+      <textarea
+        ref={textBox}
         className="item-editor-text"
+        rows={1}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => setText(e.target.value.replace(/\n/g, ' '))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void save();
+          }
+        }}
+        enterKeyHint="done"
         aria-label="Text"
         placeholder="What is it?"
         autoFocus
       />
-      {dated && (
-        <div className="item-editor-when">
-          {date ? (
-            <>
-              <DatePicker
-                value={date}
-                onChange={setDue}
-                label={type === 'reminder' ? 'Scheduled for' : 'Due date'}
-              />
-              <TimePicker value={time} onChange={setTime} label="Time (optional)" />
-              {type === 'todo' && (
-                <button type="button" className="btn small" onClick={() => setDue(null)}>
-                  No date
-                </button>
-              )}
-            </>
-          ) : (
-            <button type="button" className="btn small" onClick={() => setDue(today())}>
-              <Icon name="calendar" size={13} /> Add a date
-            </button>
-          )}
-        </div>
-      )}
+      <div className="item-editor-when">
+        {date ? (
+          <>
+            <DatePicker
+              value={date}
+              onChange={setDue}
+              label={type === 'reminder' ? 'Scheduled for' : 'Due date'}
+            />
+            <TimePicker value={time} onChange={setTime} label="Time (optional)" />
+            {type !== 'reminder' && (
+              <button type="button" className="btn small" onClick={() => setDue(null)}>
+                No date
+              </button>
+            )}
+          </>
+        ) : (
+          <button type="button" className="btn small" onClick={() => setDue(today())}>
+            <Icon name="calendar" size={13} /> Add a date
+          </button>
+        )}
+      </div>
       <div className="item-editor-foot">
         <button className="btn small primary" disabled={busy || !text.trim()}>
           Save
