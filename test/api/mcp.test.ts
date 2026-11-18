@@ -165,6 +165,7 @@ describe('MCP', () => {
         'archive_page',
         'list_archived',
         'restore_page',
+        'search_archive',
         'image_upload_status',
         'request_image_upload',
         'create_page',
@@ -336,6 +337,13 @@ describe('MCP', () => {
     expect(archived.text).toContain('Archived');
     expect((await tool(token, 'get_tree', {})).text).not.toContain('Compost');
     expect((await tool(token, 'list_archived', {})).text).toContain('Compost');
+    // Normal search leaves it out; search_archive finds it.
+    expect((await tool(token, 'search', { query: 'Compost', mode: 'keyword' })).text).not.toContain(
+      'Compost (',
+    );
+    const inArchive = await tool(token, 'search_archive', { query: 'Compost', mode: 'keyword' });
+    expect(inArchive.text).toContain('Compost (');
+    expect(inArchive.text).toContain('restore_page');
     const back = await tool(token, 'restore_page', { page: 'Compost' });
     expect(back.text).toContain('Restored “Compost”');
     expect((await tool(token, 'get_tree', {})).text).toContain('Compost');

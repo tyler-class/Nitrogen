@@ -25,11 +25,18 @@ export interface Page extends PageSummary {
   role?: string | null;
 }
 
+/** A page inside another, as listed under it. */
+export interface ChildPage extends PageSummary {
+  created_by: string | null;
+  /** Its own tags and #tags in its body, sorted. */
+  tags: string[];
+}
+
 export interface PageDetail {
   page: Page;
   /** Root first, ending with the page's parent. */
   ancestors: PageSummary[];
-  children: PageSummary[];
+  children: ChildPage[];
   backlinks: PageSummary[];
   /** Every tag: the page's own plus #tags in the body, sorted. */
   all_tags: string[];

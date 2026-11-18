@@ -6,6 +6,9 @@ import { writeFileSync } from 'node:fs';
 // Background: a subtle azure gradient, darker at the bottom, lighter at the top.
 const TOP = '#2fabf5';
 const BOTTOM = '#0a74c8';
+// A little grain on the background (not the letters): how fine, and how strong.
+const GRAIN_FREQ = 4;
+const GRAIN_OPACITY = 0.17;
 
 // N is 19.6 × 23. The 2 tucks over the N's lower-right corner, with a cut-out ring in the
 // background colour so the two white shapes read as separate.
@@ -30,23 +33,52 @@ function svg({ rounded, scale }) {
   const ringY1 = inTwo((64 - ty) / scale);
   const ringY2 = inTwo(-ty / scale);
   const line = 'fill="none" stroke-linecap="round" stroke-linejoin="round"';
+  const glyph = (inner) =>
+    `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale})">${inner}</g>`;
+  const two = (inner) =>
+    `<g transform="translate(${TWO_X} ${TWO_Y}) scale(${TWO_SCALE}) translate(${-TWO_X} ${-TWO_Y})">${inner}</g>`;
+  const rx = rounded ? ' rx="14.08"' : '';
   return [
     '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">',
     '<defs>',
     `<linearGradient id="bg" x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">${stops}</linearGradient>`,
     `<linearGradient id="ring" x1="0" y1="${ringY1}" x2="0" y2="${ringY2}" gradientUnits="userSpaceOnUse">${stops}</linearGradient>`,
+    // Grain: fine grey noise at low opacity, spread around mid-grey so it lightens and darkens.
+    `<filter id="grain" x="0" y="0" width="64" height="64" filterUnits="userSpaceOnUse">`,
+    `<feTurbulence type="fractalNoise" baseFrequency="${GRAIN_FREQ}" numOctaves="1" stitchTiles="stitch"/>`,
+    '<feColorMatrix type="saturate" values="0"/>',
+    '<feComponentTransfer><feFuncR type="linear" slope="2.4" intercept="-0.7"/><feFuncG type="linear" slope="2.4" intercept="-0.7"/><feFuncB type="linear" slope="2.4" intercept="-0.7"/>',
+    `<feFuncA type="linear" slope="0" intercept="${GRAIN_OPACITY}"/></feComponentTransfer>`,
+    '<feComposite in2="SourceGraphic" operator="in"/>',
+    '</filter>',
+    // Everywhere but the white letters (the ring around the 2 is background, so it's grainy too).
+    '<mask id="bg-only" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">',
+    '<rect width="64" height="64" fill="#fff"/>',
+    glyph(
+      `<path d="${N}" fill="#000"/>` +
+        two(
+          `<path d="${TWO}" ${line} stroke="#fff" stroke-width="6"/>` +
+            `<path d="${TWO}" ${line} stroke="#000" stroke-width="2.5"/>`,
+        ),
+    ),
+    '</mask>',
     '</defs>',
-    `<rect width="64" height="64"${rounded ? ' rx="14.08"' : ''} fill="url(#bg)"/>`,
-    `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale})">`,
-    `<path d="${N}" fill="#fff"/>`,
-    `<g transform="translate(${TWO_X} ${TWO_Y}) scale(${TWO_SCALE}) translate(${-TWO_X} ${-TWO_Y})">`,
-    `<path d="${TWO}" ${line} stroke="url(#ring)" stroke-width="6"/>`,
-    `<path d="${TWO}" ${line} stroke="#fff" stroke-width="2.5"/>`,
-    '</g></g></svg>',
+    `<rect width="64" height="64"${rx} fill="url(#bg)"/>`,
+    glyph(
+      `<path d="${N}" fill="#fff"/>` +
+        two(
+          `<path d="${TWO}" ${line} stroke="url(#ring)" stroke-width="6"/>` +
+            `<path d="${TWO}" ${line} stroke="#fff" stroke-width="2.5"/>`,
+        ),
+    ),
+    `<rect width="64" height="64"${rx} fill="#000" filter="url(#grain)" mask="url(#bg-only)"/>`,
+    '</svg>',
   ].join('');
 }
 
-const favicon = svg({ rounded: true, scale: 1 });
+// How big the N₂ is drawn (1 = its original size); the maskable icon keeps inside the safe zone.
+const GLYPH = 1.2;
+const favicon = svg({ rounded: true, scale: GLYPH });
 writeFileSync('public/favicon.svg', favicon + '\n');
 
 const png = (s, size, out) =>
@@ -57,6 +89,6 @@ const png = (s, size, out) =>
 
 await png(favicon, 192, 'public/icons/icon-192.png');
 await png(favicon, 512, 'public/icons/icon-512.png');
-await png(svg({ rounded: false, scale: 1 }), 180, 'public/icons/apple-touch-icon.png');
-await png(svg({ rounded: false, scale: 0.8 }), 512, 'public/icons/icon-maskable-512.png');
+await png(svg({ rounded: false, scale: GLYPH }), 180, 'public/icons/apple-touch-icon.png');
+await png(svg({ rounded: false, scale: GLYPH * 0.8 }), 512, 'public/icons/icon-maskable-512.png');
 console.log('Wrote favicon.svg and icons/*.png');

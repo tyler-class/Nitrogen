@@ -70,6 +70,8 @@ export const settingsInput = z.object({
 });
 
 export const pinInput = z.object({ pinned: z.boolean() });
+/** The pinned pages in their new order (each must be pinned). */
+export const pinOrderInput = z.object({ ids: z.array(z.string().min(1).max(64)).max(500) });
 
 export const revertInput = z.object({
   actor: z.string().min(1).max(100),

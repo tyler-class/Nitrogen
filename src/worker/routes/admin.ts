@@ -60,8 +60,11 @@ admin.get('/search', async (c) => {
     throw new ApiError(400, 'invalid', 'mode must be keyword, semantic or hybrid.');
   const limit = Math.min(50, Math.max(1, Number(c.req.query('limit') ?? 20) || 20));
   const tag = normalizeTag(c.req.query('tag') ?? '');
+  // ?archived=1 searches only the archive.
+  const archived = c.req.query('archived') === '1';
   let res: SearchResponse;
-  if (tag) {
+  if (archived) res = await search(c.env, q, mode, limit, { archived: true });
+  else if (tag) {
     const tagged = new Set(
       (
         await all<{ page_id: string }>(c.env.DB, 'SELECT page_id FROM page_tags WHERE tag = ?', tag)

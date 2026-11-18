@@ -4171,11 +4171,6 @@ body.resizing {
 .item-row-page:hover .item-row-page-title {
   text-decoration: underline;
 }
-.item-row-sep {
-  color: var(--faint);
-  font-size: 14px;
-  margin: 0 -2px;
-}
 
 /* --- Date and time pickers (themed; the browsers' own are not used). */
 .dt-field {
@@ -5077,30 +5072,17 @@ body.resizing {
   white-space: nowrap;
 }
 
-/* Open Items on phones: the page goes on its own line under the item, without the dot. */
-@media (max-width: 860px) {
-  .item-row-sep {
-    display: none;
-  }
-  .item-row-page {
-    flex-basis: 100%;
-  }
+/* --- While an item is edited, the editor takes its place: the full width of the row. */
+.item-row-editing,
+.prose li.item.item-editing,
+.prose div.item.item-editing {
+  display: block;
 }
-
-/* --- The item editor sits under the whole item: full width on phones, lined up with the item's
-   text on wider screens. Its type is a dropdown in the item's colour; its text wraps. */
-.prose li.item,
-.prose div.item,
-.item-row {
-  flex-wrap: wrap;
-}
-.item-editor {
-  flex-basis: 100%;
+.item-row-editing > .item-editor,
+.item-editing > .item-editor {
+  margin: 4px 0;
+  max-width: 640px;
   align-items: stretch;
-  margin-left: 25px;
-}
-.item-row > .item-editor {
-  margin-left: 30px;
 }
 textarea.item-editor-text {
   display: block;
@@ -5109,13 +5091,6 @@ textarea.item-editor-text {
   line-height: 1.4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-@media (max-width: 860px) {
-  .item-editor,
-  .item-row > .item-editor {
-    margin-left: 0;
-    max-width: none;
-  }
 }
 
 /* Open Items rows: a slightly smaller circle, so its hover shade stays clear of the row's line. */
@@ -5281,4 +5256,488 @@ textarea.item-editor-text {
 .items-empty-state.plain .items-empty-icon {
   background: var(--accent-soft);
   color: var(--accent-ink);
+}
+
+/* An item's page goes on its own line under it (no dot before it). */
+.item-row-page {
+  flex-basis: 100%;
+}
+
+/* --- Open Items: the filter and "Group by" side by side (wrapping on phones), and the groups. */
+.open-items-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 4px 0 18px;
+}
+.open-items-page .open-items-controls .slide-toggle {
+  margin: 0;
+}
+.menu-select {
+  position: relative;
+}
+.menu-select-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 550;
+}
+.menu-select-label {
+  color: var(--muted);
+  font-weight: 500;
+}
+.menu-select-btn svg {
+  color: var(--muted);
+  transform: rotate(90deg);
+  transition: transform 0.18s ease;
+}
+.menu-select-btn[aria-expanded='true'] svg {
+  transform: rotate(-90deg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu-select-btn:hover {
+    background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  }
+}
+.menu-select-list {
+  left: 0;
+  right: auto;
+  min-width: 160px;
+}
+.menu-select-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.menu-select-list button[aria-selected='true'] {
+  font-weight: 600;
+}
+.menu-select-list button svg {
+  margin-left: auto;
+  color: var(--accent);
+}
+.items-group-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .items-group-page:hover .items-group-title {
+    text-decoration: underline;
+  }
+}
+
+/* --- Pages inside: one full-width row each (the whole row opens the page), title over when and
+   by whom, tags on the right folding into "+N". Phones put the tags under the text. */
+.child-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.child-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--paper);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .child-row:hover {
+    border-color: color-mix(in srgb, var(--ink) 18%, var(--hairline));
+    box-shadow: var(--shadow-sm);
+  }
+  .child-row:hover .child-title {
+    text-decoration: underline;
+  }
+}
+.child-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.child-title {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+/* The title's link covers the whole row; the tags sit above it. */
+.child-title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.child-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+.fit-tags {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 42%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fit-tags .tag-chip {
+  flex: none;
+  white-space: nowrap;
+}
+.fit-tags-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  top: 0;
+  left: 0;
+}
+.fit-tags-more {
+  position: relative;
+  flex: none;
+}
+.tag-chip.more {
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: default;
+}
+.fit-tags-pop {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+/* A bridge over the gap, so moving the pointer down to the pop-out doesn't close it. */
+.fit-tags-pop::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8px;
+  height: 8px;
+}
+.fit-tags-more:hover .fit-tags-pop,
+.fit-tags-more:focus-within .fit-tags-pop {
+  display: flex;
+}
+@media (max-width: 640px) {
+  .child-row {
+    flex-wrap: wrap;
+  }
+  .child-text {
+    flex-basis: calc(100% - 40px);
+  }
+  .fit-tags {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    padding-left: 32px;
+  }
+  .fit-tags-pop {
+    right: auto;
+    left: 0;
+  }
+}
+
+/* Open Items groups: the same collapsible card as a page's own Open Items box (white, outlined,
+   its heading row sticking while you scroll through the group). */
+.item-summary.items-group {
+  --items-top: 0px;
+  margin: 0;
+}
+@media (max-width: 860px) {
+  .item-summary.items-group {
+    --items-top: var(--mobile-bar-h, 0px);
+  }
+}
+.item-summary.items-group + .item-summary.items-group {
+  margin-top: 14px;
+}
+.items-group .item-summary-title {
+  margin: -1px -1px 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.items-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 10px 18px;
+  cursor: pointer;
+}
+.items-group-head .item-summary-chev {
+  margin: -4px 0 -4px auto;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .items-group-head:hover .item-summary-chev {
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    color: var(--ink);
+  }
+}
+.items-group-head .item-summary-chev:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.items-group-head .item-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+/* Item rows in lists get room above and below, clear of the lines between them. */
+.items-full li.item-row {
+  padding-block: 11px;
+}
+
+/* Toggle and segmented choices draw their keyboard-focus ring inside the button: their tracks
+   scroll sideways (which clips anything outside), and the ring must never be cut off. */
+.slide-toggle button:focus-visible,
+.seg button:focus-visible,
+.pn-actions .seg button.on:focus-visible {
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    inset 0 0 0 4px var(--paper);
+}
+
+/* --- The sidebar's background has a fine grain (like the logo). It's a background image, so it
+   sits under everything in the sidebar; the few translucent fills there (hover shades, the view
+   pill's track) are made solid so the grain doesn't show through them. */
+.sidebar {
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='2 0 0 0 -0.5 2 0 0 0 -0.5 2 0 0 0 -0.5 0 0 0 0 0.03'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-image: var(--grain);
+  background-size: 180px 180px;
+  background-blend-mode: normal;
+}
+.sidebar .view-pill {
+  background: color-mix(in srgb, var(--ink) 6%, var(--sidebar));
+}
+@media (hover: hover) and (pointer: fine) {
+  .sidebar .tree-row:hover {
+    background: color-mix(in srgb, var(--ink) 5%, var(--sidebar));
+  }
+  .sidebar .foot-link:hover,
+  .sidebar .shelf-btn:hover {
+    background: color-mix(in srgb, var(--ink) 6%, var(--sidebar));
+  }
+  .sidebar .side-open:hover,
+  .sidebar .bell:hover {
+    background: color-mix(in srgb, var(--ink) 8%, var(--sidebar));
+  }
+}
+
+/* Home's Pinned list: an × at the end of each row unpins it. */
+.pinned-row > a {
+  flex: 1;
+}
+.unpin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: -4px -4px -4px auto;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .unpin:hover {
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    color: var(--ink);
+  }
+}
+
+/* Pinned: a handle on the left to drag a row up or down. While dragging, the row's slot shows
+   as a dashed outline where it will land, and a lifted copy follows the pointer. */
+.pinned-list .pinned-row {
+  gap: 6px;
+}
+.pinned-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 28px;
+  margin: -4px 0 -4px -6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+}
+.pinned-grip:active {
+  cursor: grabbing;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pinned-grip:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+}
+.pinned-list .pinned-ph {
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 65%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.pinned-ph > * {
+  visibility: hidden;
+}
+.pinned-overlay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  list-style: none;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  cursor: grabbing;
+}
+.pinned-overlay a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+}
+
+/* --- Phones: the menu drawer slides in and out as one smooth piece. The panel, its shadow and the
+   dimmed backdrop all animate together (nothing pops in or out mid-slide), and once the panel is
+   fully off screen it's hidden, so nothing in it can flash after it has gone. */
+@media (max-width: 860px) {
+  .sidebar {
+    will-change: transform;
+    box-shadow: none;
+    transition:
+      transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.26s ease,
+      visibility 0s linear 0.26s;
+  }
+  .shell:not(.nav-open) .sidebar {
+    visibility: hidden;
+  }
+  .nav-open .sidebar {
+    visibility: visible;
+    transition:
+      transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.26s ease,
+      visibility 0s;
+  }
+  .nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border: 0;
+    background: rgb(0 0 0 / 0.5);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.26s ease;
+  }
+  .nav-open .nav-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* The search pane opens like a sheet (About Nitrogen): the backdrop fades in and the pane rises
+   into place. */
+.scrim {
+  background: color-mix(in srgb, #000 40%, transparent);
+  animation: sheet-fade 0.15s;
+}
+.palette {
+  animation: sheet-rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .palette {
+    animation: none;
+  }
+}
+
+/* --- Desktop: hiding and showing the sidebar is a drawer too. The column narrows while the panel
+   (kept at its full width, so nothing inside reflows) slides left in step with it; once it's
+   fully gone it's hidden. Dragging the edge to resize stays instant. */
+@media (min-width: 861px) {
+  .shell {
+    transition: grid-template-columns 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  body.resizing .shell {
+    transition: none;
+  }
+  .sidebar {
+    width: var(--sidebar-w, 272px);
+    transition:
+      transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s;
+  }
+  .shell.collapsed .sidebar {
+    visibility: hidden;
+    overflow: visible;
+    padding: 10px 8px 8px;
+    border-right: 1px solid var(--hairline);
+    transform: translateX(-100%);
+    transition:
+      transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s linear 0.26s;
+  }
+  .side-open {
+    animation: sheet-fade 0.2s 0.12s both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shell,
+    .sidebar,
+    .shell.collapsed .sidebar {
+      transition: none;
+    }
+  }
 }

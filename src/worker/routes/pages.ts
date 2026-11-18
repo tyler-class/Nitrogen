@@ -6,6 +6,7 @@ import {
   archiveInput,
   movePageInput,
   pinInput,
+  pinOrderInput,
   updatePageInput,
 } from '@shared/schemas';
 import type { TreeResponse } from '@shared/types';
@@ -131,4 +132,32 @@ pages.post('/pages/:id/pin', async (c) => {
     .run();
   if (!res.meta.changes) throw new ApiError(404, 'not_found', 'Page not found.');
   return c.json({ ok: true, pinned });
+});
+
+/**
+ * Reorder the pinned pages (Home lists them by pinned_at): the given pinned pages get pinned_at
+ * one millisecond apart in the new order, starting at the earliest they had, so later pins still
+ * land at the end. Ids that aren't pinned are skipped.
+ */
+pages.post('/pinned/order', async (c) => {
+  const { ids } = await body(c, pinOrderInput);
+  const db = c.env.DB;
+  const pinned = (
+    await db.prepare('SELECT id, pinned_at FROM pages WHERE pinned_at IS NOT NULL').all<{
+      id: string;
+      pinned_at: string;
+    }>()
+  ).results;
+  const known = new Set(pinned.map((p) => p.id));
+  const order = [...new Set(ids)].filter((id) => known.has(id));
+  if (!order.length) return c.json({ ok: true });
+  const start = Math.min(...pinned.map((p) => Date.parse(p.pinned_at)));
+  await db.batch(
+    order.map((id, k) =>
+      db
+        .prepare('UPDATE pages SET pinned_at = ? WHERE id = ?')
+        .bind(new Date(start + k).toISOString(), id),
+    ),
+  );
+  return c.json({ ok: true });
 });

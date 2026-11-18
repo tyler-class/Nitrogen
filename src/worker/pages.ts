@@ -13,6 +13,7 @@ import {
   type updatePageInput,
 } from '@shared/schemas';
 import type {
+  ChildPage,
   EventAction,
   Page,
   PageDetail,
@@ -143,8 +144,14 @@ export async function getDetail(db: D1Database, id: string): Promise<PageDetail>
          SELECT ${summaryCols('p')} FROM up JOIN pages p ON p.id = up.id ORDER BY up.depth DESC`,
       )
       .bind(id),
+    // Pages inside, with who created them and their tags (their own and #tags in the body).
     db
-      .prepare(`SELECT ${SUMMARY_COLS} FROM pages WHERE parent_id = ? ORDER BY position, title`)
+      .prepare(
+        `SELECT ${summaryCols('p')}, p.created_by,
+           (SELECT group_concat(tag, char(31)) FROM
+             (SELECT tag FROM page_tags t WHERE t.page_id = p.id ORDER BY tag)) AS tag_list
+         FROM pages p WHERE p.parent_id = ? ORDER BY p.position, p.title`,
+      )
       .bind(id),
     db
       .prepare(
@@ -160,7 +167,9 @@ export async function getDetail(db: D1Database, id: string): Promise<PageDetail>
     page: hydrate(row),
     all_tags: (tagRes!.results as { tag: string }[]).map((t) => t.tag),
     ancestors: ancRes!.results as unknown as PageSummary[],
-    children: childRes!.results as unknown as PageSummary[],
+    children: (childRes!.results as unknown as (ChildPage & { tag_list: string | null })[]).map(
+      ({ tag_list, ...c }) => ({ ...c, tags: tag_list ? tag_list.split('\x1f') : [] }),
+    ),
     backlinks: backRes!.results as unknown as PageSummary[],
   };
 }

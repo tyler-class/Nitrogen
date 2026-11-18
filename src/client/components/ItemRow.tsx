@@ -1,6 +1,7 @@
 // One open item as a row you can act on: check off a to-do or question, answer a question, or edit
 // (type, text, date, time) and delete it from the buttons at the end of its first row. Used on the
-// Open Items page and in a page's own Open Items box; each change edits that item in its page.
+// Open Items page, Home and in a page's own Open Items box; each change edits that item in its
+// page. While it's being edited, the editor takes the row's place.
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { ITEM_LABELS, dateWords, isOverdue, type ItemEdit } from '@shared/items';
@@ -17,11 +18,17 @@ export function ItemRow({
   onAnswer,
   onEdit,
   onDelete,
-  showPage = true,
+  inPage = false,
+  showPage = !inPage,
+  showType = true,
 }: {
   item: OpenItem;
-  /** The page's name after the item (off inside the page's own Open Items box). */
+  /** In the page's own Open Items box: the text scrolls to the item instead of opening the page. */
+  inPage?: boolean;
+  /** The page's name under the item (off in the page's own box, and when grouped by page). */
   showPage?: boolean;
+  /** The type's chip before the text (off when the list is grouped by type). */
+  showType?: boolean;
   today: string;
   onDone(done: boolean): void;
   onAnswer(text: string): Promise<void>;
@@ -33,6 +40,20 @@ export function ItemRow({
   const question = i.type === 'question';
   const reminder = i.type === 'reminder';
   const dated = !!i.due;
+
+  if (editing)
+    return (
+      <li className={`item-row item-row-editing item-${i.type}`}>
+        <ItemEditor
+          item={i}
+          onCancel={() => setEditing(false)}
+          onSave={async (edit) => {
+            await onEdit(edit);
+            setEditing(false);
+          }}
+        />
+      </li>
+    );
 
   return (
     <li className={`item-row item-${i.type}${i.done ? ' is-done' : ''}`}>
@@ -54,15 +75,8 @@ export function ItemRow({
       )}
       <div className="item-row-main">
         <div className="item-row-line">
-          <span className={`item-chip item-${i.type}`}>{ITEM_LABELS[i.type]}</span>
-          {showPage ? (
-            <Link
-              to={`${pageHref(i.page_id, i.page_title)}#item-${i.line}`}
-              className="item-row-text"
-            >
-              {plainText(i.text)}
-            </Link>
-          ) : (
+          {showType && <span className={`item-chip item-${i.type}`}>{ITEM_LABELS[i.type]}</span>}
+          {inPage ? (
             // On its own page: scroll to the item where it's written.
             <a
               href={`#item-${i.line}`}
@@ -76,23 +90,25 @@ export function ItemRow({
             >
               {plainText(i.text)}
             </a>
+          ) : (
+            <Link
+              to={`${pageHref(i.page_id, i.page_title)}#item-${i.line}`}
+              className="item-row-text"
+            >
+              {plainText(i.text)}
+            </Link>
           )}
-          {/* The page it's on, right after the item; the full path is in the tooltip. Only the
-              page's title underlines on hover, not the dot or its emoji. */}
+          {/* The page it's on, on its own line under the item; the full path is in the
+              tooltip. Only the page's title underlines on hover, not its emoji. */}
           {showPage && (
-            <>
-              <span className="item-row-sep" aria-hidden>
-                ·
-              </span>
-              <Link
-                to={pageHref(i.page_id, i.page_title)}
-                className="item-row-page"
-                title={[...i.path, i.page_title].join(' › ')}
-              >
-                {i.page_icon && <span className="item-row-page-icon">{i.page_icon}</span>}
-                <span className="item-row-page-title">{i.page_title}</span>
-              </Link>
-            </>
+            <Link
+              to={pageHref(i.page_id, i.page_title)}
+              className="item-row-page"
+              title={[...i.path, i.page_title].join(' › ')}
+            >
+              {i.page_icon && <span className="item-row-page-icon">{i.page_icon}</span>}
+              <span className="item-row-page-title">{i.page_title}</span>
+            </Link>
           )}
         </div>
         {(dated || i.owner) && (
@@ -102,8 +118,7 @@ export function ItemRow({
               <button
                 type="button"
                 className={`item-due-btn${late && !i.done ? ' overdue' : ''}`}
-                onClick={() => setEditing((e) => !e)}
-                aria-expanded={editing}
+                onClick={() => setEditing(true)}
               >
                 <Icon name="calendar" size={13} />
                 {`${dateWords(i, today).replace(' ·', '')} ${formatDue(i.due!, i.due_time)}`}
@@ -116,17 +131,7 @@ export function ItemRow({
           <AnswerBox answer={i.answer} onAnswer={i.done && !i.answer ? undefined : onAnswer} />
         )}
       </div>
-      <ItemActions onEdit={() => setEditing((e) => !e)} onDelete={onDelete} />
-      {editing && (
-        <ItemEditor
-          item={i}
-          onCancel={() => setEditing(false)}
-          onSave={async (edit) => {
-            await onEdit(edit);
-            setEditing(false);
-          }}
-        />
-      )}
+      <ItemActions onEdit={() => setEditing(true)} onDelete={onDelete} />
     </li>
   );
 }

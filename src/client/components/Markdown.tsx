@@ -417,6 +417,30 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
   const label = ITEM_LABELS[type] ?? type;
   const words = reminder ? (past ? 'Past · ' : 'Scheduled for ') : overdue ? 'Overdue · ' : 'Due ';
   const dated = !!due;
+  // While it's being edited, the editor takes the item's place.
+  if (editing && onEdit)
+    return (
+      <Tag
+        className={`${className} item-editing`}
+        id={`item-${line}`}
+        data-sl={props['data-sl']}
+        data-el={props['data-el']}
+      >
+        <ItemEditor
+          item={{
+            type,
+            text: props['data-text'] ?? '',
+            due: due ?? null,
+            due_time: dueTime ?? null,
+          }}
+          onCancel={() => setEditing(false)}
+          onSave={async (edit) => {
+            await onEdit(line, edit);
+            setEditing(false);
+          }}
+        />
+      </Tag>
+    );
   return (
     <Tag
       className={`${className}${past ? ' item-past' : ''}`}
@@ -450,8 +474,7 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
                 <button
                   type="button"
                   className={`item-due-btn${overdue ? ' overdue' : ''}`}
-                  onClick={() => setEditing((e) => !e)}
-                  aria-expanded={editing}
+                  onClick={() => setEditing(true)}
                 >
                   <Icon name="calendar" size={13} />
                   {words}
@@ -476,25 +499,9 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
         )}
       </div>
       <ItemActions
-        onEdit={onEdit ? () => setEditing((e) => !e) : undefined}
+        onEdit={onEdit ? () => setEditing(true) : undefined}
         onDelete={onDelete ? () => onDelete(line) : undefined}
       />
-      {/* Under the whole item (full width on phones), not squeezed beside its buttons. */}
-      {editing && onEdit && (
-        <ItemEditor
-          item={{
-            type,
-            text: props['data-text'] ?? '',
-            due: due ?? null,
-            due_time: dueTime ?? null,
-          }}
-          onCancel={() => setEditing(false)}
-          onSave={async (edit) => {
-            await onEdit(line, edit);
-            setEditing(false);
-          }}
-        />
-      )}
     </Tag>
   );
 }

@@ -95,7 +95,7 @@ How to work with it:
 - For small changes use edit_page (find/replace, append, section edits). It keeps the rest of the page byte-for-byte and retries safely if the page changed. Use update_page with base_version only to rewrite a whole page.
 - To build a structure (a project with sub-pages, meeting notes series), use create_pages to create the whole subtree in one call.
 - Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their activity log, and can undo a whole session.
-- Archive instead of deleting: archive_page takes a finished or obsolete page (and everything under it) out of the tree, search and open items without losing it; list_archived and restore_page bring it back. delete_page is permanent.
+- Archive instead of deleting: archive_page takes a finished or obsolete page (and everything under it) out of the tree, search and open items without losing it. Archived pages never appear in search, get_tree or open_items: to find one, use search_archive (or list_archived), and if the owner wants it back, restore_page. delete_page is permanent.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
 - AI Instructions: the owner keeps one page of house rules for assistants (where things go, naming, tags, style). It's at the end of these instructions; follow it over the general advice here. It is identified by the app, not by its title: always read it with get_ai_instructions and change it with update_ai_instructions, never by searching for a page called "AI Instructions" (a page with that title elsewhere in the wiki is an ordinary page, not your instructions). When the owner asks you to add or change a rule, use update_ai_instructions.
@@ -288,7 +288,7 @@ function buildServer(
     {
       title: 'Search the wiki',
       description:
-        'Find pages by meaning and by keywords. "hybrid" (default) combines semantic search with keyword matching; "keyword" matches words exactly (fast, good for names and codes); "semantic" matches by meaning only. Returns ids, paths and snippets.',
+        'Find pages by meaning and by keywords. "hybrid" (default) combines semantic search with keyword matching; "keyword" matches words exactly (fast, good for names and codes); "semantic" matches by meaning only. Returns ids, paths and snippets. Archived pages are not included: use search_archive for those.',
       inputSchema: z.object({
         query: z.string().min(1),
         mode: z.enum(['hybrid', 'semantic', 'keyword']).optional(),
@@ -720,6 +720,38 @@ function buildServer(
       await call('POST', `/pages/${p.id}/archive`, { archived: true });
       return text(
         `Archived ${describe(p, t)}${n > 1 ? ` and the ${n - 1} page(s) under it` : ''}. restore_page brings ${n > 1 ? 'them' : 'it'} back.`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    'search_archive',
+    {
+      title: 'Search the archive',
+      description:
+        'Search only archived pages (by meaning and keywords, like search). Archived pages are left out of search, get_tree and open_items, so look here when the owner asks about something that might have been archived, or when search finds nothing. Results are archived: don’t edit them in place; if the owner wants one back, restore it with restore_page (its whole branch comes back).',
+      inputSchema: z.object({
+        query: z.string().min(1),
+        mode: z.enum(['hybrid', 'semantic', 'keyword']).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safe(async ({ query, mode, limit }) => {
+      const res = await call<SearchResponse>(
+        'GET',
+        `/search?${new URLSearchParams({ q: query, mode: mode ?? 'hybrid', limit: String(limit ?? 10), archived: '1' })}`,
+      );
+      const note = res.semantic_unavailable ? `Note: ${res.semantic_unavailable}\n\n` : '';
+      if (!res.hits.length) return text(`${note}No archived pages match “${query}”.`);
+      return text(
+        `${note}Archived pages (not in the wiki’s normal search; restore_page brings one back if the owner asks):\n` +
+          res.hits
+            .map(
+              (h, i) =>
+                `${i + 1}. ${h.title} (${h.id})${h.path.length ? ` — was in ${h.path.join(' / ')}` : ''}\n   ${h.snippet.replaceAll('\u0001', '**').replaceAll('\u0002', '**')}`,
+            )
+            .join('\n'),
       );
     }),
   );

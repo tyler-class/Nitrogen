@@ -47,6 +47,23 @@ describe('pages', () => {
     expect(first.position).toBe(0);
   });
 
+  it('lists pages inside with their tags and creator', async () => {
+    const api = await session();
+    const a = (await api.post<Page>('/pages', { title: 'Parent' })).data;
+    await api.post('/pages', {
+      title: 'Child',
+      parent_id: a.id,
+      tags: ['zeta'],
+      body: 'About #alpha things',
+    });
+    await api.post('/pages', { title: 'Bare', parent_id: a.id });
+    const kids = (await api.get<PageDetail>(`/pages/${a.id}`)).data.children;
+    const child = kids.find((k) => k.title === 'Child')!;
+    expect(child.tags).toEqual(['alpha', 'zeta']);
+    expect(child.created_by).toBe('you');
+    expect(kids.find((k) => k.title === 'Bare')!.tags).toEqual([]);
+  });
+
   it('detects edit conflicts', async () => {
     const api = await session();
     const p = (await api.post<Page>('/pages', { title: 'Doc', body: 'v1' })).data;

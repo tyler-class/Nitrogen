@@ -63,6 +63,25 @@ describe('connections', () => {
 });
 
 describe('dashboard', () => {
+  it('reorders pinned pages', async () => {
+    const api = await session();
+    const ids: string[] = [];
+    for (const title of ['Pin A', 'Pin B', 'Pin C']) {
+      const p = (await api.post<Page>('/pages', { title })).data;
+      await api.post(`/pages/${p.id}/pin`, { pinned: true });
+      ids.push(p.id);
+    }
+    const mine = async () =>
+      (await api.get<Dashboard>('/dashboard')).data.pinned
+        .map((x) => x.id)
+        .filter((id) => ids.includes(id));
+    expect(await mine()).toEqual(ids);
+    const all = (await api.get<Dashboard>('/dashboard')).data.pinned.map((x) => x.id);
+    const next = all.filter((id) => !ids.includes(id)).concat([ids[2]!, ids[0]!, ids[1]!]);
+    expect((await api.post('/pinned/order', { ids: next })).status).toBe(200);
+    expect(await mine()).toEqual([ids[2], ids[0], ids[1]]);
+  });
+
   it('pins pages, attributes edits to you, and keeps settings', async () => {
     const api = await session();
     const p = (await api.post<Page>('/pages', { title: 'Pin Me', body: 'one two three' })).data;

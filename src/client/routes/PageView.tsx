@@ -25,6 +25,7 @@ import { Markdown } from '../components/Markdown';
 import { DiffView } from '../components/Diff';
 import { downloadPage } from '../lib/exportMarkdown';
 import { TagEditor, TagList } from '../components/Tags';
+import { FitTags } from '../components/FitTags';
 import { Menu } from '../components/Tree';
 import { useToast } from '../components/Toast';
 import { useTitleIndex } from '../lib/titles';
@@ -592,14 +593,27 @@ function ReadPage({
               )}
             </div>
             {children.length ? (
-              <div className="cards">
+              // One full-width row each: title, then when and by whom, with its tags on the right.
+              <ul className="child-list">
                 {children.map((c) => (
-                  <Link key={c.id} to={pageHref(c.id, c.title)} className="card">
+                  <li key={c.id} className="child-row">
                     <PageGlyph icon={c.icon} folder={false} />
-                    <span>{c.title}</span>
-                  </Link>
+                    <div className="child-text">
+                      <Link to={pageHref(c.id, c.title)} className="child-title">
+                        {c.title}
+                      </Link>
+                      <span className="child-meta">
+                        Updated {formatWhen(c.updated_at)}
+                        {c.updated_by && ` by ${actorLabel(c.updated_by)}`}
+                        {c.created_by && c.created_by !== c.updated_by
+                          ? ` · created by ${actorLabel(c.created_by)}`
+                          : ''}
+                      </span>
+                    </div>
+                    {c.tags?.length > 0 && <FitTags tags={c.tags} />}
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : (
               <p className="muted">None yet.</p>
             )}
@@ -1254,7 +1268,7 @@ function ItemSummary({
                   path: [],
                 }}
                 today={today}
-                showPage={false}
+                inPage
                 onDone={(d) => void onDone(i.line, d)}
                 onAnswer={(t) => onAnswer(i.line, t)}
                 onEdit={(edit) => onEdit(i.line, edit)}

@@ -2,13 +2,15 @@
 // (open items and recent edits on the left; pinned pages and AI sessions on the right); phones
 // stack them. Insights is the arrangeable board; Home stays put.
 import { useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { actorLabel, isAgent } from '@shared/actor';
 import { pageHref } from '@shared/markdown';
 import { todayKey } from '@shared/items';
 import type { Dashboard as DashboardData, SessionEntry } from '@shared/types';
-import { api } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
+import { keys } from '../lib/queries';
+import { useToast } from '../components/Toast';
 import { eventLine } from '../lib/activity';
 import { readLocal, writeLocal } from '../lib/storage';
 import { WhoToggle, type Who } from '../components/charts';
@@ -21,9 +23,10 @@ import {
   type Show,
 } from '../components/OpenItemsFilter';
 import { ItemRow } from '../components/ItemRow';
+import { PinnedList } from '../components/PinnedList';
 import { EmptyState } from '../components/EmptyState';
 import { useOpenItems } from '../lib/useOpenItems';
-import { Icon, PageGlyph } from '../components/Icon';
+import { Icon } from '../components/Icon';
 import { formatWhen } from './PageView';
 
 const OPEN_SHOWN = 10;
@@ -98,6 +101,43 @@ export function Dashboard() {
     setWhoState(w);
     writeLocal('n2.home.who', w);
   };
+  const qc = useQueryClient();
+  const toast = useToast();
+  /** Pin or unpin a page from here (unpinning offers Undo). */
+  async function setPinned(p: { id: string; title: string }, pinned: boolean) {
+    try {
+      await api.post(`/pages/${p.id}/pin`, { pinned });
+      await qc.invalidateQueries({ queryKey: ['dashboard'] });
+      void qc.invalidateQueries({ queryKey: keys.page(p.id) });
+      if (!pinned)
+        toast(`Unpinned “${p.title}”.`, {
+          label: 'Undo',
+          run: () => void setPinned(p, true),
+        });
+    } catch (e) {
+      toast(errorMessage(e));
+    }
+  }
+  /** Save a new order for the pinned pages, showing it straight away. */
+  async function reorderPinned(ids: string[]) {
+    const before = qc.getQueryData<DashboardData>(['dashboard']);
+    qc.setQueryData<DashboardData>(['dashboard'], (old) =>
+      old
+        ? {
+            ...old,
+            pinned: ids
+              .map((id) => old.pinned.find((p) => p.id === id))
+              .filter((p): p is (typeof old.pinned)[number] => !!p),
+          }
+        : old,
+    );
+    try {
+      await api.post('/pinned/order', { ids });
+    } catch (e) {
+      qc.setQueryData(['dashboard'], before);
+      toast(errorMessage(e));
+    }
+  }
   const d = q.data;
   if (!d) return <div className="page-loading" aria-busy="true" />;
 
@@ -201,16 +241,11 @@ export function Dashboard() {
           {/* Only once something is pinned (pin a page from its ⋯ menu). */}
           {d.pinned.length > 0 && (
             <Card icon="pin" title="Pinned" className="home-pinned">
-              <ul className="dash-list">
-                {d.pinned.map((p) => (
-                  <li key={p.id}>
-                    <Link to={pageHref(p.id, p.title)}>
-                      <PageGlyph icon={p.icon} folder={false} />
-                      <span className="dash-title">{p.title}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <PinnedList
+                pages={d.pinned}
+                onUnpin={(p) => void setPinned(p, false)}
+                onReorder={(ids) => void reorderPinned(ids)}
+              />
             </Card>
           )}
 

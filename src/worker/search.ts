@@ -6,7 +6,7 @@ import { ftsQuery, plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
 import type { PageSummary, SearchHit, SearchResponse } from '@shared/types';
 import { all, chunks, first, nowIso } from './db';
-import { listSummaries } from './pages';
+import { listArchived, listSummaries } from './pages';
 
 const ITEM_PREFIX = 'pages/';
 const itemKey = (id: string) => `${ITEM_PREFIX}${id}.md`;
@@ -210,28 +210,35 @@ export async function search(
   q: string,
   mode: SearchResponse['mode'],
   limit = 20,
+  /** Search only archived pages (normal search leaves them out). */
+  opts: { archived?: boolean } = {},
 ): Promise<SearchResponse> {
   const query = q.trim();
   if (!query) return { query, mode, hits: [] };
+  // The indexes hold every page; archived ones are few, so ask for more and keep only them.
+  const fetch = opts.archived ? 50 : limit;
 
   const wantKeyword = mode !== 'semantic';
   const wantSemantic = mode !== 'keyword';
   let semanticUnavailable: string | undefined;
   const [kw, sem] = await Promise.all([
-    wantKeyword ? keywordSearch(env.DB, query, limit) : Promise.resolve([]),
+    wantKeyword ? keywordSearch(env.DB, query, fetch) : Promise.resolve([]),
     wantSemantic
-      ? semanticSearch(env, query, limit).catch((e: unknown) => {
+      ? semanticSearch(env, query, fetch).catch((e: unknown) => {
           semanticUnavailable = unavailableMessage(e);
           return null;
         })
       : Promise.resolve([]),
   ]);
   // Semantic-only requests still answer with keyword hits when AI Search can't.
-  const keyword = sem === null && !wantKeyword ? await keywordSearch(env.DB, query, limit) : kw;
+  const keyword = sem === null && !wantKeyword ? await keywordSearch(env.DB, query, fetch) : kw;
   const semantic = sem ?? [];
 
-  const pages = await listSummaries(env.DB);
-  const byId = new Map(pages.map((p) => [p.id, p]));
+  const live = await listSummaries(env.DB);
+  const archived = opts.archived ? await listArchived(env.DB) : [];
+  // Paths run through both (an archived page may sit under a live one).
+  const byId = new Map([...live, ...archived].map((p) => [p.id, p]));
+  const wanted = new Set((opts.archived ? archived : live).map((p) => p.id));
   const fused = fuse<{ id: string }>([semantic, keyword]);
   const kwSnippet = new Map(keyword.map((h) => [h.id, h.snippet]));
   const semSnippet = new Map(semantic.map((h) => [h.id, h.snippet]));
@@ -239,7 +246,7 @@ export async function search(
   const hits: SearchHit[] = [];
   for (const [id, score] of [...fused].sort((a, b) => b[1] - a[1])) {
     const p: PageSummary | undefined = byId.get(id);
-    if (!p) continue; // deleted since it was indexed
+    if (!p || !wanted.has(id)) continue; // deleted since it was indexed, or the other kind
     hits.push({
       id,
       title: p.title,

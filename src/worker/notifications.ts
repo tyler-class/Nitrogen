@@ -122,8 +122,8 @@ export async function runNotifications(db: D1Database, o: Partial<PushJobOptions
 // ---------------------------------------------------------------------------------------------
 // The in-app list (the bell)
 
-/** Notifications older than this are dropped. */
-const KEEP_DAYS = 60;
+/** Notifications older than this are deleted (on every run of the notification job). */
+const KEEP_DAYS = 90;
 
 /**
  * The time zones to follow: what the app last reported (the owner's clock, even with no device

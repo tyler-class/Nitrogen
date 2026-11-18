@@ -93,7 +93,9 @@ export function Settings() {
   return (
     <div className="page settings">
       <div className="settings-top">
-        <h1 className="page-title">Settings</h1>
+        <h1 className="page-title view-title">
+          <Icon name="settings" size={26} /> Settings
+        </h1>
         <AboutButton className="btn small about-mobile" onClick={() => setAbout(true)} />
       </div>
       {about && <AboutSheet onClose={() => setAbout(false)} />}
