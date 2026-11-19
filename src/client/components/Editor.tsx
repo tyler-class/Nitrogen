@@ -718,8 +718,9 @@ function PhoneBar({ view, pickImages }: { view: EditorView; pickImages(): void }
       onPointerDown={keep}
       onMouseDown={keep}
     >
-      {!folded && (
-        <div className="phone-bar-scroll">
+      {/* Always there: folding slides the pill in over it (it fades out, and can't be used). */}
+      {
+        <div className="phone-bar-scroll" inert={folded} aria-hidden={folded || undefined}>
           {BAR.map((item, n) => {
             if (item.kind === 'sep') return <span key={`sep${n}`} className="pb-sep" aria-hidden />;
             const off = blocked(item);
@@ -749,7 +750,7 @@ function PhoneBar({ view, pickImages }: { view: EditorView; pickImages(): void }
             );
           })}
         </div>
-      )}
+      }
       <button
         type="button"
         className="phone-bar-fold"

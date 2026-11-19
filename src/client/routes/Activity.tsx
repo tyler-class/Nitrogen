@@ -114,10 +114,12 @@ export function Activity() {
             <section className={`act-session ${isAgent(s.actor) ? 'agent' : ''}`}>
               <header>
                 <strong>{actorLabel(s.actor)}</strong>
-                <span className="muted">
-                  {formatTime(s.start)}
-                  {formatTime(s.start) !== formatTime(s.end) && ` to ${formatTime(s.end)}`} ·{' '}
-                  {pages} page{pages === 1 ? '' : 's'}
+                <span className="muted act-when">
+                  <span className="nowrap">
+                    {formatTime(s.start)}
+                    {formatTime(s.start) !== formatTime(s.end) && ` to ${formatTime(s.end)}`}
+                  </span>{' '}
+                  · <span className="nowrap">{`${pages} page${pages === 1 ? '' : 's'}`}</span>
                 </span>
                 {isAgent(s.actor) && (
                   <button

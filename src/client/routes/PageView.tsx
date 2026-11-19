@@ -37,7 +37,7 @@ import { readLocal, writeLocal } from '../lib/storage';
 import type { EditorHandle, LinkTarget } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { ItemRow } from '../components/ItemRow';
-import { MenuSelect } from '../components/MenuSelect';
+import { ItemFilters } from '../components/ItemFilters';
 import { DEFAULT_PAGE_ICON, Icon, PageGlyph } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
 import { DiffView } from '../components/Diff';
@@ -49,19 +49,24 @@ import { useToast } from '../components/Toast';
 import { useTitleIndex } from '../lib/titles';
 export { useTitleIndex };
 import { deleteItem } from '../lib/items';
+import { useDrawer } from '../lib/useDrawer';
 
 // CodeMirror is most of the bundle; it loads with the first page, after the page itself.
 const Editor = lazy(() => import('../components/Editor').then((m) => ({ default: m.Editor })));
 
-/** Pages to offer after "@" (not AI Sessions), most recently edited first, with their place in the tree. */
+/** Pages to offer after "@" (not AI Sessions or AI Instructions), most recently edited first, with their place in the tree. */
 function useLinkTargets(): LinkTarget[] {
   const tree = useTree();
   return useMemo(() => {
     const pages = tree.data?.pages ?? [];
     const sid = tree.data?.sessions_id;
+    const iid = tree.data?.instructions_id;
     const byId = new Map(pages.map((p) => [p.id, p]));
+    // Not AI Sessions (or anything in it), and not the AI Instructions page.
+    const system = (id: string) =>
+      id === sid || id === iid || ancestorsOf(id, byId).some((a) => a.id === sid || a.id === iid);
     return pages
-      .filter((p) => !sid || (p.id !== sid && p.parent_id !== sid))
+      .filter((p) => !system(p.id))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .map((p) => ({
         title: p.title,
@@ -1025,6 +1030,11 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
   const { index } = useTitleIndex();
   const qc = useQueryClient();
   const toast = useToast();
+  // While it's open the page behind doesn't scroll (on phones it would take over the scroll).
+  useEffect(() => {
+    document.documentElement.classList.add('nav-locked');
+    return () => document.documentElement.classList.remove('nav-locked');
+  }, []);
 
   // Newest first: the current page, then earlier versions as listed.
   const order: VersionKey[] = ['current', ...(list.data?.revisions.map((r) => r.id) ?? [])];
@@ -1214,6 +1224,7 @@ function ItemSummary({
   onDelete(line: number): Promise<void>;
 }) {
   const [open, setOpen] = useState(() => readLocal('n2.items.open', true));
+  const drawer = useDrawer<HTMLDivElement>(open);
   const toggle = () =>
     setOpen((o) => {
       writeLocal('n2.items.open', !o);
@@ -1290,44 +1301,59 @@ function ItemSummary({
         </button>
         {open && (list.length > 1 || anyDone) && (
           <div className="item-summary-tools">
-            {anyDone && (
-              // Finished items: checked to-dos, answered questions, reminders gone by.
-              <button
-                type="button"
-                className="menu-select-btn done-toggle"
-                aria-pressed={showDone}
-                onClick={() => {
-                  // Hiding takes everything finished out, including what was just checked off here.
-                  if (showDone) setKept([]);
-                  setShowDone(!showDone);
-                  writeLocal('n2.page-items.done', !showDone);
-                }}
-              >
-                {showDone ? 'Hide completed' : 'Show completed'}
-              </button>
-            )}
-            <MenuSelect
-              label="Sort"
-              value={sort}
-              options={SUMMARY_SORTS}
-              onChange={(v) => {
-                setSort(v);
-                writeLocal('n2.page-items.sort', v);
-              }}
-            />
-            <MenuSelect
-              label="Group"
-              value={group}
-              options={SUMMARY_GROUPS}
-              onChange={(v) => {
-                setGroup(v);
-                writeLocal('n2.page-items.group', v);
-              }}
+            <ItemFilters
+              title="Action Items"
+              choices={[
+                {
+                  label: 'Sort',
+                  value: sort,
+                  initial: 'page',
+                  options: SUMMARY_SORTS,
+                  onChange: (v: string) => {
+                    setSort(v as 'page' | 'due');
+                    writeLocal('n2.page-items.sort', v);
+                  },
+                },
+                {
+                  label: 'Group by',
+                  value: group,
+                  initial: 'none',
+                  options: SUMMARY_GROUPS,
+                  onChange: (v: string) => {
+                    setGroup(v as 'none' | 'type');
+                    writeLocal('n2.page-items.group', v);
+                  },
+                },
+                ...(anyDone
+                  ? [
+                      {
+                        label: 'Completed',
+                        value: showDone ? 'show' : 'hide',
+                        initial: 'hide',
+                        options: [
+                          ['hide', 'Hide'],
+                          ['show', 'Show'],
+                        ] as const,
+                        toggle: {
+                          on: 'show',
+                          off: 'hide',
+                          labels: ['Show completed', 'Hide completed'] as [string, string],
+                        },
+                        onChange: (v: string) => {
+                          // Hiding takes everything finished out, including what was just checked off here.
+                          if (v === 'hide') setKept([]);
+                          setShowDone(v === 'show');
+                          writeLocal('n2.page-items.done', v === 'show');
+                        },
+                      },
+                    ]
+                  : []),
+              ]}
             />
           </div>
         )}
       </h2>
-      <div className="item-summary-drawer" id={`items-${page.id}`} inert={!open}>
+      <div className="item-summary-drawer" ref={drawer} id={`items-${page.id}`} inert={!open}>
         <div className="item-summary-inner">
           {group === 'type' ? (
             ITEM_TYPES.map((t) => {

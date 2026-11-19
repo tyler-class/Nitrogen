@@ -2,6 +2,7 @@
 // page; each can be marked read or unread, or all at once. The app-icon badge is the unread
 // count, so clearing them here clears the badge.
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InboxNotice } from '@shared/types';
@@ -135,53 +136,56 @@ export function Bell({ className = '', size = 17 }: { className?: string; size?:
         <Icon name="bell" size={size} />
         {unread > 0 && <span className="bell-count">{unread > 99 ? '99+' : unread}</span>}
       </button>
-      {open && (
-        <div
-          ref={pop}
-          className="bell-pop"
-          role="dialog"
-          aria-label="Notifications"
-          style={pos ? { top: pos.top, left: pos.left, width: pos.width } : undefined}
-        >
-          <div className="bell-head">
-            <h2>
-              <Icon name="bell" size={16} /> Notifications
-            </h2>
-            {unread > 0 && (
-              <button className="bell-all" onClick={() => readAll.mutate()}>
-                Mark all read
-              </button>
+      {/* On the page's top layer, so nothing on the page (a sticky header row) can cover it. */}
+      {open &&
+        createPortal(
+          <div
+            ref={pop}
+            className="bell-pop"
+            role="dialog"
+            aria-label="Notifications"
+            style={pos ? { top: pos.top, left: pos.left, width: pos.width } : undefined}
+          >
+            <div className="bell-head">
+              <h2>
+                <Icon name="bell" size={16} /> Notifications
+              </h2>
+              {unread > 0 && (
+                <button className="bell-all" onClick={() => readAll.mutate()}>
+                  Mark all read
+                </button>
+              )}
+            </div>
+            {inbox.data?.items.length ? (
+              <ul className="bell-list">
+                {inbox.data.items.map((n) => (
+                  <li key={n.id} className={n.read ? 'read' : 'unread'}>
+                    <button className="bell-item" onClick={() => go(n)}>
+                      <span className="bell-title">
+                        {n.title}
+                        <span className="bell-when">{ago(n.created_at)}</span>
+                      </span>
+                      <span className="bell-body">{n.body}</span>
+                    </button>
+                    <button
+                      className="bell-dot"
+                      onClick={() => mark.mutate({ id: n.id, read: !n.read })}
+                      aria-label={n.read ? 'Mark as unread' : 'Mark as read'}
+                      title={n.read ? 'Mark as unread' : 'Mark as read'}
+                    >
+                      <span aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="bell-empty">
+                {inbox.isError ? 'Couldn’t load notifications.' : 'No notifications yet.'}
+              </p>
             )}
-          </div>
-          {inbox.data?.items.length ? (
-            <ul className="bell-list">
-              {inbox.data.items.map((n) => (
-                <li key={n.id} className={n.read ? 'read' : 'unread'}>
-                  <button className="bell-item" onClick={() => go(n)}>
-                    <span className="bell-title">
-                      {n.title}
-                      <span className="bell-when">{ago(n.created_at)}</span>
-                    </span>
-                    <span className="bell-body">{n.body}</span>
-                  </button>
-                  <button
-                    className="bell-dot"
-                    onClick={() => mark.mutate({ id: n.id, read: !n.read })}
-                    aria-label={n.read ? 'Mark as unread' : 'Mark as read'}
-                    title={n.read ? 'Mark as unread' : 'Mark as read'}
-                  >
-                    <span aria-hidden />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="bell-empty">
-              {inbox.isError ? 'Couldn’t load notifications.' : 'No notifications yet.'}
-            </p>
-          )}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

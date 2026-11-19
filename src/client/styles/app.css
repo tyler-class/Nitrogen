@@ -7020,7 +7020,7 @@ th .cm-cell {
     vertical-align: 0.1em;
   }
   .item-row-line > .item-row-page {
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -7091,4 +7091,378 @@ th .cm-cell {
 .mini-editor .cm-content {
   min-height: 0 !important;
   padding: 0 !important;
+}
+
+/* --- 1.0.8: phones. History scrolls as one piece (the list of versions, then the version or the
+   comparison), inside the panel only; the page behind is held still while it's open. */
+@media (max-width: 860px) {
+  .drawer {
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .drawer-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--paper);
+  }
+  .history {
+    display: block;
+  }
+  .history-list {
+    max-height: none;
+    overflow: visible;
+  }
+  .history-preview {
+    overflow: visible;
+  }
+}
+
+/* An item's date pill stays one compact line (it wrapped inside itself on phones). */
+.item-due-btn {
+  white-space: nowrap;
+  max-width: 100%;
+}
+.item-row-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Action Items boxes open and close by a measured height animation (lib/useDrawer), not the
+   grid-row transition (uneven on phones' Safari). */
+.item-summary-drawer,
+.item-summary.open .item-summary-drawer {
+  display: block;
+  transition: none;
+}
+.item-summary-inner,
+.item-summary.open .item-summary-inner {
+  overflow: visible;
+  animation: none;
+}
+
+/* Activity: a session's header keeps who did it at the top left and "Undo session" pinned at the
+   top right; the time and page count between them wraps onto a second line when it must. */
+.act-session header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 10px;
+}
+.act-session header .btn {
+  margin-left: 0;
+  white-space: nowrap;
+}
+.act-session header .act-when {
+  padding-top: 1px;
+}
+
+/* Phones: with the menu open, the page's dimming layer sits just above the page and header,
+   under search and every other overlay (an older rule had it at 45, over search). */
+@media (max-width: 860px) {
+  .nav-open .nav-scrim {
+    z-index: 4;
+  }
+}
+
+/* The phone bar folds by sliding: the pill pulls in to the right into its round button (and out
+   again to the left), its buttons fading as it goes. */
+.phone-bar {
+  overflow: hidden;
+  transition:
+    left 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    bottom 0.12s ease;
+}
+.phone-bar.folded {
+  left: calc(100% - 12px - 48px);
+  width: auto;
+  padding: 0;
+  justify-content: flex-end;
+}
+.phone-bar-scroll {
+  transition: opacity 0.2s ease;
+}
+.phone-bar.folded .phone-bar-scroll {
+  opacity: 0;
+  pointer-events: none;
+}
+.phone-bar.folded .phone-bar-fold {
+  margin: 0 1px 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-bar,
+  .phone-bar-scroll {
+    transition: none;
+  }
+}
+
+/* Filter (phones): one pill for sort, grouping and completed items, opening a sheet. */
+.filter-btn {
+  gap: 6px;
+}
+.filter-btn svg {
+  transform: none !important;
+}
+.filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.filter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 0 12px;
+}
+.filter-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.filter-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.filter-opts button {
+  padding: 8px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.filter-opts button.on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+/* In a page's Action Items box on phones: the Filter pill back on the header row, at the right. */
+@media (max-width: 860px) {
+  .item-summary-tools {
+    flex-basis: auto;
+    margin-left: auto;
+    margin-top: 0;
+    padding: 0 12px 0 0;
+  }
+  .item-summary .item-summary-title {
+    flex-wrap: nowrap;
+  }
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Action Items headers: a tap only opens or closes the drawer (no grey tap flash on phones). */
+.item-summary-head,
+.items-group-head,
+.item-summary-chev {
+  -webkit-tap-highlight-color: transparent;
+}
+.item-summary-head:active,
+.items-group-head:active {
+  background: none;
+}
+
+/* The Filter button: just the three-line funnel, in a round button; a small count when set. */
+.filter-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-btn.changed {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.filter-btn .filter-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.item-summary-tools .filter-btn {
+  width: 30px;
+  height: 30px;
+}
+
+/* Filter choices: the chosen one has a darker blue outline and text on a light grey fill. */
+.filter-opts button.on {
+  border: 1.5px solid var(--accent-ink);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* Phones: the "+ Add tag" pill a size smaller. Its text box stays 16px (smaller makes iOS zoom in
+   when tapped); the pill as a whole is scaled down instead. */
+@media (max-width: 860px) {
+  .tag-add {
+    zoom: 0.85;
+    padding: 1px 9px 1px 7px;
+  }
+}
+
+/* The app never zooms: no double-tap zoom anywhere (the viewport tag stops zoom-on-focus). */
+html {
+  touch-action: manipulation;
+}
+
+/* Wide screens: the filter choices in a small pop-over under the funnel button. */
+.filter-pop {
+  position: fixed;
+  z-index: 60;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  padding: 14px 16px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.filter-pop .filter-rows {
+  gap: 14px;
+  padding: 0 0 8px;
+}
+.filter-pop .filter-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.filter-pop .filter-opts {
+  gap: 6px;
+}
+.filter-pop .filter-opts button {
+  padding: 5px 12px;
+  font-size: 13.5px;
+}
+.filter-btn[aria-expanded='true'] {
+  border-color: var(--accent-ink);
+}
+
+/* Action Items: the funnel always sits right of the All / Today / Overdue toggle, on one row;
+   the toggle takes the room that's left (it scrolls sideways if it must). */
+.open-items-controls {
+  flex-wrap: nowrap;
+}
+.open-items-controls .slide-toggle {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.open-items-controls .filter-btn {
+  flex: none;
+}
+@media (max-width: 860px) {
+  .open-items-controls {
+    gap: 8px;
+  }
+  .open-items-controls .slide-toggle button {
+    padding-left: 10px;
+    padding-right: 10px;
+    font-size: 13.5px;
+  }
+}
+@media (max-width: 860px) {
+  .open-items-controls .slide-toggle button {
+    padding-left: 7px;
+    padding-right: 7px;
+    font-size: 13px;
+  }
+}
+
+/* Filter: Reset puts sort, group and completed back to how they start. */
+.filter-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+.filter-reset {
+  padding: 6px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.filter-reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Reset is plain underlined text: beside the sheet's title on phones, top right in the pop-over. */
+.filter-reset,
+.filter-reset:hover {
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-reset:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: default;
+}
+.filter-sheet-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.filter-pop {
+  position: fixed;
+}
+.filter-pop > .filter-reset {
+  position: absolute;
+  top: 11px;
+  right: 16px;
+  font-size: 13px;
+}
+
+/* Main pages (Home, Action Items, Activity, Tags, Insights, AI Sessions, Archive…): a little room
+   above the heading. Settings already has its own. */
+.page h1.view-title {
+  margin-top: 14px;
+}
+.settings-top h1.view-title {
+  margin-top: 0;
 }

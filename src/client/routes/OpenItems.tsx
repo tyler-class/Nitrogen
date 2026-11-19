@@ -11,9 +11,10 @@ import type { OpenItem } from '@shared/types';
 import { ItemsEmpty, OpenItemsToggle, parseShow, showFilter } from '../components/OpenItemsFilter';
 import { Icon } from '../components/Icon';
 import { ItemRow } from '../components/ItemRow';
-import { MenuSelect } from '../components/MenuSelect';
+import { ItemFilters } from '../components/ItemFilters';
 import { useOpenItems } from '../lib/useOpenItems';
 import { readLocal, writeLocal } from '../lib/storage';
+import { useDrawer } from '../lib/useDrawer';
 
 const GROUPS = [
   ['none', 'None'],
@@ -27,6 +28,18 @@ const PLURALS: Record<ItemType, string> = {
   question: 'Questions',
   reminder: 'Reminders',
 };
+const SORTS = [
+  ['due', 'Due date'],
+  ['page', 'Document'],
+] as const;
+type Sort = (typeof SORTS)[number][0];
+const parseSort = (v: string | null): Sort | null =>
+  SORTS.some(([k]) => k === v) ? (v as Sort) : null;
+const COMPLETED = [
+  ['hide', 'Hide'],
+  ['show', 'Show'],
+] as const;
+
 const parseGroup = (v: string | null): Group | null =>
   GROUPS.some(([g]) => g === v) ? (v as Group) : null;
 
@@ -49,7 +62,19 @@ export function OpenItems() {
     params.get('done') === '1' || (!params.has('done') && readLocal('n2.items.done', false));
   const { q, live, all, idOf, rowProps, clearHandled } = useOpenItems({ completed });
   const today = todayKey();
-  const list = all.filter(showFilter(today)[show]);
+  // Sorted by due date (as they come: soonest first, undated last) or by page, then by place.
+  const sort =
+    parseSort(params.get('sort')) ?? parseSort(readLocal<string>('n2.items.sort', 'due')) ?? 'due';
+  const shown = all.filter(showFilter(today)[show]);
+  const list =
+    sort === 'page'
+      ? [...shown].sort(
+          (a, b) =>
+            a.page_title.localeCompare(b.page_title) ||
+            a.page_id.localeCompare(b.page_id) ||
+            a.line - b.line,
+        )
+      : shown;
 
   const setParam = (key: string, v: string | null) =>
     setParams(
@@ -120,28 +145,57 @@ export function OpenItems() {
           items={completed ? all : live}
           today={today}
         />
-        <MenuSelect
-          label="Group by"
-          value={group}
-          options={GROUPS}
-          onChange={(g) => {
-            writeLocal('n2.items.group', g);
-            setParam('group', g === 'none' ? null : g);
+        <ItemFilters
+          title="Action Items"
+          onReset={() => {
+            writeLocal('n2.items.sort', 'due');
+            writeLocal('n2.items.group', 'none');
+            writeLocal('n2.items.done', false);
+            setParams(
+              (p) => {
+                const next = new URLSearchParams(p);
+                for (const k of ['sort', 'group', 'done']) next.delete(k);
+                return next;
+              },
+              { replace: true },
+            );
           }}
+          choices={[
+            {
+              label: 'Sort',
+              value: sort,
+              initial: 'due',
+              options: SORTS,
+              onChange: (v) => {
+                writeLocal('n2.items.sort', v);
+                setParam('sort', v === 'due' ? null : v);
+              },
+            },
+            {
+              label: 'Group by',
+              value: group,
+              initial: 'none',
+              options: GROUPS,
+              onChange: (g) => {
+                writeLocal('n2.items.group', g);
+                setParam('group', g === 'none' ? null : g);
+              },
+            },
+            {
+              label: 'Completed',
+              value: completed ? 'show' : 'hide',
+              initial: 'hide',
+              options: COMPLETED,
+              toggle: { on: 'show', off: 'hide', labels: ['Show completed', 'Hide completed'] },
+              onChange: (v) => {
+                // Hiding takes everything finished out, including what was just checked off here.
+                if (v === 'hide') clearHandled();
+                writeLocal('n2.items.done', v === 'show');
+                setParam('done', v === 'show' ? '1' : null);
+              },
+            },
+          ]}
         />
-        <button
-          type="button"
-          className="menu-select-btn done-toggle"
-          aria-pressed={completed}
-          onClick={() => {
-            // Hiding takes everything finished out, including what was just checked off here.
-            if (completed) clearHandled();
-            writeLocal('n2.items.done', !completed);
-            setParam('done', completed ? null : '1');
-          }}
-        >
-          {completed ? 'Hide completed' : 'Show completed'}
-        </button>
       </div>
       {q.isPending ? (
         <p className="muted">Loading…</p>
@@ -188,6 +242,7 @@ function GroupCard({
       return !o;
     });
   const drawer = `group-${id.replace(/[^\w-]/g, '-')}`;
+  const drawerRef = useDrawer<HTMLDivElement>(open);
   return (
     <section className={`item-summary items-group${open ? ' open' : ''}`}>
       <h2 className="item-summary-title">
@@ -211,7 +266,7 @@ function GroupCard({
           </button>
         </div>
       </h2>
-      <div className="item-summary-drawer" id={drawer} inert={!open}>
+      <div className="item-summary-drawer" ref={drawerRef} id={drawer} inert={!open}>
         <div className="item-summary-inner">
           <ul className="items-full">{children}</ul>
         </div>

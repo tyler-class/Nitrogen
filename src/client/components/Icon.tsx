@@ -11,6 +11,8 @@ const PATHS: Record<string, string> = {
   undo: 'M7 4 3 8l4 4M3 8h9a4.5 4.5 0 0 1 0 9H9',
   // A light bulb: a Tip callout.
   bulb: 'M7.6 14.2h4.8M8.2 16.8h3.6M10 2.8a5 5 0 0 0-3 9c.6.5 1 1.3 1 2.2h4c0-.9.4-1.7 1-2.2a5 5 0 0 0-3-9z',
+  // A funnel: filter settings.
+  filter: 'M3.5 5.5h13M6 10h8M8.5 14.5h3',
   // A box with a tick in it: a task list.
   checkbox: 'M4.5 4.5h11v11h-11zM7.3 10.1l1.9 1.9 3.6-3.8',
   // A warning sign: a triangle with "!".
