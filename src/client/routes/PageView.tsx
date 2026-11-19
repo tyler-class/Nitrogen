@@ -1,10 +1,27 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
 import { ancestorsOf } from '@shared/tree';
-import { extractItems, nowMoment, reminderPast, todayKey, type ItemEdit } from '@shared/items';
-import { extractTags, pageHref } from '@shared/markdown';
+import {
+  extractItems,
+  ITEM_TYPES,
+  nowMoment,
+  reminderPast,
+  todayKey,
+  type ItemEdit,
+  type ItemType,
+} from '@shared/items';
+import { extractTags, pageHref, slugify } from '@shared/markdown';
 import type {
   Mention,
   Page,
@@ -17,10 +34,11 @@ import type {
 import { api, ApiError, errorMessage } from '../lib/api';
 import { keys, useCreatePage, useDeletePage, usePage, useTree } from '../lib/queries';
 import { readLocal, writeLocal } from '../lib/storage';
-import type { Caret, EditorHandle, LinkTarget } from '../components/Editor';
+import type { EditorHandle, LinkTarget } from '../components/Editor';
 import { EmojiButton } from '../components/EmojiPicker';
 import { ItemRow } from '../components/ItemRow';
-import { Icon, PageGlyph } from '../components/Icon';
+import { MenuSelect } from '../components/MenuSelect';
+import { DEFAULT_PAGE_ICON, Icon, PageGlyph } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
 import { DiffView } from '../components/Diff';
 import { downloadPage } from '../lib/exportMarkdown';
@@ -32,10 +50,10 @@ import { useTitleIndex } from '../lib/titles';
 export { useTitleIndex };
 import { deleteItem } from '../lib/items';
 
-// CodeMirror is most of the bundle; load it only when someone edits.
+// CodeMirror is most of the bundle; it loads with the first page, after the page itself.
 const Editor = lazy(() => import('../components/Editor').then((m) => ({ default: m.Editor })));
 
-/** Pages to offer after "[[" (not AI Sessions), most recently edited first, with their place in the tree. */
+/** Pages to offer after "@" (not AI Sessions), most recently edited first, with their place in the tree. */
 function useLinkTargets(): LinkTarget[] {
   const tree = useTree();
   return useMemo(() => {
@@ -54,60 +72,6 @@ function useLinkTargets(): LinkTarget[] {
 }
 
 /**
- * Phones: a tap in the page body opens the editor there. Where the tap landed (the block's source
- * lines and the text just before the tap) is left here for the editor to put its cursor at.
- */
-let pendingCaret: Caret | null = null;
-/** Where in its block a tap at (x, y) landed. */
-function caretAt(block: HTMLElement, x: number, y: number): Caret {
-  const sl = Number(block.dataset.sl);
-  const el = Number(block.dataset.el) || sl;
-  let before = '';
-  const doc = document as Document & {
-    caretRangeFromPoint?(x: number, y: number): Range | null;
-    caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
-  };
-  let node: Node | null = null;
-  let offset = 0;
-  const r = doc.caretRangeFromPoint?.(x, y);
-  if (r) {
-    node = r.startContainer;
-    offset = r.startOffset;
-  } else {
-    const pos = doc.caretPositionFromPoint?.(x, y);
-    if (pos) {
-      node = pos.offsetNode;
-      offset = pos.offset;
-    }
-  }
-  if (node && block.contains(node)) {
-    const range = document.createRange();
-    range.setStart(block, 0);
-    range.setEnd(node, offset);
-    before = range.toString();
-  }
-  return { sl, el, before };
-}
-
-/**
- * iOS only shows the keyboard for a focus made during the tap itself, and the editor appears a
- * moment later. So the tap focuses a hidden field first; the keyboard stays up when the editor
- * takes the focus over.
- */
-function holdKeyboard() {
-  const i = document.createElement('input');
-  i.setAttribute('aria-hidden', 'true');
-  i.tabIndex = -1;
-  i.style.cssText =
-    'position:fixed;top:30%;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0';
-  document.body.appendChild(i);
-  i.focus({ preventScroll: true });
-  setTimeout(() => i.remove(), 3000);
-}
-
-const coarse = () => window.matchMedia('(pointer: coarse)').matches;
-
-/**
  * A wiki page. `pageId` and `header` let another view show a page in its own frame (the
  * AI Instructions view): `header` replaces the breadcrumbs (and the ⋯ menu: only Edit and
  * History), `titleAddon` sits after the title, and the URL stays where it is.
@@ -120,7 +84,8 @@ export function PageView({
   const params0 = useParams<{ id: string }>();
   const id = pageId ?? params0.id;
   const [params, setParams] = useSearchParams();
-  const editing = params.get('edit') === '1';
+  // "?edit=1": a page just made, its title ready to type into. Read once, then dropped.
+  const fresh = params.get('edit') === '1';
   const q = usePage(id);
   const tree = useTree();
   const navigate = useNavigate();
@@ -136,6 +101,13 @@ export function PageView({
     if (window.location.pathname !== want)
       navigate(`${want}${window.location.search}${window.location.hash}`, { replace: true });
   }, [detail, navigate, tree.data, pageId]);
+
+  useEffect(() => {
+    if (!detail || params.get('edit') !== '1') return;
+    const next = new URLSearchParams(params);
+    next.delete('edit');
+    setParams(next, { replace: true });
+  }, [detail, params, setParams]);
 
   // Sessions and AI Instructions have their own views, outside the wiki.
   if (!pageId && detail && detail.page.id === tree.data?.instructions_id)
@@ -164,19 +136,11 @@ export function PageView({
       </div>
     );
 
-  const setEditing = (on: boolean) => {
-    const next = new URLSearchParams(params);
-    if (on) next.set('edit', '1');
-    else next.delete('edit');
-    setParams(next, { replace: true });
-  };
-
-  return editing ? (
-    <EditPage key={detail!.page.id} detail={detail!} onDone={() => setEditing(false)} />
-  ) : (
-    <ReadPage
+  return (
+    <PageScreen
+      key={detail!.page.id}
       detail={detail!}
-      onEdit={() => setEditing(true)}
+      fresh={fresh}
       header={header}
       titleAddon={titleAddon}
     />
@@ -203,19 +167,26 @@ function Breadcrumbs({ ancestors, page }: { ancestors: PageSummary[]; page: { ti
   );
 }
 
-function ReadPage({
+/**
+ * A page, always ready to write in: the title, emoji and tags edit in place, the body is the live
+ * preview editor, and changes save themselves a moment after you stop typing.
+ */
+function PageScreen({
   detail,
-  onEdit,
+  fresh,
   header,
   titleAddon,
 }: {
   detail: PageDetail;
-  onEdit(): void;
+  /** Just made: the title has the cursor. */
+  fresh: boolean;
   header?: React.ReactNode;
   titleAddon?: React.ReactNode;
 }) {
   const { page, ancestors, children, backlinks } = detail;
   const { index } = useTitleIndex();
+  const links = useLinkTargets();
+  const editor = useRef<EditorHandle>(null);
   const [menu, setMenu] = useState(false);
   const [history, setHistory] = useState(false);
   const create = useCreatePage();
@@ -233,10 +204,13 @@ function ReadPage({
       : ancestors.some((a) => a.id === sessionsId)
         ? 'entry'
         : null;
+  const draft = usePageDraft(page, !locked, (body) => editor.current?.setDoc(body));
+  const { flush } = draft;
 
   const toggleItem = useCallback(
     async (line: number, done: boolean) => {
       try {
+        await flush();
         const next = await api.post<Page>(`/pages/${page.id}/items/toggle`, { line, done });
         qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
           old ? { ...old, page: next } : old,
@@ -246,12 +220,13 @@ function ReadPage({
         toast(errorMessage(e));
       }
     },
-    [page.id, qc, toast],
+    [page.id, qc, toast, flush],
   );
 
   const editItemAt = useCallback(
     async (line: number, edit: ItemEdit) => {
       try {
+        await flush();
         const next = await api.post<Page>(`/pages/${page.id}/items/edit`, { line, ...edit });
         qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
           old ? { ...old, page: next } : old,
@@ -261,12 +236,13 @@ function ReadPage({
         toast(errorMessage(e));
       }
     },
-    [page.id, qc, toast],
+    [page.id, qc, toast, flush],
   );
 
   const answerItem = useCallback(
     async (line: number, answer: string) => {
       try {
+        await flush();
         const next = await api.post<Page>(`/pages/${page.id}/items/answer`, { line, answer });
         qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
           old ? { ...old, page: next } : old,
@@ -276,7 +252,7 @@ function ReadPage({
         toast(errorMessage(e));
       }
     },
-    [page.id, qc, toast],
+    [page.id, qc, toast, flush],
   );
 
   const deleteItemAt = useCallback(
@@ -289,6 +265,7 @@ function ReadPage({
         void qc.invalidateQueries({ queryKey: ['dashboard'] });
       };
       try {
+        await flush();
         const { page: next, undo } = await deleteItem(page.id, line);
         show(next);
         toast('Item deleted.', {
@@ -302,31 +279,8 @@ function ReadPage({
         toast(errorMessage(e));
       }
     },
-    [page.id, qc, toast],
+    [page.id, qc, toast, flush],
   );
-
-  // Phones: load the editor ahead of time, so a tap on the text opens it without a wait.
-  useEffect(() => {
-    if (!locked && coarse()) void import('../components/Editor');
-  }, [locked]);
-
-  /** A tap on the text (not on a link, button or item) opens the editor where it landed. */
-  function tapToEdit(e: React.MouseEvent) {
-    if (locked || !coarse()) return;
-    const t = e.target as HTMLElement;
-    if (
-      t.closest(
-        'a, button, input, textarea, select, label, img, summary, details, .item, .mermaid-box, .lightbox',
-      )
-    )
-      return;
-    const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) return;
-    const block = t.closest<HTMLElement>('[data-sl]');
-    pendingCaret = block ? caretAt(block, e.clientX, e.clientY) : null;
-    holdKeyboard();
-    onEdit();
-  }
 
   const archivable = !locked && page.role !== 'ai_instructions';
   async function archive(on: boolean) {
@@ -369,6 +323,32 @@ function ReadPage({
     (b) => b.id !== page.parent_id && !children.some((c) => c.id === b.id),
   );
 
+  // Open Items above the text grows or shrinks as you write items: while you're writing, the
+  // page scrolls by the same amount, so the line you're on stays where it is.
+  const summaryBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = summaryBox.current;
+    if (!box) return;
+    let last = box.offsetHeight;
+    const ro = new ResizeObserver(() => {
+      const h = box.offsetHeight;
+      const delta = h - last;
+      last = h;
+      if (!delta || !document.activeElement?.closest('.cm-editor')) return;
+      const main = box.closest<HTMLElement>('.main');
+      if (
+        main &&
+        main.scrollHeight > main.clientHeight &&
+        getComputedStyle(main).overflowY !== 'visible'
+      )
+        main.scrollTop += delta;
+      else window.scrollBy(0, delta);
+    });
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [locked]);
+
+  // "E" puts the cursor in the page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -380,24 +360,33 @@ function ReadPage({
         !t.closest('input, textarea, [contenteditable]')
       ) {
         e.preventDefault();
-        onEdit();
+        editor.current?.focus();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onEdit, locked]);
+  }, [locked]);
 
-  // Scroll to a #h-… or #item-… anchor once the body renders, once per page and anchor: checking
-  // off or editing an item changes the body, and that mustn't jump back to the linked item.
+  // Scroll to a #h-… or #item-… anchor once the body is there, once per page and anchor:
+  // checking off or editing an item changes the body, and that mustn't jump back to the item.
+  const { hash } = useLocation();
   const anchored = useRef<string | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
   useEffect(() => {
-    const target = `${page.id}${location.hash}`;
-    if (!location.hash || anchored.current === target) return;
-    const el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
-    if (!el) return;
+    const target = `${page.id}${hash}`;
+    if (!hash || anchored.current === target) return;
+    if (locked) {
+      const el = document.getElementById(decodeURIComponent(hash.slice(1)));
+      if (!el) return;
+      anchored.current = target;
+      el.scrollIntoView();
+      return;
+    }
+    if (!editorReady) return;
     anchored.current = target;
-    el.scrollIntoView();
-  }, [page.id, page.body]);
+    const line = anchorLine(page.body, hash);
+    if (line) requestAnimationFrame(() => editor.current?.scrollToLine(line));
+  }, [page.id, page.body, hash, locked, editorReady]);
 
   async function addChild() {
     try {
@@ -443,12 +432,17 @@ function ReadPage({
   return (
     <article className="page">
       <div className="page-top">
-        {header ?? <Breadcrumbs ancestors={ancestors} page={page} />}
+        {header ?? (
+          <Breadcrumbs
+            ancestors={ancestors}
+            page={{ title: locked ? page.title : draft.draft.title || 'Untitled' }}
+          />
+        )}
         <div className="page-actions">
-          {!locked && (
-            <button className="btn" onClick={onEdit} title="Edit (E)">
-              <Icon name="edit" size={15} /> Edit
-            </button>
+          {!locked && draft.touched && (
+            <span className={`save-state ${draft.state}`} aria-live="polite">
+              {SAVE_LABEL[draft.state]}
+            </span>
           )}
           <button
             className="btn icon-only"
@@ -488,7 +482,7 @@ function ReadPage({
                       toast('Link copied. Paste it into another page.');
                     }}
                   >
-                    <Icon name="link" size={15} /> Copy wiki link
+                    <Icon name="link" size={15} /> Copy link to page
                   </button>
                   <button
                     role="menuitem"
@@ -518,13 +512,27 @@ function ReadPage({
       </div>
       <header className="page-head">
         {/* The emoji just left of the title, on the same line. */}
-        <div className="page-title-row">
-          {page.icon && <div className="page-icon">{page.icon}</div>}
-          <h1 className="page-title">
-            {page.title}
+        {locked ? (
+          <div className="page-title-row">
+            <div className="page-icon">{page.icon || DEFAULT_PAGE_ICON}</div>
+            <h1 className="page-title">
+              {page.title}
+              {titleAddon && <span className="title-addon">{titleAddon}</span>}
+            </h1>
+          </div>
+        ) : (
+          <div className="page-title-row live-title">
+            {/* Every page has its icon here (📄 until one is chosen): tap it to change it. */}
+            <EmojiButton value={draft.draft.icon} onChange={(icon) => draft.change({ icon })} />
+            <TitleField
+              value={draft.draft.title}
+              onChange={(title) => draft.change({ title })}
+              onEnter={() => editor.current?.focus('start')}
+              focus={fresh}
+            />
             {titleAddon && <span className="title-addon">{titleAddon}</span>}
-          </h1>
-        </div>
+          </div>
+        )}
         <p className="page-meta">
           Updated {formatWhen(page.updated_at)}
           {page.updated_by && ` by ${actorLabel(page.updated_by)}`}
@@ -532,8 +540,17 @@ function ReadPage({
             ? ` · created by ${actorLabel(page.created_by)}`
             : ''}
         </p>
-        <TagList tags={detail.all_tags} />
+        {locked ? (
+          <TagList tags={detail.all_tags} />
+        ) : (
+          <TagEditor
+            tags={draft.draft.tags}
+            bodyTags={extractTags(draft.draft.body)}
+            onChange={(tags) => draft.change({ tags })}
+          />
+        )}
       </header>
+      {draft.banners}
       {page.archived_at && (
         <div className="banner archived-banner" role="status">
           <p>
@@ -553,30 +570,37 @@ function ReadPage({
         </p>
       )}
       {!locked && (
-        <ItemSummary
-          key={page.id}
-          page={page}
-          onDone={toggleItem}
-          onAnswer={answerItem}
-          onEdit={editItemAt}
-          onDelete={deleteItemAt}
-        />
-      )}
-      <div className="prose" onClick={tapToEdit}>
-        {page.body.trim() ? (
-          <Markdown
-            source={page.body}
-            titles={index}
-            onToggleItem={locked ? undefined : toggleItem}
-            onAnswerItem={locked ? undefined : answerItem}
-            onEditItem={locked ? undefined : editItemAt}
-            onDeleteItem={locked ? undefined : deleteItemAt}
-            noItems={!!locked}
+        <div ref={summaryBox} className="item-summary-box">
+          <ItemSummary
+            key={page.id}
+            page={page}
+            body={draft.draft.body}
+            onDone={toggleItem}
+            onAnswer={answerItem}
+            onEdit={editItemAt}
+            onDelete={deleteItemAt}
           />
-        ) : locked ? null : (
-          <button className="empty-body" onClick={onEdit}>
-            This page is empty. Click to start writing.
-          </button>
+        </div>
+      )}
+      <div className="prose">
+        {locked ? (
+          page.body.trim() && <Markdown source={page.body} titles={index} noItems />
+        ) : (
+          // Until the editor's code arrives, the page as it reads.
+          <Suspense fallback={<Markdown source={page.body} titles={index} />}>
+            <Editor
+              ref={editor}
+              value={draft.draft.body}
+              pageId={page.id}
+              links={links}
+              titles={index}
+              onChange={(body) => draft.change({ body })}
+              onSave={() => void draft.save()}
+              onError={toast}
+              onNavigate={(href) => navigate(href)}
+              onReady={() => setEditorReady(true)}
+            />
+          </Suspense>
         )}
       </div>
 
@@ -653,47 +677,65 @@ interface Draft {
   base: number;
 }
 
+const SAVE_LABEL: Record<SaveState, string> = {
+  saved: 'Saved',
+  dirty: 'Unsaved',
+  saving: 'Saving…',
+  error: 'Not saved',
+  conflict: 'Changed elsewhere',
+};
+
 const sameTags = (a: string[] | undefined, b: string[] | undefined) =>
   JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
 
-function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
-  const { page, ancestors } = detail;
+const fromPage = (page: Page): Draft => ({
+  title: page.title,
+  icon: page.icon ?? '',
+  body: page.body,
+  tags: page.tags,
+  base: page.version,
+});
+
+/**
+ * The page as it's being written: changes save a moment after typing stops (and on leaving),
+ * against the version they started from. A newer version from elsewhere (an assistant, an item
+ * checked off in Open Items, a restored revision) is taken in when nothing is waiting to save;
+ * otherwise saving reports the clash and offers both ways out.
+ */
+function usePageDraft(page: Page, editable: boolean, onExternal: (body: string) => void) {
   const qc = useQueryClient();
   const toast = useToast();
-  const links = useLinkTargets();
-  const editor = useRef<EditorHandle>(null);
   const draftKey = `n2.draft.${page.id}`;
-  const [draft, setDraft] = useState<Draft>({
-    title: page.title,
-    icon: page.icon ?? '',
-    body: page.body,
-    tags: page.tags,
-    base: page.version,
-  });
-  const [state, setState] = useState<SaveState>('saved');
-  const [editorKey, setEditorKey] = useState(0);
-  // Opened by a tap on the text (phones): the editor starts with its cursor there.
-  const [caret] = useState(() => {
-    const c = pendingCaret;
-    pendingCaret = null;
-    return c;
-  });
+  const [draft, setDraft] = useState<Draft>(() => fromPage(page));
+  const [state, setStateValue] = useState<SaveState>('saved');
+  // "Saved" shows once you've changed something on this visit.
+  const [touched, setTouched] = useState(false);
   const [stale] = useState<Draft | null>(() => {
+    if (!editable) return null;
     const d = readLocal<Draft | null>(draftKey, null);
     return d && (d.body !== page.body || d.title !== page.title) ? d : null;
   });
   const [offerDraft, setOfferDraft] = useState(!!stale);
-  // The latest draft for async saves; kept in step by change(), save() and loadLatest().
+  // The latest draft and state for async saves.
   const current = useRef(draft);
+  const stateRef = useRef<SaveState>('saved');
   const saving = useRef<Promise<void> | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const external = useRef(onExternal);
+  useEffect(() => {
+    external.current = onExternal;
+  });
+  const setState = useCallback((s: SaveState) => {
+    stateRef.current = s;
+    setStateValue(s);
+  }, []);
 
+  // The latest save, for timers and handlers set up before it last changed.
+  const saveRef = useRef<(force?: boolean) => Promise<void>>(async () => undefined);
   const save = useCallback(
     async (force = false): Promise<void> => {
       clearTimeout(timer.current);
-      if (saving.current) {
-        await saving.current;
-      }
+      if (saving.current) await saving.current;
       const d = current.current;
       const cached = qc.getQueryData<PageDetail>(keys.page(page.id))?.page;
       if (
@@ -704,7 +746,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
         sameTags(d.tags, cached.tags) &&
         d.base === cached.version
       ) {
-        setState('saved');
+        if (stateRef.current !== 'conflict') setState('saved');
         return;
       }
       if (!d.title.trim()) return setState('dirty');
@@ -718,8 +760,8 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
             tags: d.tags,
             ...(force ? {} : { base_version: d.base }),
           });
-          setDraft((cur) => ({ ...cur, base: next.version }));
           current.current = { ...current.current, base: next.version };
+          setDraft((cur) => ({ ...cur, base: next.version }));
           // The tags under the title show at once: the page's own plus #tags in the body.
           const allTags = [...new Set([...next.tags, ...extractTags(next.body)])].sort();
           qc.setQueryData<PageDetail>(keys.page(page.id), (old) =>
@@ -727,12 +769,12 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           );
           if (!cached || cached.title !== next.title || cached.icon !== next.icon)
             void qc.invalidateQueries({ queryKey: keys.tree });
-          // all_tags (incl. #tags in the body) comes from the server; refresh it when viewing.
           if (!cached || !sameTags(cached.tags, next.tags) || cached.body !== next.body) {
-            void qc.invalidateQueries({ queryKey: keys.page(page.id), refetchType: 'none' });
-            // The Tags view and each tag's page list pages by tag.
+            // The Tags view and each tag's page list pages by tag; Open Items read the body.
             void qc.invalidateQueries({ queryKey: ['tags'] });
             void qc.invalidateQueries({ queryKey: ['tag'] });
+            void qc.invalidateQueries({ queryKey: ['items'] });
+            void qc.invalidateQueries({ queryKey: ['dashboard'] });
           }
           const latest = current.current;
           if (
@@ -743,7 +785,10 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           ) {
             writeLocal(draftKey, undefined);
             setState('saved');
-          } else setState('dirty');
+          } else {
+            setState('dirty');
+            timer.current = setTimeout(() => void saveRef.current(), 1200);
+          }
         } catch (e) {
           if (e instanceof ApiError && e.status === 409) setState('conflict');
           else {
@@ -756,41 +801,59 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
       await run;
       saving.current = null;
     },
-    [page.id, qc, toast, draftKey],
+    [page.id, qc, toast, draftKey, setState],
+  );
+  useEffect(() => {
+    saveRef.current = save;
+  });
+
+  const change = useCallback(
+    (patch: Partial<Draft>) => {
+      const next = { ...current.current, ...patch };
+      current.current = next;
+      setDraft(next);
+      writeLocal(draftKey, next);
+      setTouched(true);
+      if (stateRef.current !== 'conflict') {
+        setState('dirty');
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => void saveRef.current(), 1200);
+      }
+    },
+    [draftKey, setState],
   );
 
-  const change = (patch: Partial<Draft>) => {
-    setDraft((d) => {
-      const next = { ...d, ...patch };
-      current.current = next;
-      writeLocal(draftKey, next);
-      return next;
-    });
-    if (state !== 'conflict') {
-      setState('dirty');
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => void save(), 1200);
-    }
-  };
+  /** Saves anything waiting, before an action that changes the page on the server. */
+  const flush = useCallback(async () => {
+    if (stateRef.current === 'dirty' || saving.current) await saveRef.current();
+  }, []);
 
-  // Save before leaving the page or closing the tab.
+  // A newer version from elsewhere, with nothing of ours waiting: take it in.
+  useEffect(() => {
+    const d = current.current;
+    if (!editable || page.version <= d.base) return;
+    if (stateRef.current !== 'saved' || saving.current) return;
+    const next = fromPage(page);
+    current.current = next;
+    setDraft(next);
+    external.current(next.body);
+  }, [page, editable]);
+
+  // Save before closing the tab, and when leaving the page in the app.
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => {
-      if (state !== 'saved') {
-        void save();
+      if (stateRef.current === 'dirty' || stateRef.current === 'saving') {
+        void saveRef.current();
         e.preventDefault();
       }
     };
     window.addEventListener('beforeunload', before);
-    return () => window.removeEventListener('beforeunload', before);
-  }, [state, save]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  async function done() {
-    if (state === 'conflict') return;
-    await save();
-    onDone();
-  }
+    return () => {
+      window.removeEventListener('beforeunload', before);
+      clearTimeout(timer.current);
+      if (stateRef.current === 'dirty') void saveRef.current();
+    };
+  }, []);
 
   async function loadLatest() {
     await navigator.clipboard?.writeText(current.current.body).catch(() => undefined);
@@ -799,47 +862,22 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
       queryFn: () => api.get<PageDetail>(`/pages/${page.id}`),
       staleTime: 0,
     });
-    const d = {
-      title: fresh.page.title,
-      icon: fresh.page.icon ?? '',
-      body: fresh.page.body,
-      tags: fresh.page.tags,
-      base: fresh.page.version,
-    };
-    setDraft(d);
+    const d = fromPage(fresh.page);
     current.current = d;
-    setEditorKey((k) => k + 1);
+    setDraft(d);
+    external.current(d.body);
+    writeLocal(draftKey, undefined);
     setState('saved');
     toast('Loaded the latest version. Your text was copied to the clipboard.');
   }
 
-  const status: Record<SaveState, string> = {
-    saved: 'Saved',
-    dirty: 'Unsaved',
-    saving: 'Saving…',
-    error: 'Not saved',
-    conflict: 'Changed elsewhere',
-  };
-
-  return (
-    <article className="page editing">
-      <div className="page-top">
-        <Breadcrumbs ancestors={ancestors} page={{ title: draft.title || 'Untitled' }} />
-        <div className="page-actions">
-          <span className={`save-state ${state}`} aria-live="polite">
-            {status[state]}
-          </span>
-          <button className="btn primary" onClick={done} disabled={state === 'conflict'}>
-            <Icon name="check" size={15} /> Done
-          </button>
-        </div>
-      </div>
-
+  const banners = (
+    <>
       {state === 'conflict' && (
         <div className="banner warn" role="alert">
-          <p>Someone (or an assistant) changed this page while you were editing.</p>
+          <p>Someone (or an assistant) changed this page while you were writing.</p>
           <div>
-            <button className="btn small" onClick={loadLatest}>
+            <button className="btn small" onClick={() => void loadLatest()}>
               Load latest (copies your text)
             </button>
             <button className="btn small" onClick={() => void save(true)}>
@@ -850,7 +888,7 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
       )}
       {offerDraft && stale && (
         <div className="banner" role="status">
-          <p>You have unsaved changes from an earlier session.</p>
+          <p>You have unsaved changes from an earlier visit.</p>
           <div>
             <button
               className="btn small"
@@ -859,9 +897,9 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
                   title: stale.title,
                   icon: stale.icon,
                   body: stale.body,
-                  tags: stale.tags ?? draft.tags,
+                  tags: stale.tags ?? current.current.tags,
                 });
-                setEditorKey((k) => k + 1);
+                external.current(stale.body);
                 setOfferDraft(false);
               }}
             >
@@ -879,153 +917,94 @@ function EditPage({ detail, onDone }: { detail: PageDetail; onDone(): void }) {
           </div>
         </div>
       )}
+    </>
+  );
 
-      <header className="page-head">
-        <div className="title-row">
-          <EmojiButton value={draft.icon} onChange={(icon) => change({ icon })} />
-          {/* Sized to its text inside a scroller, so a long title can be swiped across on phones. */}
-          <div className="title-scroll">
-            <span className="title-sizer" aria-hidden>
-              {draft.title || 'Untitled'}
-            </span>
-            <input
-              className="title-input"
-              value={draft.title}
-              onChange={(e) => change({ title: e.target.value })}
-              placeholder="Untitled"
-              aria-label="Title"
-              autoFocus={page.title === 'Untitled'}
-              onFocus={(e) => page.title === 'Untitled' && e.target.select()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  editor.current?.focus();
-                }
-              }}
-            />
-          </div>
-        </div>
-        <TagEditor
-          tags={draft.tags}
-          bodyTags={extractTags(draft.body)}
-          onChange={(tags) => change({ tags })}
-        />
-      </header>
+  return { draft, change, save, flush, state, touched, banners };
+}
 
-      <div className="toolbar" role="toolbar" aria-label="Formatting">
-        <button onClick={() => editor.current?.wrap('**')} title="Bold (⌘B)" aria-label="Bold">
-          <b>B</b>
-        </button>
-        <button onClick={() => editor.current?.wrap('_')} title="Italic (⌘I)" aria-label="Italic">
-          <i>I</i>
-        </button>
-        {([1, 2, 3] as const).map((n) => (
-          <button
-            key={n}
-            onClick={() => editor.current?.heading(n)}
-            title={`Heading ${n} (${'#'.repeat(n)})`}
-            aria-label={`Heading ${n}`}
-            className="tb-h"
-          >
-            H<sub>{n}</sub>
-          </button>
-        ))}
-        <button
-          onClick={() => editor.current?.wrap('[', '](https://)')}
-          title="Link (⌘K)"
-          aria-label="Link"
-        >
-          <Icon name="link" size={15} />
-        </button>
-        <button
-          onClick={() => editor.current?.wrap('[[', ']]')}
-          title="Link to a page"
-          aria-label="Link to a page"
-        >
-          [[ ]]
-        </button>
-        <button
-          onClick={() => editor.current?.wrap('\n> [!NOTE]\n> ', '\n')}
-          title="Callout"
-          aria-label="Callout"
-        >
-          <Icon name="panel" size={15} />
-        </button>
-        <button
-          onClick={() => editor.current?.wrap('\n- [ ] ', '')}
-          title="Checklist"
-          aria-label="Checklist"
-        >
-          <Icon name="check" size={15} />
-        </button>
-        <button
-          onClick={() =>
-            editor.current?.wrap(
-              '\n```mermaid\nflowchart LR\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Do it]\n  B -->|No| D[Skip]\n',
-              '```\n',
-            )
-          }
-          title="Mermaid diagram (rendered when you’re done editing)"
-          aria-label="Insert a diagram"
-        >
-          <Icon name="graph" size={15} /> Diagram
-        </button>
-        <span className="toolbar-sep" aria-hidden />
-        <button
-          onClick={() => editor.current?.wrap('\n- [ ] todo: ', '')}
-          title="To Do: - [ ] todo: … @owner due:YYYY-MM-DD (add HH:MM to be notified then)"
-          aria-label="Insert a to-do"
-          className="tb-item item-todo"
-        >
-          To Do
-        </button>
-        <button
-          onClick={() => editor.current?.wrap('\n- question: ', '')}
-          title="Question: - question: … (resolve with [x] and answer: …)"
-          aria-label="Insert a question"
-          className="tb-item item-question"
-        >
-          Question
-        </button>
-        <button
-          onClick={() => editor.current?.wrap(`\n- reminder: due:${inAWeek()} `, '')}
-          title="Reminder: - reminder: … due:YYYY-MM-DD (add HH:MM to be notified then). A nudge, not a task: no checkbox, never overdue."
-          aria-label="Insert a reminder"
-          className="tb-item item-reminder"
-        >
-          Reminder
-        </button>
-        <span className="toolbar-sep" aria-hidden />
-        <button
-          onClick={() => editor.current?.pickImages()}
-          title="Insert image"
-          aria-label="Insert image"
-        >
-          <Icon name="image" size={15} /> Image
-        </button>
-      </div>
-
-      <Suspense fallback={<div className="editor" aria-busy="true" />}>
-        <Editor
-          key={editorKey}
-          ref={editor}
-          value={draft.body}
-          pageId={page.id}
-          caret={editorKey === 0 ? caret : null}
-          links={links}
-          onChange={(body) => change({ body })}
-          onSave={() => void save()}
-          onError={toast}
-        />
-      </Suspense>
-    </article>
+/** The page title, edited in place: wraps like a heading, Enter goes to the text. */
+function TitleField({
+  value,
+  onChange,
+  onEnter,
+  focus,
+}: {
+  value: string;
+  onChange(title: string): void;
+  onEnter(): void;
+  /** Start with the cursor here (a page just made: "Untitled" selected, to type over). */
+  focus: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = useCallback(() => {
+    const t = ref.current;
+    if (!t) return;
+    t.style.height = '0px';
+    t.style.height = `${t.scrollHeight}px`;
+  }, []);
+  useLayoutEffect(fit, [value, fit]);
+  useEffect(() => {
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [fit]);
+  useEffect(() => {
+    if (!focus) return;
+    ref.current?.focus();
+    if (ref.current?.value === 'Untitled') ref.current.select();
+  }, [focus]);
+  return (
+    <textarea
+      ref={ref}
+      className="page-title title-field"
+      rows={1}
+      value={value}
+      placeholder="Untitled"
+      aria-label="Title"
+      spellCheck
+      onChange={(e) => onChange(e.target.value.replace(/\n/g, ' '))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onEnter();
+        }
+      }}
+    />
   );
 }
 
-/** A week from today (local), as YYYY-MM-DD: the default date for a new reminder. */
-function inAWeek(): string {
-  const d = new Date(Date.now() + 7 * 86_400_000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** The line a #h-heading or #item-line anchor points at, in the page's markdown. */
+function anchorLine(body: string, hash: string): number | null {
+  const id = decodeURIComponent(hash.slice(1));
+  const item = /^item-(\d+)$/.exec(id);
+  if (item) return Number(item[1]);
+  if (!id.startsWith('h-')) return null;
+  const want = id.slice(2);
+  const seen = new Map<string, number>();
+  let fence = false;
+  const lines = body.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!;
+    if (/^\s*(```|~~~)/.test(l)) {
+      fence = !fence;
+      continue;
+    }
+    const m = fence ? null : /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(l);
+    if (!m) continue;
+    // The heading's text as the reader sees it (the renderer slugs that).
+    const text = m[1]!
+      .replace(
+        /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g,
+        (_s, t: string, h?: string, label?: string) => label ?? (h ? `${t} › ${h}` : t),
+      )
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`~]/g, '');
+    const base = slugify(text);
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    if ((n ? `${base}-${n}` : base) === want) return i + 1;
+  }
+  return null;
 }
 
 type VersionKey = number | 'current';
@@ -1204,14 +1183,31 @@ function ComparePair({
  * it's written. Its header stays pinned while the list scrolls under it, and a tap on the header
  * folds the list away (remembered on this device).
  */
+const SUMMARY_SORTS = [
+  ['page', 'Page order'],
+  ['due', 'Due date'],
+] as const;
+const SUMMARY_GROUPS = [
+  ['none', 'None'],
+  ['type', 'Type'],
+] as const;
+const TYPE_GROUP: Record<ItemType, string> = {
+  todo: 'To Dos',
+  question: 'Questions',
+  reminder: 'Reminders',
+};
+
 function ItemSummary({
   page,
+  body,
   onDone,
   onAnswer,
   onEdit,
   onDelete,
 }: {
   page: Page;
+  /** The page's text as it is on screen (it saves a moment later). */
+  body: string;
   onDone(line: number, done: boolean): Promise<void>;
   onAnswer(line: number, answer: string): Promise<void>;
   onEdit(line: number, edit: ItemEdit): Promise<void>;
@@ -1223,23 +1219,62 @@ function ItemSummary({
       writeLocal('n2.items.open', !o);
       return !o;
     });
-  const items = useMemo(() => extractItems(page.body), [page.body]);
+  const items = useMemo(() => extractItems(body), [body]);
   const now = nowMoment();
   // Open to-dos and questions, and reminders still ahead (past ones were just nudges).
   const isOpen = (i: (typeof items)[number]) => !i.done && !reminderPast(i, now);
   const keyOf = (i: (typeof items)[number]) => `${i.line}:${i.text}`;
-  // Items stay listed (struck through) once checked off, here or in the page, until you leave:
-  // the box doesn't shrink under your finger, and a mis-tap is one tap to undo.
-  const openKeys = items.filter(isOpen).map(keyOf);
-  const [shown, setShown] = useState<string[]>(openKeys);
-  const added = openKeys.filter((k) => !shown.includes(k));
-  if (added.length) setShown([...shown, ...added]);
-  const list = items.filter((i) => isOpen(i) || shown.includes(keyOf(i)));
-  if (!list.length) return null;
+  // An item checked off or answered here stays listed (struck through, with its answer) until
+  // you leave, so the box doesn't shrink under your finger, a mis-tap is one tap to undo, and you
+  // see what you wrote. Checked off in the page itself, it goes at once.
+  const keepKey = (i: (typeof items)[number]) => `${i.type}:${i.text}`;
+  const [kept, setKept] = useState<string[]>([]);
+  const [sort, setSort] = useState<'page' | 'due'>(() => readLocal('n2.page-items.sort', 'page'));
+  const [group, setGroup] = useState<'none' | 'type'>(() =>
+    readLocal('n2.page-items.group', 'none'),
+  );
+  const [showDone, setShowDone] = useState(() => readLocal('n2.page-items.done', false));
+  const anyDone = items.some((i) => !isOpen(i));
+  const listed = items.filter((i) => showDone || isOpen(i) || kept.includes(keepKey(i)));
+  if (!listed.length) return null;
+  // By due date: soonest first (a time before none on the same day), undated last, then by line.
+  const when = (i: (typeof items)[number]) =>
+    i.due ? `${i.due} ${i.due_time ?? '99:99'}` : '\uffff';
+  const list =
+    sort === 'due'
+      ? [...listed].sort((a, b) => when(a).localeCompare(when(b)) || a.line - b.line)
+      : listed;
   const today = todayKey();
-  const count = list.filter(isOpen).length;
+  // With completed shown, the counts are of everything listed; otherwise of what's still open.
+  const tally = (of: typeof list) => (showDone ? of.length : of.filter(isOpen).length);
+  const count = tally(list);
+  const row = (i: (typeof items)[number]) => (
+    <ItemRow
+      key={keyOf(i)}
+      item={{
+        ...i,
+        page_id: page.id,
+        page_title: page.title,
+        page_icon: page.icon,
+        path: [],
+      }}
+      today={today}
+      inPage
+      onDone={(d) => {
+        if (d) setKept((k) => [...k, keepKey(i)]);
+        void onDone(i.line, d);
+      }}
+      onAnswer={(t) => {
+        // Answering resolves it: it stays listed, with its answer, like one ticked here.
+        setKept((k) => [...k, keepKey(i)]);
+        return onAnswer(i.line, t);
+      }}
+      onEdit={(edit) => onEdit(i.line, edit)}
+      onDelete={() => void onDelete(i.line)}
+    />
+  );
   return (
-    <aside className={`item-summary${open ? ' open' : ''}`} aria-label="Open Items on this page">
+    <aside className={`item-summary${open ? ' open' : ''}`} aria-label="Action Items on this page">
       <h2 className="item-summary-title">
         <button
           type="button"
@@ -1248,34 +1283,68 @@ function ItemSummary({
           aria-controls={`items-${page.id}`}
           onClick={toggle}
         >
-          <Icon name="checks" size={16} /> Open Items <span className="count">{count}</span>
+          <Icon name="checks" size={16} /> Action Items <span className="count">{count}</span>
           <span className="item-summary-chev" aria-hidden>
             <Icon name="chevron" size={16} />
           </span>
         </button>
+        {open && (list.length > 1 || anyDone) && (
+          <div className="item-summary-tools">
+            {anyDone && (
+              // Finished items: checked to-dos, answered questions, reminders gone by.
+              <button
+                type="button"
+                className="menu-select-btn done-toggle"
+                aria-pressed={showDone}
+                onClick={() => {
+                  // Hiding takes everything finished out, including what was just checked off here.
+                  if (showDone) setKept([]);
+                  setShowDone(!showDone);
+                  writeLocal('n2.page-items.done', !showDone);
+                }}
+              >
+                {showDone ? 'Hide completed' : 'Show completed'}
+              </button>
+            )}
+            <MenuSelect
+              label="Sort"
+              value={sort}
+              options={SUMMARY_SORTS}
+              onChange={(v) => {
+                setSort(v);
+                writeLocal('n2.page-items.sort', v);
+              }}
+            />
+            <MenuSelect
+              label="Group"
+              value={group}
+              options={SUMMARY_GROUPS}
+              onChange={(v) => {
+                setGroup(v);
+                writeLocal('n2.page-items.group', v);
+              }}
+            />
+          </div>
+        )}
       </h2>
       <div className="item-summary-drawer" id={`items-${page.id}`} inert={!open}>
         <div className="item-summary-inner">
-          <ul className="items-full">
-            {list.map((i) => (
-              <ItemRow
-                key={keyOf(i)}
-                item={{
-                  ...i,
-                  page_id: page.id,
-                  page_title: page.title,
-                  page_icon: page.icon,
-                  path: [],
-                }}
-                today={today}
-                inPage
-                onDone={(d) => void onDone(i.line, d)}
-                onAnswer={(t) => onAnswer(i.line, t)}
-                onEdit={(edit) => onEdit(i.line, edit)}
-                onDelete={() => void onDelete(i.line)}
-              />
-            ))}
-          </ul>
+          {group === 'type' ? (
+            ITEM_TYPES.map((t) => {
+              const of = list.filter((i) => i.type === t);
+              if (!of.length) return null;
+              return (
+                <div key={t} className="item-summary-group">
+                  <h3 className="item-summary-sub">
+                    {TYPE_GROUP[t]} <span className="count">{tally(of)}</span>
+                  </h3>
+                  <ul className="items-full">{of.map(row)}</ul>
+                </div>
+              );
+            })
+          ) : (
+            <ul className="items-full">{list.map(row)}</ul>
+          )}
         </div>
       </div>
     </aside>

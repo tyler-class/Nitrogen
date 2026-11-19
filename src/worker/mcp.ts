@@ -95,15 +95,19 @@ How to work with it:
 - For small changes use edit_page (find/replace, append, section edits). It keeps the rest of the page byte-for-byte and retries safely if the page changed. Use update_page with base_version only to rewrite a whole page.
 - To build a structure (a project with sub-pages, meeting notes series), use create_pages to create the whole subtree in one call.
 - Every assistant edit is saved in the page history under your app's name; list_revisions and restore_revision undo mistakes. The owner sees what you changed in their activity log, and can undo a whole session.
-- Archive instead of deleting: archive_page takes a finished or obsolete page (and everything under it) out of the tree, search and open items without losing it. Archived pages never appear in search, get_tree or open_items: to find one, use search_archive (or list_archived), and if the owner wants it back, restore_page. delete_page is permanent.
+- Archive instead of deleting: archive_page takes a finished or obsolete page (and everything under it) out of the tree, search and action items without losing it. Archived pages never appear in search, get_tree or open_items: to find one, use search_archive (or list_archived), and if the owner wants it back, restore_page. delete_page is permanent.
 - Tag pages to group them across the tree: pass tags when creating, use tag_page later, or write #tag in the body. list_tags shows the tags in use; search can filter by tag. Reuse existing tags rather than inventing near-duplicates.
 - Sessions: every change you make is recorded automatically in your entry under the read-only "Sessions" section (one entry per session, listing the pages you touched); you don't need to ask the user or do anything for that. At the end of a session that changed the wiki, call log_session once to give that entry a title and a short summary of what was decided, done and left open. You can't edit or delete session entries.
 - AI Instructions: the owner keeps one page of house rules for assistants (where things go, naming, tags, style). It's at the end of these instructions; follow it over the general advice here. It is identified by the app, not by its title: always read it with get_ai_instructions and change it with update_ai_instructions, never by searching for a page called "AI Instructions" (a page with that title elsewhere in the wiki is an ordinary page, not your instructions). When the owner asks you to add or change a rule, use update_ai_instructions.
-- Open Items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
+- Action items: to-dos, questions and reminders are written inline on the page they belong to (see "Typed items" below), not in a separate list. open_items lists them across the wiki (filter by type, due date or section). When a session leaves something unresolved, write it as a question: or todo: item on the page it belongs to.
 
-Markdown format:
-- Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks.
-- Callouts: "> [!NOTE]", "> [!TIP]", "> [!WARNING]" as the first line of a blockquote.
+Markdown format (the app shows pages formatted as they're written, and the owner edits them the same way, so everything below round-trips):
+- Link to another page with [[Page title]], [[Page title|label]] or [[Page title#Heading]]; these power backlinks. (In the app the owner types "@" and a page's name; it's stored as [[Page title]].)
+- Text: **bold**, *italic*, ~~strikethrough~~, ==highlighted== (shown in yellow; the only colour), \`inline code\`, [label](https://…) links, and #tags. A single line break shows as a new line; leave a blank line between paragraphs and around blocks (tables, code, callouts, rules).
+- Lists: "- " bullets, "1. " numbered, "- [ ] " / "- [x] " task lists. Nest an item by indenting it to the text of the item above (2 spaces under "- ", 3 under "1. "); levels show as • ◦ ▪ and 1. a. i.
+- Callouts: a blockquote whose first line is "> [!NOTE]" (blue), "> [!TIP]" (yellow) or "> [!WARNING]" (red); there are no other kinds. Optionally follow it with a short title ("> [!TIP] Before you start"); every following line starts with "> ". Plain quotes are "> " lines. Callouts and quotes hold text, lists and items only: never put a table, code block, rule or another callout or quote inside one.
+- Tables: GitHub pipe tables (a header row, a "| --- |" row, then rows; ":---:" to center, "---:" to right-align), with a blank line before and after. Write "\\|" for a pipe inside a cell.
+- Code: fenced blocks with a language ("\`\`\`js"); a rule is "---" on its own line with a blank line above it.
 - Diagrams: Mermaid is supported. A fenced code block with the language "mermaid" renders as a diagram in the app. Use one when structure is clearer drawn than described: a process or decision flow (flowchart), who talks to whom over time (sequenceDiagram), states and transitions (stateDiagram-v2), a plan over time (gantt or timeline), data relationships (erDiagram), or a hierarchy (mindmap). Keep labels short, quote labels that contain punctuation, like A["Draft, review"], and put the diagram next to the text it illustrates. Example:
     \`\`\`mermaid
     flowchart LR
@@ -113,12 +117,12 @@ Markdown format:
     \`\`\`
   If a diagram has a syntax error the page shows the error, so check the syntax and fix it with edit_page.
 - Typed items (to-dos, questions, reminders). One item per line, as a list item:
-    - [ ] todo: <text> [@owner] [due:YYYY-MM-DD]
-    - [ ] question: <text> [@owner] [due:YYYY-MM-DD]
+    - [ ] todo: <text> [due:YYYY-MM-DD]
+    - [ ] question: <text> [due:YYYY-MM-DD]
     - reminder: <text> due:YYYY-MM-DD [HH:MM]            (no checkbox; reminders must have a date)
-  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "@owner" is one word; "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. A to-do is a task to act on: done means changing "[ ]" to "[x]", and one past its date is overdue. A question can have a due date too (when it needs an answer by), and goes overdue the same way. A reminder is a nudge, not a task: it notifies the owner on its date (or at its time) and then simply passes; it has no checkbox, is never overdue, and isn't checked off. Use a reminder for "remind me to…" or "nudge me on…", a to-do for work someone has to do. A question is resolved by checking it and ending the line with " answer: <the answer>"; a longer answer can go on over lines indented under the item (lists, quotes and other markdown work there). Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
-  Examples: "- [ ] todo: Send the draft to legal @maria due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- reminder: Renew the domain due:2026-12-01", "- reminder: Call the dentist due:2026-11-12 14:00".
-- Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
+  Rules: the type word (todo, question or reminder, lowercase) followed by a colon comes right after the bullet and optional checkbox, at the start of the line. "due:" takes an ISO date with no space after the colon, optionally followed by a 24-hour time after a space or "T" ("due:2026-11-12 14:00" or "due:2026-11-12T14:00"). The time is the owner's local time; with one, the owner's phone gets a notification at that time, without one only the morning list. Add a time only when the owner gave one. A to-do is a task to act on: done means changing "[ ]" to "[x]", and one past its date is overdue. A question can have a due date too (when it needs an answer by), and goes overdue the same way. A reminder is a nudge, not a task: it notifies the owner on its date (or at its time) and then simply passes; it has no checkbox, is never overdue, and isn't checked off. Use a reminder for "remind me to…" or "nudge me on…", a to-do for work someone has to do. A question is resolved by checking it and ending the line with " answer: <the answer>"; a longer answer can go on over lines indented under the item (lists, quotes and other markdown work there). Items in code blocks are ignored. The app shows them as cards with a summary at the top of the page; open_items lists them.
+  Examples: "- [ ] todo: Send the draft to legal due:2026-11-20", "- [x] question: Which vendor? answer: Acme, cheaper at our volume.", "- reminder: Renew the domain due:2026-12-01", "- reminder: Call the dentist due:2026-11-12 14:00".
+- Images are stored in Nitrogen (R2) and shown with markdown like ![alt](/files/img/…). A width in pixels after the alt text resizes one, keeping its shape: ![Floor plan|480](/files/img/…) (the owner sets this by dragging the corner). To add one: add_image with a public URL or base64 bytes, or, for an image the person has (e.g. attached in chat, which tools can't receive), request_image_upload and give them the link. Both place the image at a precise spot: under a heading, at the end of a section, before/after exact text, or in place of a placeholder like "[photo]". Don't hotlink external images.
 - Headings: "#" (largest), "##" and "###" render at three distinct sizes. Don't repeat the page title as a heading at the top of the body; the title is shown separately. Use "##" for sections and "###" for subsections; "#" is for a page split into a few major parts.
 
 When someone asks what you can do with Nitrogen (or seems unsure where to start), call get_started: it returns their wiki's current state and example requests to offer. Suggest two or three that fit what they're doing, phrased for their wiki, rather than listing tools. Examples:
@@ -702,7 +706,7 @@ function buildServer(
     {
       title: 'Archive a page',
       description:
-        'Archive a page AND all pages under it: they leave the tree, search, open items and your view of the wiki, but are kept and can be brought back with restore_page. Links to them still open them for the owner. Use this (not delete_page) to tidy away pages that are finished or obsolete.',
+        'Archive a page AND all pages under it: they leave the tree, search, action items and your view of the wiki, but are kept and can be brought back with restore_page. Links to them still open them for the owner. Use this (not delete_page) to tidy away pages that are finished or obsolete.',
       inputSchema: z.object({ page: z.string().describe('Page id, title or path.') }),
       annotations: {
         readOnlyHint: false,
@@ -761,7 +765,7 @@ function buildServer(
     {
       title: 'List archived pages',
       description:
-        'Pages that were archived (out of the tree, search and open items), most recently archived first, with ids for restore_page.',
+        'Pages that were archived (out of the tree, search and action items), most recently archived first, with ids for restore_page.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -1180,9 +1184,9 @@ function buildServer(
   server.registerTool(
     'open_items',
     {
-      title: 'Open Items',
+      title: 'Action Items',
       description:
-        'To-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- reminder: … due:YYYY-MM-DD [HH:MM]"), from an index kept up to date on every save, soonest first. Reminders whose moment has passed are left out (they were nudges). Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
+        'Action items: the to-dos, questions and reminders written anywhere in the wiki (as "- [ ] todo: …", "- question: …", "- reminder: … due:YYYY-MM-DD [HH:MM]"), from an index kept up to date on every save, soonest first. Reminders whose moment has passed are left out (they were nudges). Use it for "what’s due", "what’s open on <project>", or a start-of-day list.',
       inputSchema: z.object({
         type: z.enum(['todo', 'question', 'reminder']).optional(),
         due_before: z
@@ -1279,7 +1283,7 @@ function buildServer(
 
 1. List the decisions, facts worth keeping, and open questions from our conversation. Leave out chit-chat and anything already superseded.
 2. Search the wiki for the pages they belong on. Prefer adding to existing pages (edit_page) over creating new ones; create a page only when nothing fits, in the right place in the tree.
-3. Link related pages with [[Title]] and tag decisions #decision. Write follow-ups and open questions as typed items on the page they belong to: "- [ ] todo: … @owner due:YYYY-MM-DD", "- [ ] question: …", "- [ ] reminder: … due:YYYY-MM-DD".
+3. Link related pages with [[Title]] and tag decisions #decision. Write follow-ups and open questions as typed items on the page they belong to: "- [ ] todo: … due:YYYY-MM-DD", "- [ ] question: …", "- [ ] reminder: … due:YYYY-MM-DD".
 4. Finish with log_session, then tell me in a few lines what you changed, with links.`),
   );
 

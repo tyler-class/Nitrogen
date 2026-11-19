@@ -1,10 +1,31 @@
 // The page icon: a button that opens a searchable emoji picker (frimousse, emojibase data
 // served from our own origin; see vite.config.ts).
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmojiPicker } from 'frimousse';
+import { DEFAULT_PAGE_ICON } from './Icon';
 
-export function EmojiButton(props: { value: string; onChange: (emoji: string) => void }) {
-  const [open, setOpen] = useState(false);
+export function EmojiButton(props: {
+  value: string;
+  onChange: (emoji: string) => void;
+  /** Open the picker straight away (chosen from a menu). */
+  startOpen?: boolean;
+  /** Called whenever the picker closes. */
+  onClose?: () => void;
+}) {
+  const [open, setOpenState] = useState(props.startOpen ?? false);
+  const onClose = useRef(props.onClose);
+  useEffect(() => {
+    onClose.current = props.onClose;
+  });
+  const setOpen = useCallback(
+    (next: boolean | ((o: boolean) => boolean)) =>
+      setOpenState((o) => {
+        const v = typeof next === 'function' ? next(o) : next;
+        if (o && !v) queueMicrotask(() => onClose.current?.());
+        return v;
+      }),
+    [],
+  );
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
 
@@ -39,13 +60,13 @@ export function EmojiButton(props: { value: string; onChange: (emoji: string) =>
         ref={button}
         type="button"
         className={`emoji-button${props.value ? '' : ' empty'}`}
-        aria-label={props.value ? `Page icon ${props.value}. Change` : 'Add a page icon'}
+        aria-label={`Page icon ${props.value || DEFAULT_PAGE_ICON}. Change`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={props.value ? 'Change icon' : 'Add icon'}
+        title="Change icon"
         onClick={() => setOpen((o) => !o)}
       >
-        {props.value || '☺'}
+        {props.value || DEFAULT_PAGE_ICON}
       </button>
       {open && (
         <div className="emoji-pop" role="dialog" aria-label="Choose a page icon">

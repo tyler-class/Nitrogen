@@ -154,7 +154,7 @@ describe('MCP', () => {
     });
     expect(init.result?.instructions).toContain('[[Page title]]');
     expect(init.result?.instructions).toContain('call get_started');
-    expect(init.result?.instructions).toContain('- [ ] todo: <text> [@owner] [due:YYYY-MM-DD]');
+    expect(init.result?.instructions).toContain('- [ ] todo: <text> [due:YYYY-MM-DD]');
     expect(init.result?.instructions).toContain('answer: <the answer>');
     expect(init.result?.instructions).toContain('```mermaid');
 

@@ -60,7 +60,7 @@ export function ItemRow({
       {reminder ? (
         // A nudge, not a task: nothing to check off.
         <span className="item-bell" aria-hidden>
-          <Icon name="bell" size={15} />
+          <Icon name="bell" size={12} />
         </span>
       ) : (
         <button
@@ -98,8 +98,8 @@ export function ItemRow({
               {plainText(i.text)}
             </Link>
           )}
-          {/* The page it's on, on its own line under the item; the full path is in the
-              tooltip. Only the page's title underlines on hover, not its emoji. */}
+          {/* The page it's on, after the item and a dot, as a page link; the full path is in
+              the tooltip. */}
           {showPage && (
             <Link
               to={pageHref(i.page_id, i.page_title)}
@@ -111,7 +111,7 @@ export function ItemRow({
             </Link>
           )}
         </div>
-        {(dated || i.owner) && (
+        {dated && (
           <div className="item-row-meta">
             {dated && (
               // The date, and a shortcut to the editor (the pencil does the same).
@@ -124,7 +124,6 @@ export function ItemRow({
                 {`${dateWords(i, today).replace(' ·', '')} ${formatDue(i.due!, i.due_time)}`}
               </button>
             )}
-            {i.owner && <span className="muted">@{i.owner}</span>}
           </div>
         )}
         {question && (

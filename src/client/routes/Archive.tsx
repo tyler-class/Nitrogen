@@ -97,7 +97,7 @@ export function Archive() {
         <Icon name="archive" size={26} /> Archive
       </h1>
       <p className="muted archive-sub">
-        Out of the tree, search, open items and assistants’ view. Links to them still work.
+        Out of the tree, search, action items and assistants’ view. Links to them still work.
       </p>
       {tree.isPending ? (
         <p className="muted">Loading…</p>

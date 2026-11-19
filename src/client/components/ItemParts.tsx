@@ -1,12 +1,15 @@
 // The pieces every open item shares, wherever it's shown (in the page, the page's Open Items box,
 // the Open Items view): its edit and delete buttons, the editor behind the pencil, and a
 // question's answer.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ITEM_LABELS, ITEM_TYPES, type ItemEdit, type ItemType } from '@shared/items';
 import { useTitleIndex } from '../lib/titles';
 import { DatePicker, TimePicker } from './DateTimePicker';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
+import { pageHref } from '@shared/markdown';
+
+const MiniEditor = lazy(() => import('./MiniEditor'));
 
 const today = () => {
   const d = new Date();
@@ -110,6 +113,7 @@ export function ItemEditor({
         placeholder="What is it?"
         autoFocus
       />
+      {/* The date and time, with Cancel and Save on the same row at the right. */}
       <div className="item-editor-when">
         {date ? (
           <>
@@ -120,8 +124,8 @@ export function ItemEditor({
             />
             <TimePicker value={time} onChange={setTime} label="Time (optional)" />
             {type !== 'reminder' && (
-              <button type="button" className="btn small" onClick={() => setDue(null)}>
-                No date
+              <button type="button" className="btn small clear-due" onClick={() => setDue(null)}>
+                Clear Due Date
               </button>
             )}
           </>
@@ -130,14 +134,14 @@ export function ItemEditor({
             <Icon name="calendar" size={13} /> Add a date
           </button>
         )}
-      </div>
-      <div className="item-editor-foot">
-        <button className="btn small primary" disabled={busy || !text.trim()}>
-          Save
-        </button>
-        <button type="button" className="btn small" onClick={onCancel}>
-          Cancel
-        </button>
+        <div className="item-editor-foot">
+          <button type="button" className="btn small" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn small primary" disabled={busy || !text.trim()}>
+            Save
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -214,8 +218,6 @@ function TypePicker({ value, onChange }: { value: ItemType; onChange(t: ItemType
   );
 }
 
-const touch = () => window.matchMedia('(pointer: coarse)').matches;
-
 /**
  * Answers keep the line breaks they were typed with: a line followed by more text gets a hard
  * break (markdown would otherwise run them together). Lists, quotes, blank lines and code fences
@@ -250,15 +252,7 @@ export function AnswerBox({
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(answer ?? '');
-  const box = useRef<HTMLTextAreaElement>(null);
   const { index } = useTitleIndex();
-
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value, editing]);
 
   const open = () => {
     if (!onAnswer) return;
@@ -273,32 +267,42 @@ export function AnswerBox({
     setValue(answer ?? '');
     setEditing(false);
   };
+  // A click outside the box saves it (as leaving the field used to: focus moves around while the
+  // field opens inside the page, so it's the click that counts).
+  const editBox = useRef<HTMLDivElement>(null);
+  const commitRef = useRef(commit);
+  useEffect(() => {
+    commitRef.current = commit;
+  });
+  useEffect(() => {
+    if (!editing) return;
+    const away = (e: PointerEvent) => {
+      if (!editBox.current?.contains(e.target as Node)) commitRef.current();
+    };
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [editing]);
 
   if (editing)
     return (
-      <div className="qa qa-editing">
+      <div className="qa qa-editing" ref={editBox}>
         <div className="qa-field">
           <span className="qa-label">Answer</span>
-          <textarea
-            ref={box}
-            className="qa-input"
-            rows={1}
-            value={value}
-            autoFocus
-            aria-label="Answer"
-            placeholder="Type the answer"
-            onChange={(e) => setValue(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                cancel();
-              } else if (e.key === 'Enter' && !e.shiftKey && !touch()) {
-                e.preventDefault();
-                commit();
-              }
-            }}
-          />
+          {/* The page editor's live formatting, in one field (loaded when first needed). */}
+          <Suspense fallback={<div className="qa-input qa-loading">{value}</div>}>
+            <MiniEditor
+              value={value}
+              label="Answer"
+              placeholder="Type the answer"
+              onChange={setValue}
+              onSubmit={commit}
+              onCancel={cancel}
+              resolve={(t) => {
+                const p = index.get(t.toLowerCase());
+                return p ? { href: pageHref(p.id, p.title) } : null;
+              }}
+            />
+          </Suspense>
         </div>
         <div className="qa-foot">
           {/* Pressed without taking the focus, so the box's blur doesn't save first. */}

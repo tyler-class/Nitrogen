@@ -14,7 +14,7 @@ const MAX_W = 460;
 /** The everyday views, as one pill: icons only, the current one with its name. */
 const VIEWS = [
   ['/', 'home', 'Home'],
-  ['/items', 'checks', 'Open Items'],
+  ['/items', 'checks', 'Action Items'],
   ['/activity', 'activity', 'Activity'],
 ] as const;
 
@@ -83,8 +83,13 @@ export function Layout() {
   useEffect(() => {
     const el = bar.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
+    // Rounded down, so what pins under it overlaps it by a fraction instead of leaving a
+    // hairline gap that scrolling text shows through (offsetHeight rounds either way).
     const set = () =>
-      document.documentElement.style.setProperty('--mobile-bar-h', `${el.offsetHeight}px`);
+      document.documentElement.style.setProperty(
+        '--mobile-bar-h',
+        `${Math.floor(el.getBoundingClientRect().height)}px`,
+      );
     const ro = new ResizeObserver(set);
     ro.observe(el);
     set();
@@ -272,26 +277,27 @@ export function Layout() {
         onClick={() => setNav(false)}
         tabIndex={-1}
       />
-      <div className="main" ref={mainRef}>
-        <header className="mobile-bar" ref={bar}>
-          <button onClick={() => setNav(true)} aria-label="Open menu" className="menu-btn">
-            <Icon name="menu" size={24} />
+      {/* Phones: the header is pinned to the top of the screen, outside the scrolling page. */}
+      <header className="mobile-bar" ref={bar}>
+        <button onClick={() => setNav(true)} aria-label="Open menu" className="menu-btn">
+          <Icon name="menu" size={24} />
+        </button>
+        <Link to="/" className="mobile-title">
+          <img src="/favicon.svg" alt="" width={22} height={22} />
+          Nitrogen
+        </Link>
+        <span className="mobile-bar-end">
+          <Bell className="menu-btn" size={24} />
+          <button
+            onClick={() => setPalette(true)}
+            aria-label="Search"
+            className="menu-btn search-btn"
+          >
+            <Icon name="search" size={24} />
           </button>
-          <Link to="/" className="mobile-title">
-            <img src="/favicon.svg" alt="" width={22} height={22} />
-            Nitrogen
-          </Link>
-          <span className="mobile-bar-end">
-            <Bell className="menu-btn" size={24} />
-            <button
-              onClick={() => setPalette(true)}
-              aria-label="Search"
-              className="menu-btn search-btn"
-            >
-              <Icon name="search" size={24} />
-            </button>
-          </span>
-        </header>
+        </span>
+      </header>
+      <div className="main" ref={mainRef}>
         <Outlet />
       </div>
       {palette && tree.data && <Palette pages={pages} onClose={() => setPalette(false)} />}

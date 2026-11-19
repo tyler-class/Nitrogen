@@ -1,5 +1,27 @@
 const PATHS: Record<string, string> = {
   chevron: 'M8 6l4 4-4 4',
+  // Editor blocks (the "/" menu).
+  list: 'M8 5h9M8 10h9M8 15h9M3.5 5h.01M3.5 10h.01M3.5 15h.01',
+  // Two lines numbered 1 and 2.
+  numbered:
+    'M9 6h8M9 14.5h8M3.4 4.4 4.9 3.5v5.2M3 12.4a1.5 1.5 0 0 1 2.9.5c0 1.3-2.9 2.1-2.9 3.6h3',
+  quote: 'M3.5 4v12M8 6h9M8 10h9M8 14h6',
+  code: 'M7 6l-4 4 4 4M13 6l4 4-4 4',
+  divider: 'M3 10h14',
+  undo: 'M7 4 3 8l4 4M3 8h9a4.5 4.5 0 0 1 0 9H9',
+  // A light bulb: a Tip callout.
+  bulb: 'M7.6 14.2h4.8M8.2 16.8h3.6M10 2.8a5 5 0 0 0-3 9c.6.5 1 1.3 1 2.2h4c0-.9.4-1.7 1-2.2a5 5 0 0 0-3-9z',
+  // A box with a tick in it: a task list.
+  checkbox: 'M4.5 4.5h11v11h-11zM7.3 10.1l1.9 1.9 3.6-3.8',
+  // A warning sign: a triangle with "!".
+  warning: 'M10 3.2 18 16.5H2zM10 8.3v3.6M10 14.1h.01',
+  // A sticky note with its corner turned up: a Note callout.
+  note: 'M4 4h12v8l-4 4H4zM12 16v-4h4',
+  question:
+    'M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM7.9 7.9a2.2 2.2 0 0 1 4.3.7c0 1.5-2.2 1.9-2.2 3.2M10 14.3h.01',
+  redo: 'M13 4l4 4-4 4M17 8H8a4.5 4.5 0 0 0 0 9h3',
+  chevronDown: 'M6 8l4 4 4-4',
+  format: 'M4 16 9 4h2l5 12M6.5 11.5h7',
   back: 'M12 6l-4 4 4 4',
   menu: 'M3 5h14M3 10h14M3 15h14',
   search: 'M9 15A6 6 0 1 0 9 3a6 6 0 0 0 0 12zm4.5-1.5L17 17',
@@ -71,6 +93,28 @@ const PATHS: Record<string, string> = {
     'M3.5 7.5h11v4a4 4 0 0 1-4 4h-3a4 4 0 0 1-4-4zM14.5 8.5h1a2 2 0 0 1 0 4h-1M7 3v2M10.5 3v2',
 };
 
+/** The same icon as a DOM element, for code outside React (the editor's widgets and menus). */
+export function iconElement(name: string, size = 16): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  for (const [k, v] of Object.entries({
+    width: String(size),
+    height: String(size),
+    viewBox: '0 0 20 20',
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': '1.6',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'aria-hidden': 'true',
+  }))
+    svg.setAttribute(k, v);
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', PATHS[name] ?? PATHS.page!);
+  svg.appendChild(path);
+  return svg;
+}
+
 export function Icon({ name, size = 16, label }: { name: string; size?: number; label?: string }) {
   return (
     <svg
@@ -91,17 +135,14 @@ export function Icon({ name, size = 16, label }: { name: string; size?: number; 
   );
 }
 
-/** A page's emoji icon, or a page/folder outline when it has none. */
-export function PageGlyph({ icon, folder }: { icon: string | null; folder: boolean }) {
-  if (icon)
-    return (
-      <span className="glyph" aria-hidden>
-        {icon}
-      </span>
-    );
+/** A page's icon until one is chosen. */
+export const DEFAULT_PAGE_ICON = '📄';
+
+/** A page's emoji icon (📄 until one is chosen), wherever pages are listed. */
+export function PageGlyph({ icon }: { icon: string | null; folder?: boolean }) {
   return (
-    <span className="glyph">
-      <Icon name={folder ? 'folder' : 'page'} size={15} />
+    <span className="glyph" aria-hidden>
+      {icon || DEFAULT_PAGE_ICON}
     </span>
   );
 }

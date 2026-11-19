@@ -53,15 +53,18 @@ function Pop({
   icon,
   text,
   muted,
+  startOpen,
   children,
 }: {
   label: string;
   icon: string;
   text: string;
   muted?: boolean;
+  /** Open straight away (a date just added that you'll want to set). */
+  startOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen ?? false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -165,13 +168,16 @@ export function DatePicker({
   value,
   onChange,
   label = 'Date',
+  startOpen,
 }: {
   value: string;
   onChange: (v: string) => void;
   label?: string;
+  /** Show the calendar straight away. */
+  startOpen?: boolean;
 }) {
   return (
-    <Pop label={label} icon="calendar" text={dateLabel(value)}>
+    <Pop label={label} icon="calendar" text={dateLabel(value)} startOpen={startOpen}>
       <Calendar value={value} onPick={onChange} />
     </Pop>
   );

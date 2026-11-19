@@ -41,7 +41,9 @@ export function TagEditor({
     <div className="tag-row editing">
       {tags.map((t) => (
         <span key={t} className="tag-chip">
-          #{t}
+          <Link to={`/tags/${encodeURIComponent(t)}`} className="tag-chip-link">
+            #{t}
+          </Link>
           <button
             type="button"
             aria-label={`Remove tag ${t}`}
@@ -52,9 +54,14 @@ export function TagEditor({
         </span>
       ))}
       {inline.map((t) => (
-        <span key={t} className="tag-chip inline" title="Written as #tag in the page">
+        <Link
+          key={t}
+          to={`/tags/${encodeURIComponent(t)}`}
+          className="tag-chip inline"
+          title="Written as #tag in the page"
+        >
           #{t}
-        </span>
+        </Link>
       ))}
       {/* A dashed "+ Add tag" pill: tap in, type, then Enter (or tap away) makes the tag. */}
       <label className="tag-add">

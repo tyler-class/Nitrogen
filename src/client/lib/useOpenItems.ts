@@ -1,5 +1,6 @@
-// Every open item in the wiki, and what you can do to one from a list of them (check off, answer,
-// edit, delete). Shared by the Open Items page and Home's Open Items card, so both behave the same.
+// Every action item in the wiki (open ones, and the completed ones too when asked), and what you
+// can do to one from a list of them (check off, answer, edit, delete). Shared by the Action Items
+// page and Home's Action Items card, so both behave the same.
 // Each change edits that one line of its page, the same as doing it on the page.
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,10 +12,10 @@ import { useToast } from '../components/Toast';
 
 const idOf = (i: OpenItem) => `${i.page_id}:${i.line}`;
 
-export function useOpenItems() {
+export function useOpenItems({ completed = false }: { completed?: boolean } = {}) {
   const q = useQuery({
-    queryKey: ['items'],
-    queryFn: () => api.get<{ items: OpenItem[] }>('/items'),
+    queryKey: ['items', completed ? 'all' : 'open'],
+    queryFn: () => api.get<{ items: OpenItem[] }>(completed ? '/items?include_done=1' : '/items'),
     refetchInterval: 60_000,
   });
   const qc = useQueryClient();
@@ -72,11 +73,12 @@ export function useOpenItems() {
 
   const fetched = q.data?.items ?? [];
   const open = new Set(fetched.map(idOf));
-  // Past reminders were nudges: nothing left to do, so they're not listed.
+  // Past reminders were nudges: nothing left to do, so they count as completed.
   const now = nowMoment();
-  const live = fetched.filter((i) => !reminderPast(i, now));
+  const live = fetched.filter((i) => !i.done && !reminderPast(i, now));
+  const finished = completed ? fetched.filter((i) => i.done || reminderPast(i, now)) : [];
   // Handled items keep their place: still open ones come from the server, done ones from here.
-  const all = [...live, ...[...handled.values()].filter((i) => !open.has(idOf(i)))];
+  const all = [...live, ...[...handled.values()].filter((i) => !open.has(idOf(i))), ...finished];
 
   /** The props an ItemRow needs for item `i`. */
   const rowProps = (i: OpenItem) => ({
@@ -86,5 +88,8 @@ export function useOpenItems() {
     onDelete: () => void remove(i),
   });
 
-  return { q, live: q.data ? live : undefined, all, idOf, rowProps };
+  /** Forget the items handled here (Hide completed hides those too). */
+  const clearHandled = () => setHandled(new Map());
+
+  return { q, live: q.data ? live : undefined, all, idOf, rowProps, clearHandled };
 }

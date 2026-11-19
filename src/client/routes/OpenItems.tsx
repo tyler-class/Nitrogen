@@ -44,7 +44,10 @@ export function OpenItems() {
     parseGroup(params.get('group')) ??
     parseGroup(readLocal<string>('n2.items.group', 'none')) ??
     'none';
-  const { q, live, all, idOf, rowProps } = useOpenItems();
+  // Completed items (checked, answered, gone by) shown too: in the URL, and remembered here.
+  const completed =
+    params.get('done') === '1' || (!params.has('done') && readLocal('n2.items.done', false));
+  const { q, live, all, idOf, rowProps, clearHandled } = useOpenItems({ completed });
   const today = todayKey();
   const list = all.filter(showFilter(today)[show]);
 
@@ -108,13 +111,13 @@ export function OpenItems() {
   return (
     <div className="page open-items-page">
       <h1 className="page-title view-title">
-        <Icon name="checks" size={26} /> Open Items
+        <Icon name="checks" size={26} /> Action Items
       </h1>
       <div className="open-items-controls">
         <OpenItemsToggle
           value={show}
           onChange={(s) => setParam('show', s === 'all' ? null : s)}
-          items={live}
+          items={completed ? all : live}
           today={today}
         />
         <MenuSelect
@@ -126,6 +129,19 @@ export function OpenItems() {
             setParam('group', g === 'none' ? null : g);
           }}
         />
+        <button
+          type="button"
+          className="menu-select-btn done-toggle"
+          aria-pressed={completed}
+          onClick={() => {
+            // Hiding takes everything finished out, including what was just checked off here.
+            if (completed) clearHandled();
+            writeLocal('n2.items.done', !completed);
+            setParam('done', completed ? null : '1');
+          }}
+        >
+          {completed ? 'Hide completed' : 'Show completed'}
+        </button>
       </div>
       {q.isPending ? (
         <p className="muted">Loading…</p>

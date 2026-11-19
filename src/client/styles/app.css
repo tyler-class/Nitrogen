@@ -3762,7 +3762,7 @@ body.resizing {
 @media (pointer: coarse) {
   input:not([type='checkbox'], [type='radio'], .title-input),
   select,
-  textarea,
+  textarea:not(.title-field),
   .editor .cm-content {
     font-size: 16px !important;
   }
@@ -5081,7 +5081,7 @@ body.resizing {
 .item-row-editing > .item-editor,
 .item-editing > .item-editor {
   margin: 4px 0;
-  max-width: 640px;
+  max-width: none;
   align-items: stretch;
 }
 textarea.item-editor-text {
@@ -5740,4 +5740,1355 @@ textarea.item-editor-text {
       transition: none;
     }
   }
+}
+
+/* --- 1.0.7: the page editor. Pages are always ready to write in, drawn formatted as you type
+   (components/livePreview.ts); the markdown underneath never shows, except a Mermaid diagram's
+   when you click into it. Lines never get margins (CodeMirror measures them): spacing is
+   padding on the line. */
+
+/* No editing box: the page reads the same with or without the cursor in it. */
+.editor.live {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
+  box-shadow: none;
+}
+.editor.live:focus-within {
+  border: 0;
+  box-shadow: none;
+}
+.editor.live .cm-content {
+  min-height: 3em;
+}
+
+/* The title, written in place: a heading that wraps, with no box. */
+.live-title {
+  align-items: flex-start;
+}
+.title-field {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  resize: none;
+  overflow: hidden;
+}
+.title-field:focus,
+.title-field:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.title-field::placeholder {
+  color: var(--faint);
+}
+.live-title .emoji-button {
+  width: auto;
+  height: auto;
+  min-width: 44px;
+  padding: 0 4px;
+  font-size: 34px;
+  line-height: 1.15;
+  margin-left: -4px;
+}
+@media (max-width: 860px) {
+  .live-title .emoji-button {
+    font-size: 28px;
+    min-width: 36px;
+  }
+}
+.tag-chip-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Headings: the read view's three sizes, with room above. */
+.cm-line.cm-h {
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.cm-line.cm-h1 {
+  font-size: 1.75em;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  padding-top: 0.55em !important;
+  padding-bottom: 0.1em !important;
+}
+.cm-line.cm-h2 {
+  font-size: 1.38em;
+  padding-top: 0.6em !important;
+  padding-bottom: 0.1em !important;
+}
+.cm-line.cm-h3 {
+  font-size: 1.14em;
+  font-weight: 650;
+  padding-top: 0.5em !important;
+}
+.cm-line.cm-h4,
+.cm-line.cm-h5,
+.cm-line.cm-h6 {
+  font-weight: 650;
+  color: var(--muted);
+  padding-top: 0.4em !important;
+}
+
+/* A blank line is a whole line, so the cursor and its hint have room from the blocks around it. */
+.cm-line.cm-blank {
+  line-height: 1.55;
+}
+.cm-line.cm-blank-here {
+  position: relative;
+}
+.cm-line.cm-blank-here::before {
+  content: attr(data-hint);
+  position: absolute;
+  inset: 0 auto auto 0;
+  line-height: inherit;
+  color: var(--faint);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+.cm-hint {
+  color: var(--faint);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Lists: every level indents the same step, with its marker hanging in the margin
+   (• ◦ ▪ and 1. a. i. by level; checkboxes and items take the marker's place). */
+.cm-line.cm-li {
+  --step: 1.6em;
+  padding-left: calc(var(--lvl, 1) * var(--step)) !important;
+}
+.cm-prefix {
+  display: inline;
+}
+.cm-lm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: var(--step);
+  margin-left: calc(-1 * var(--step));
+  color: var(--muted);
+  vertical-align: top;
+  height: 1.55em;
+  user-select: none;
+}
+.cm-lm.cm-num {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+}
+.cm-line.cm-done:not(.cm-item) {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.cm-check {
+  margin: 0 !important;
+  cursor: pointer;
+}
+.cm-check.item-plain {
+  --item-fg: var(--muted);
+}
+.cm-bell {
+  width: 16px;
+  height: 16px;
+  margin: 0 !important;
+}
+
+/* Typed items: the small-caps type, the text, and a date chip. */
+.cm-item .item-label {
+  margin-right: 6px;
+}
+.cm-item.cm-done {
+  color: var(--muted);
+}
+.cm-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--sidebar);
+  border: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  vertical-align: 0.1em;
+  cursor: pointer;
+  user-select: none;
+}
+.cm-due.overdue {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: var(--danger-soft);
+}
+.cm-answer {
+  color: var(--info);
+  font-weight: 650;
+}
+.due-pop {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+/* Quotes and callouts: one box drawn line by line. */
+.cm-line.cm-quote {
+  border-left: 3px solid var(--hairline);
+  padding-left: 14px !important;
+  color: var(--muted);
+}
+.cm-line.cm-callout {
+  --c: var(--info);
+  --cs: var(--info-soft);
+  background: var(--cs);
+  border-left: 3px solid var(--c);
+  padding: 0 14px !important;
+}
+.cm-line.cm-callout.cm-q-first {
+  padding-top: 8px !important;
+  border-top-right-radius: var(--radius);
+}
+.cm-line.cm-callout.cm-q-last {
+  padding-bottom: 8px !important;
+  border-bottom-right-radius: var(--radius);
+}
+.cm-line.cm-callout-tip,
+.cm-line.cm-callout-important,
+.cm-menu .cm-callout-tip,
+.cm-menu .cm-callout-important {
+  --c: var(--ok);
+  --cs: var(--ok-soft);
+}
+.cm-line.cm-callout-warning,
+.cm-menu .cm-callout-warning {
+  --c: var(--warn);
+  --cs: var(--warn-soft);
+}
+.cm-line.cm-callout-caution,
+.cm-menu .cm-callout-caution {
+  --c: var(--danger);
+  --cs: var(--danger-soft);
+}
+.cm-line.cm-callout-question,
+.cm-menu .cm-callout-question {
+  --c: var(--claude);
+  --cs: var(--claude-soft);
+}
+.cm-callout-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  color: var(--c);
+  vertical-align: top;
+  height: 1.55em;
+  cursor: pointer;
+  user-select: none;
+}
+.cm-callout-title {
+  font-weight: 650;
+  color: var(--c);
+}
+.cm-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.cm-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.cm-menu button svg {
+  color: var(--c, var(--muted));
+}
+.cm-menu button.on,
+.cm-menu button:hover {
+  background: var(--accent-soft);
+}
+
+/* Code: a soft box with its language on top (type over it to change it). */
+.cm-icode {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.cm-code-head {
+  background: var(--code-bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 6px 16px 0;
+}
+.cm-code-lang {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--faint);
+  font: 600 11.5px/1.4 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cm-code-lang:focus {
+  outline: none;
+  box-shadow: none;
+  color: var(--ink);
+}
+.cm-code-lang::placeholder {
+  color: var(--faint);
+}
+.cm-line.cm-codeblock {
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  line-height: 1.55;
+  padding: 0 16px !important;
+}
+.cm-line.cm-codeblock-first {
+  padding-top: 10px !important;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.cm-line.cm-codeblock-last {
+  padding-bottom: 10px !important;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+.cm-line.cm-codeblock-first.cm-codeblock-last {
+  border-radius: var(--radius);
+}
+
+/* Links, page links and #tags: a click puts the cursor in (and shows the link's card);
+   ⌘/Ctrl-click opens it. */
+.cm-link {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 2px;
+}
+.cm-wikilink {
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.cm-wikilink.missing {
+  color: var(--danger);
+  border-bottom: 1px dashed color-mix(in srgb, var(--danger) 50%, transparent);
+}
+.cm-wikilink.archived {
+  color: var(--muted);
+}
+.cm-wiki-sep {
+  border-bottom: 0;
+}
+.cm-tag {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  padding: 0 5px;
+  border-radius: 4px;
+}
+
+/* Rules, images and diagrams. */
+.cm-hr {
+  height: 1px;
+  margin: 0.9em 0;
+  background: var(--hairline);
+}
+.cm-img {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 0.3em 0;
+  vertical-align: top;
+  line-height: 0;
+}
+.cm-img img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+.cm-img.uploading {
+  padding: 18px;
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius);
+  color: var(--faint);
+  font-size: 14px;
+  line-height: 1.4;
+}
+/* The corner handle: drag to resize (the picture keeps its shape). */
+.cm-img-handle {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 2px solid var(--paper);
+  background: var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.cm-img:hover .cm-img-handle,
+.cm-img.resizing .cm-img-handle {
+  opacity: 1;
+}
+.cm-img.resizing img {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .cm-img-handle {
+    opacity: 1;
+    width: 20px;
+    height: 20px;
+  }
+}
+.cm-block {
+  margin: 0.4em 0;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.cm-block > :first-child {
+  margin-top: 0;
+}
+.cm-block > :last-child {
+  margin-bottom: 0;
+}
+.cm-mermaid-src {
+  color: var(--ink);
+}
+
+/* Tables: a grid you type into. */
+.cm-table {
+  margin: 0.4em 0;
+}
+.cm-table .table-wrap {
+  overflow-x: auto;
+}
+.cm-table table {
+  border-collapse: collapse;
+  font-size: 0.94em;
+  min-width: 50%;
+}
+.cm-table th,
+.cm-table td {
+  border: 1px solid var(--hairline);
+  padding: 0;
+  vertical-align: top;
+  min-width: 90px;
+}
+.cm-table th {
+  background: var(--sidebar);
+}
+.cm-cell {
+  display: block;
+  width: 100%;
+  min-width: 90px;
+  border: 0;
+  padding: 6px 10px;
+  margin: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+th .cm-cell {
+  font-weight: 600;
+}
+.cm-cell:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.cm-table-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  visibility: hidden;
+}
+.cm-table.active .cm-table-tools {
+  visibility: visible;
+}
+.cm-table-tools button {
+  padding: 3px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cm-table-tools button:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--hairline));
+}
+
+/* The format bar over a selection, and a link's card. */
+.cm-tooltip.cm-tooltip-below,
+.cm-tooltip.cm-tooltip-above {
+  border-radius: 10px;
+}
+.cm-format-bar,
+.cm-link-card {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  font-family: var(--font-ui);
+}
+.cm-format-bar button,
+.cm-link-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cm-format-bar button code {
+  font-size: 12px;
+  background: none;
+  padding: 0;
+}
+.cm-format-bar button:hover,
+.cm-link-card button:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.cm-format-bar button.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.cm-link-where {
+  max-width: 240px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+.cm-link-input {
+  width: min(320px, 70vw);
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+}
+.cm-link-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* --- 1.0.7: the sidebar sits behind the page. On wide screens the page casts a light shadow
+   onto it along the dividing line. On phones the page itself slides aside to show the sidebar
+   under it (square-edged, full height), which drifts in a little slower for a touch of depth. */
+.sidebar {
+  box-shadow: inset -10px 0 12px -10px rgb(0 0 0 / 0.1);
+}
+@media (max-width: 860px) {
+  .shell {
+    --drawer-w: min(88vw, 440px);
+  }
+  .sidebar {
+    z-index: 1;
+    border-radius: 0;
+    border-right: 0;
+    box-shadow: none;
+    transform: translateX(-28%);
+    transition:
+      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s linear 0.32s;
+  }
+  .nav-open .sidebar {
+    transform: none;
+    box-shadow: none;
+    transition:
+      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s;
+  }
+  .main {
+    position: relative;
+    z-index: 2;
+    min-height: 100dvh;
+    background: var(--paper);
+    transition:
+      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.32s ease;
+  }
+  .nav-open .main {
+    transform: translateX(var(--drawer-w));
+    box-shadow: -10px 0 28px rgb(0 0 0 / 0.18);
+  }
+  /* The page, slid aside: a tap on it closes the menu. Lightly dimmed, moving with it. */
+  .nav-scrim {
+    z-index: 3;
+    background: rgb(0 0 0 / 0.08);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    transform: none;
+    transition:
+      opacity 0.32s ease,
+      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .nav-open .nav-scrim {
+    transform: translateX(var(--drawer-w));
+    background: rgb(0 0 0 / 0.08);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .nav-open .sidebar,
+    .main,
+    .nav-scrim {
+      transition: none;
+    }
+  }
+}
+
+/* The page's picture rule (.prose img: a block with room around it) mustn't reach inside the
+   editor: CodeMirror keeps tiny invisible images beside every hidden mark and drawn piece, and
+   as blocks they pushed the text down a line. Pictures in the editor are styled by .cm-img. */
+.prose .cm-editor img.cm-widgetBuffer {
+  display: inline !important;
+  margin: 0 !important;
+  width: 0 !important;
+  height: 1em !important;
+  max-width: none !important;
+  vertical-align: text-top;
+  border-radius: 0;
+  cursor: text;
+}
+.prose .cm-img img {
+  margin: 0;
+  cursor: default;
+}
+
+/* Open Items on a page: the editor keeps your line in place when it changes size (PageView), so
+   the browser's own scroll anchoring stays out of it (it would move the page twice). */
+.item-summary-box {
+  overflow-anchor: none;
+}
+.page:has(.item-summary-box) .prose {
+  overflow-anchor: none;
+}
+
+/* An item being edited: Cancel then Save, on the date row, at its right end. */
+.item-editor-when .item-editor-foot {
+  margin-left: auto;
+  flex-wrap: nowrap;
+}
+
+/* --- Phones: the format bar, a pill floating just above the keyboard while you write. Its
+   buttons scroll sideways inside it; the round button at the end folds it away and back. */
+.phone-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 48px;
+  padding: 0 4px 0 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 0.16),
+    0 1px 4px rgb(0 0 0 / 0.08);
+  transition: bottom 0.12s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.phone-bar.folded {
+  left: auto;
+  width: 48px;
+  padding: 0;
+  justify-content: center;
+}
+.phone-bar-scroll {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* Fade at the edges, so it reads as scrolling. */
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 14px),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 14px),
+    transparent
+  );
+  padding: 0 6px;
+}
+.phone-bar-scroll::-webkit-scrollbar {
+  display: none;
+}
+.phone-bar button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink);
+  padding: 0;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.phone-bar button.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.phone-bar button:active {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.phone-bar-fold {
+  border-left: 1px solid var(--hairline) !important;
+  border-radius: 0 999px 999px 0 !important;
+  width: 42px !important;
+  color: var(--muted) !important;
+}
+.phone-bar.folded .phone-bar-fold {
+  border-left: 0 !important;
+  border-radius: 50% !important;
+  width: 46px !important;
+  height: 46px !important;
+}
+.pb-text {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1;
+}
+.pb-italic {
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+.pb-strike {
+  text-decoration: line-through;
+}
+.pb-code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.pb-h {
+  font-size: 13.5px;
+  font-weight: 750;
+}
+/* Room under the last lines for the format bar, only while you write (when it shows). */
+@media (pointer: coarse) {
+  .editor.live.writing .cm-content {
+    padding-bottom: 76px;
+  }
+}
+
+@media (max-width: 860px) {
+  .title-field.page-title {
+    font-size: 28px;
+  }
+}
+
+/* A page's Open Items: sort and group choices along the top; with Group by Type, a small
+   heading over each kind. */
+/* In the header row, on the right: small, in ordinary type (the heading is small caps). */
+.item-summary-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+  padding-right: 8px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.item-summary-tools .menu-select-btn {
+  height: 26px;
+  gap: 4px;
+  padding: 0 7px 0 10px;
+  font-size: 12.5px;
+}
+.item-summary-tools .menu-select-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.item-summary-tools .menu-select-list {
+  right: 0;
+  left: auto;
+}
+.item-summary-head {
+  flex: 1;
+  min-width: 0;
+}
+.item-summary-group {
+  padding: 10px 18px 0;
+}
+.item-summary-group:last-child {
+  padding-bottom: 14px;
+}
+.item-summary-group + .item-summary-group {
+  margin-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--hairline) 70%, transparent);
+}
+.item-summary-group > .items-full {
+  margin: 0;
+  padding: 0;
+}
+.item-summary-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.item-summary-sub .count {
+  font-weight: 600;
+  color: var(--faint);
+}
+
+/* Taking an item's date off: a quiet grey button beside the pickers. */
+.btn.clear-due {
+  color: var(--muted);
+  background: var(--sidebar);
+  border-color: var(--hairline);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn.clear-due:hover {
+    color: var(--ink);
+  }
+}
+
+/* Phones: the date pop-up spans the width (with a margin), so it never runs off the edge. */
+@media (max-width: 860px) {
+  .due-pop {
+    left: 8px !important;
+    right: 8px;
+  }
+}
+
+/* Phones: nothing shows through around the pinned header while the page scrolls. Its background
+   reaches up past the top of the screen (over anything a bounce or a fraction of a pixel could
+   reveal there). */
+@media (max-width: 860px) {
+  .mobile-bar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% - 1px);
+    height: 120px;
+    background: var(--paper);
+    pointer-events: none;
+  }
+}
+
+/* Phones: the header is fixed to the top of the screen (outside the scrolling page, so it holds
+   perfectly still while you scroll), with the page starting under it. It slides aside with the
+   page when the menu opens; the page's tap-to-close layer stays on top of both. */
+@media (max-width: 860px) {
+  .mobile-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .nav-open .mobile-bar {
+    transform: translateX(var(--drawer-w));
+  }
+  .main {
+    padding-top: var(--mobile-bar-h, 50px);
+  }
+  .nav-scrim {
+    z-index: 4;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-bar {
+      transition: none;
+    }
+  }
+}
+
+/* The phone bar: thin grey dividers between its groups, and buttons that can't be used where the
+   cursor is (blocks inside a callout, anything inside code) greyed out. */
+.pb-sep {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 5px;
+  background: var(--hairline);
+}
+.phone-bar button:disabled {
+  color: var(--faint);
+  opacity: 0.45;
+}
+
+/* --- Highlighted text (==like this==): one yellow, no other colours. */
+.cm-highlight,
+.prose mark {
+  background: color-mix(in srgb, #ffd43b 55%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* The format bar over a selection: a pill like the phone's, with round buttons and the formats
+   in use shaded in a light blue circle. */
+.cm-tooltip:has(> .cm-format-bar) {
+  border-radius: 999px;
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 0.14),
+    0 1px 4px rgb(0 0 0 / 0.08);
+}
+.cm-format-bar {
+  gap: 2px;
+  padding: 4px 6px;
+}
+.cm-format-bar button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 650;
+}
+.cm-format-bar button.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+/* Highlight's button: an "A" on yellow. */
+.fb-mark,
+.pb-highlight {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, #ffd43b 60%, transparent);
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+/* The resize handle: a plain blue square right on the picture's corner. */
+.cm-img-handle {
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
+}
+@media (pointer: coarse) {
+  .cm-img-handle {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* A picture on its own line: a block of its own (the cursor goes above or below it). */
+.cm-img-line {
+  padding: 0.3em 0;
+  line-height: 0;
+}
+.cm-img-line .cm-img {
+  margin: 0;
+}
+
+/* A reminder's mark: a filled circle in the reminder colour with a small white bell, the same
+   size and place as a to-do's or question's checkbox. */
+.item-bell {
+  border-radius: 50%;
+  background: var(--item-fg);
+  color: var(--paper);
+}
+.item-bell svg {
+  stroke-width: 2;
+}
+
+/* Callout colours: Note blue, Tip yellow, Warning red (in the page, the editor and the
+   kind menu alike). */
+.callout-note,
+.cm-line.cm-callout-note,
+.cm-menu .cm-callout-note {
+  --c: var(--accent-ink);
+  --cs: var(--accent-soft);
+}
+.callout-tip,
+.cm-line.cm-callout-tip,
+.cm-menu .cm-callout-tip {
+  --c: var(--warn);
+  --cs: var(--warn-soft);
+}
+.callout-warning,
+.cm-line.cm-callout-warning,
+.cm-menu .cm-callout-warning {
+  --c: var(--danger);
+  --cs: var(--danger-soft);
+}
+/* The callout's icon a little larger, lined up with its title. */
+.cm-callout-label {
+  gap: 7px;
+}
+.cm-callout-label svg {
+  flex: none;
+}
+
+/* Hints in the text ("Type / for blocks", an empty to-do's "To do", an empty page's
+   placeholder): a lighter grey than secondary text. */
+.cm-line.cm-blank-here::before,
+.cm-hint,
+.editor.live .cm-placeholder {
+  color: color-mix(in srgb, var(--faint) 55%, transparent);
+}
+
+/* List bullets: a filled dot, then a ring, then a small square, by level. */
+.cm-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.cm-dot-1 {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.cm-dot-2 {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 1px;
+}
+.cm-dot {
+  flex: none;
+}
+
+/* The phone bar's fold button: a grey circle with a right-pointing chevron, so it reads as
+   "close the bar", apart from the formats. Folded, it's the round "A" button on its own. */
+.phone-bar-fold {
+  border-left: 0 !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  margin: 0 2px 0 4px;
+  background: color-mix(in srgb, var(--ink) 9%, var(--paper)) !important;
+  color: var(--ink) !important;
+}
+.phone-bar.folded .phone-bar-fold {
+  width: 46px !important;
+  height: 46px !important;
+  margin: 0;
+  background: none !important;
+}
+
+/* "Show completed" / "Hide completed": the same pill as the dropdowns beside it, without the
+   chevron. */
+.done-toggle {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--muted);
+}
+.done-toggle[aria-pressed='true'] {
+  color: var(--ink);
+}
+
+/* Items in the page: the type as the same coloured pill as in Action Items. */
+.cm-item .item-label {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--item-bg);
+  color: var(--item-fg);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 19px;
+  vertical-align: 0.12em;
+}
+
+/* The space before a date chip is part of the chip (so it can't be deleted by accident): drawn
+   as the chip's own gap. */
+.cm-due.spaced {
+  margin-left: 0.3em;
+}
+
+/* Sidebar hidden (wide screens): the round "show sidebar" button lines up with the page heading's
+   middle, and the page keeps clear room to its right. */
+@media (min-width: 861px) {
+  .side-open {
+    top: 17px;
+    left: 14px;
+  }
+  .shell.collapsed .main {
+    padding-left: 20px;
+  }
+}
+
+/* A page's icon by its title is the same with or without a chosen emoji (📄 by default): no
+   dashed "empty" outline. */
+.live-title .emoji-button.empty {
+  border-color: transparent;
+  color: inherit;
+  font-size: 34px;
+}
+@media (max-width: 860px) {
+  .live-title .emoji-button.empty {
+    font-size: 28px;
+  }
+}
+
+/* Action Items boxes: the header scrolls away with its box (it no longer pins while scrolling). */
+.item-summary .item-summary-title {
+  position: static;
+}
+
+/* A group's header row toggles it anywhere you click (not just on its words or the chevron). */
+.items-group-head {
+  flex: 1;
+  min-width: 0;
+}
+
+/* "Answer" after an open question in the page: the same small pill as in Action Items. */
+.cm-answer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 24px;
+  vertical-align: 0.08em;
+  cursor: pointer;
+  user-select: none;
+}
+.cm-answer-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--hairline));
+}
+/* A question's answer in the page: a small "ANSWER" label before it, as in Action Items. */
+.cm-answer-label {
+  margin: 0 2px 0 4px;
+  color: var(--info);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* An item's page in lists: after the item's text and a dot, in blue like a page link. */
+.item-row-page {
+  flex-basis: auto;
+  display: inline;
+  font-size: inherit;
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+.item-row-page::before {
+  content: '·';
+  margin: 0 7px 0 1px;
+  color: var(--faint);
+}
+.item-row-page .item-row-page-title {
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.item-row-page-icon {
+  margin-right: 3px;
+}
+.item-row-page:hover {
+  color: var(--accent-ink);
+}
+.item-row-page:hover .item-row-page-title {
+  text-decoration: none;
+  border-bottom-color: var(--accent-ink);
+}
+
+/* A question's answer under it in the page: a little room before the next line. */
+.cm-answer-block {
+  padding-bottom: 6px;
+}
+.cm-answer-block .qa {
+  margin-top: 2px;
+}
+
+/* The end of the page: "Pages inside" and the rest sit a short way under the text. */
+.page-foot {
+  margin-top: 28px;
+}
+
+/* Phones: a page's Action Items header keeps its title on one line, with the Show completed,
+   Sort and Group pills on a row of their own under it. */
+@media (max-width: 860px) {
+  .item-summary .item-summary-title {
+    flex-wrap: wrap;
+  }
+  .item-summary-head {
+    white-space: nowrap;
+  }
+  .item-summary-tools {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+    padding: 0 14px 10px 18px;
+    margin-top: -4px;
+  }
+}
+
+/* Phones: an item's text runs on straight after its type pill, wrapping under it like a
+   sentence, instead of dropping to a line of its own. */
+@media (max-width: 860px) {
+  .item-row-line {
+    display: block;
+  }
+  .item-row-line > .item-chip {
+    display: inline-block;
+    margin-right: 8px;
+    vertical-align: 0.1em;
+  }
+  .item-row-line > .item-row-page {
+    white-space: nowrap;
+  }
+}
+
+/* Phones: the page doesn't make a layer of its own (it sits over the sidebar by coming after it),
+   so what opens from the page (History, sheets, pop-ups) stays above the pinned header. */
+@media (max-width: 860px) {
+  .sidebar {
+    z-index: 0;
+  }
+  .main {
+    z-index: auto;
+  }
+}
+
+/* Phones: the page's top row (breadcrumbs, History, ⋯) sits above the page's content, so its
+   menu is solid over everything under it (the row's blur had trapped the menu beneath them). */
+@media (max-width: 860px) {
+  .page-top {
+    position: relative;
+    z-index: 20;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Things drawn into the editor (answers, diagrams) lay out like ordinary page content: the
+   editor keeps every line break in its text, which turned the gaps in their markup into blank
+   lines. */
+.cm-answer-block,
+.cm-block,
+.cm-answer-block .qa-md {
+  white-space: normal;
+}
+
+/* Action Items: the same room under the page heading as the other pages (20px). */
+.open-items-controls {
+  margin-top: 20px;
+}
+
+/* A line's hidden start (bullet, "#", ">"): in the text, but at no size. */
+.cm-conceal {
+  font-size: 0;
+  letter-spacing: 0;
+}
+
+/* The answer field: no focus outline of its own (the underline turns green instead), and no
+   room under its last line. */
+.mini-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.mini-editor .cm-content {
+  padding: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mini-editor .cm-content:focus-visible {
+  box-shadow: none;
+}
+.mini-editor .cm-scroller {
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  overflow: visible;
+}
+.mini-editor .cm-placeholder {
+  color: color-mix(in srgb, var(--faint) 55%, transparent);
+}
+/* The answer field sits inside the page editor: the page editor's own sizing stays out of it. */
+.mini-editor .cm-content {
+  min-height: 0 !important;
+  padding: 0 !important;
 }

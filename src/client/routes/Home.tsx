@@ -28,8 +28,8 @@ export function Home() {
       <img src="/favicon.svg" alt="" width={56} height={56} />
       <h1>Your wiki is empty</h1>
       <p>
-        Pages live in a tree: every page can hold subpages. Write in markdown, link pages with
-        [[Page title]], and paste images straight into the editor.
+        Pages live in a tree: every page can hold subpages. Type / for headings, lists and more, @
+        and a page’s name to link it, and paste images straight in.
       </p>
       <button className="btn primary" onClick={start} disabled={create.isPending}>
         Create your first page

@@ -451,7 +451,7 @@ function explore(
         .filter((p) => p.backlinks > 0)
         .sort((a, b) => b.backlinks - a.backlinks)
         .map((p) => row(p, p.backlinks, plural(p.backlinks, 'link')));
-      empty = 'No links yet. Link pages with [[Page title]].';
+      empty = 'No links yet. Type @ in a page to link another.';
       break;
     case 'biggest':
       list = [...d.pages]

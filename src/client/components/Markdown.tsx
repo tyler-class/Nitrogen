@@ -48,7 +48,15 @@ import { pageHref, slugify, splitTags, WIKILINK_RE } from '@shared/markdown';
 import { Icon } from './Icon';
 import { AnswerBox, ItemActions, ItemEditor } from './ItemParts';
 
-const CALLOUTS = ['note', 'tip', 'important', 'warning', 'caution', 'info', 'question'];
+/** The three kinds of callout; others show as the nearest of them. */
+const CALLOUTS = ['note', 'tip', 'warning'];
+const CALLOUT_ALIAS: Record<string, string> = {
+  important: 'tip',
+  caution: 'warning',
+  danger: 'warning',
+  question: 'note',
+  info: 'note',
+};
 
 /** Title (lowercased) → page, for resolving [[wikilinks]]. Archived pages still resolve. */
 export type TitleIndex = Map<string, { id: string; title: string; archived?: boolean }>;
@@ -216,7 +224,8 @@ function transform(tree: Root, titles: TitleIndex, source: string, items = true)
     if (lead?.type !== 'text') return;
     const m = /^\[!([A-Za-z]+)\][+-]?[ \t]*([^\n]*)\n?/.exec(lead.value);
     if (!m) return;
-    const type = CALLOUTS.includes(m[1]!.toLowerCase()) ? m[1]!.toLowerCase() : 'note';
+    const kind = m[1]!.toLowerCase();
+    const type = CALLOUTS.includes(kind) ? kind : (CALLOUT_ALIAS[kind] ?? 'note');
     lead.value = lead.value.slice(m[0].length);
     if (!lead.value) first.children.shift();
     // GFM alerts have no title; a bold-only first line is read as one.
@@ -237,6 +246,38 @@ function transform(tree: Root, titles: TitleIndex, source: string, items = true)
     };
     node.children.unshift(titleNode);
     node.data = { hName: 'aside', hProperties: { className: ['callout', `callout-${type}`] } };
+  });
+
+  // ==Highlighted== text, as the editor shows it.
+  visit(tree, 'text', (node: Text, index, parent) => {
+    if (!parent || index === undefined || !node.value.includes('==')) return;
+    const parts: PhrasingContent[] = [];
+    let last = 0;
+    for (const m of node.value.matchAll(/==(?=[^\s=])(.*?[^\s=])==/g)) {
+      if (m.index > last) parts.push({ type: 'text', value: node.value.slice(last, m.index) });
+      parts.push({
+        type: 'emphasis',
+        children: [{ type: 'text', value: m[1]! }],
+        data: { hName: 'mark' },
+      });
+      last = m.index + m[0].length;
+    }
+    if (!parts.length) return;
+    if (last < node.value.length) parts.push({ type: 'text', value: node.value.slice(last) });
+    parent.children.splice(index, 1, ...(parts as never[]));
+    return [SKIP, index + parts.length];
+  });
+
+  // A single line break is a line break, as it is in the editor.
+  visit(tree, 'text', (node: Text, index, parent) => {
+    if (!parent || index === undefined || !node.value.includes('\n')) return;
+    const parts: PhrasingContent[] = [];
+    node.value.split('\n').forEach((piece, k) => {
+      if (k) parts.push({ type: 'break' });
+      if (piece) parts.push({ type: 'text', value: piece });
+    });
+    parent.children.splice(index, 1, ...(parts as never[]));
+    return [SKIP, index + parts.length];
   });
 
   // Heading anchors (the sanitizer prefixes them with "h-").
@@ -286,7 +327,7 @@ const ITEM_DATA = [
 const schema: Schema = {
   ...defaultSchema,
   clobberPrefix: 'h-',
-  tagNames: [...(defaultSchema.tagNames ?? []), 'aside'],
+  tagNames: [...(defaultSchema.tagNames ?? []), 'aside', 'mark'],
   attributes: {
     ...defaultSchema.attributes,
     // The default allows only one class on links; the first className rule wins, so replace it.
@@ -326,13 +367,17 @@ function Anchor({ href, children, ...rest }: ComponentProps<'a'>) {
   );
 }
 
-function Img({ src, alt, title }: ComponentProps<'img'>) {
+function Img({ src, alt: rawAlt, title }: ComponentProps<'img'>) {
   const [zoom, setZoom] = useState(false);
+  // "![alt|320](…)": an image resized in the editor (width in pixels; the height follows).
+  const sized = /^(.*)\|(\d{2,5})$/.exec(rawAlt ?? '');
+  const alt = sized ? sized[1] : rawAlt;
   return (
     <>
       <img
         src={src}
         alt={alt ?? ''}
+        style={sized ? { width: `${sized[2]}px` } : undefined}
         title={title}
         loading="lazy"
         decoding="async"
@@ -377,7 +422,7 @@ type ItemProps = { className?: string; children?: ReactNode } & Record<
   string | undefined
 >;
 
-/** A typed item as a card: check it off (when the page allows), label, text, owner, due date. */
+/** A typed item as a card: check it off (when the page allows), label, text, due date. */
 type Handlers = {
   onToggle?: (line: number, done: boolean) => void;
   onAnswer?: (line: number, answer: string) => void;
@@ -450,7 +495,7 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
     >
       {reminder ? (
         <span className="item-bell" aria-hidden>
-          <Icon name="bell" size={14} />
+          <Icon name="bell" size={11} />
         </span>
       ) : (
         <button
@@ -466,9 +511,8 @@ function ItemOrPlain({ Tag, ...props }: ItemProps & { Tag: 'li' | 'div' }) {
       <div className="item-main">
         <span className="item-label">{type}</span>
         <div className="item-text">{children}</div>
-        {(props['data-owner'] || dated || props['data-invalid']) && (
+        {(dated || props['data-invalid']) && (
           <span className="item-meta">
-            {props['data-owner'] && <span>@{props['data-owner']}</span>}
             {dated &&
               (onEdit && !done ? (
                 <button

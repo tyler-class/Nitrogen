@@ -54,7 +54,7 @@ export function OpenItemsToggle({
 }
 
 const EMPTY: Record<Show, [string, string]> = {
-  all: ['All clear', 'No open to-dos, questions or reminders.'],
+  all: ['All clear', 'No action items left to do.'],
   today: ['Nothing today', 'No to-dos due or reminders scheduled today.'],
   overdue: ['Nothing overdue', 'Every to-do with a date is on time.'],
   questions: ['No open questions', 'Every question has been answered or resolved.'],

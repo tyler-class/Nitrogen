@@ -78,7 +78,7 @@ export function Dashboard() {
     queryFn: () => api.get<DashboardData>('/dashboard'),
     refetchInterval: 60_000,
   });
-  // The same rows and actions as the Open Items page: check off, answer, edit, delete.
+  // The same rows and actions as the Action Items page: check off, answer, edit, delete.
   const items = useOpenItems();
   const sessions = useQuery({
     queryKey: ['sessions'],
@@ -150,7 +150,9 @@ export function Dashboard() {
   const live = items.live;
   const open = items.all.filter(showFilter(today)[show]);
   // To-dos and questions due today or overdue (reminders are nudges, not due).
-  const dueNow = open.filter((i) => i.type !== 'reminder' && i.due && i.due <= today).length;
+  const dueNow = open.filter(
+    (i) => !i.done && i.type !== 'reminder' && i.due && i.due <= today,
+  ).length;
   const latestSessions = (sessions.data?.entries ?? []).slice(0, SESSIONS_SHOWN);
 
   return (
@@ -164,7 +166,7 @@ export function Dashboard() {
           {(items.q.isPending || items.all.length > 0) && (
             <Card
               icon="checks"
-              title="Open Items"
+              title="Action Items"
               className="home-open"
               link={showHref(show)}
               sub={dueNow ? `${dueNow} due today or overdue` : undefined}
