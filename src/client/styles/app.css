@@ -7466,3 +7466,35 @@ html {
 .settings-top h1.view-title {
   margin-top: 0;
 }
+
+/* Pages heading: a plain-text "Expand all" / "Collapse all" beside it, before the + button. */
+.tree-head .tree-all {
+  width: auto;
+  height: auto;
+  margin: 0 6px 0 auto;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tree-head .tree-all:hover {
+    background: none;
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+@media (max-width: 860px) {
+  .tree-head .tree-all {
+    padding: 8px 6px;
+    font-size: 13px;
+  }
+}

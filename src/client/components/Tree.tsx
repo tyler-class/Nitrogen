@@ -27,6 +27,19 @@ export function Tree({
   sessionsId?: string | null;
 }) {
   const roots = useMemo(() => buildTree(pages), [pages]);
+  // Every page with subpages, for Expand all / Collapse all.
+  const parents = useMemo(() => {
+    const ids: string[] = [];
+    const walk = (nodes: typeof roots) => {
+      for (const n of nodes)
+        if (n.children.length) {
+          ids.push(n.page.id);
+          walk(n.children);
+        }
+    };
+    walk(roots);
+    return ids;
+  }, [roots]);
   const byId = useMemo(() => new Map(pages.map((p) => [p.id, p])), [pages]);
   const [open, setOpen] = useState<Set<string>>(
     () => new Set(readLocal<string[]>('n2.tree.open', [])),
@@ -293,6 +306,16 @@ export function Tree({
     <nav className="tree" aria-label="Pages">
       <div className="tree-head">
         <span>Pages</span>
+        {parents.length > 0 &&
+          (parents.every((id) => open.has(id)) ? (
+            <button type="button" className="tree-all" onClick={() => setOpen(new Set())}>
+              Collapse all
+            </button>
+          ) : (
+            <button type="button" className="tree-all" onClick={() => setOpen(new Set(parents))}>
+              Expand all
+            </button>
+          ))}
         <button onClick={() => addChild(null)} aria-label="New top-level page" title="New page">
           <Icon name="plus" size={14} />
         </button>
