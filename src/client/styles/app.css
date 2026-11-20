@@ -7528,3 +7528,20 @@ html {
     height: 28px;
   }
 }
+
+/* Phones: the sidebar's footer (Tags, Insights…) is a real footer, flush with the bottom of the
+   slide-over, full width with a divider; the home-bar space is added once, below its icons
+   (the sidebar itself no longer pads its bottom, which doubled it). */
+@media (max-width: 860px) {
+  .sidebar,
+  .shell.collapsed .sidebar {
+    padding-bottom: 0;
+  }
+  .sidebar-foot.shelf {
+    margin: auto -14px 0;
+    padding: 8px 14px max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--hairline);
+    border-radius: 0 0 18px 0;
+    background: var(--paper);
+  }
+}
