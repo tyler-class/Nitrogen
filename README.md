@@ -148,7 +148,7 @@ Sign in to Cloudflare if it asks. You land on a setup page.
 
 ### 6. Set your password
 
-Under **Variables and secrets**, fill in **APP_PASSWORD**: the one password everyone in your household uses to sign in. Pick something long. You can change it later (see [Change your password](#change-your-password)), but set it now.
+Under **Variables and secrets**, fill in **APP_PASSWORD**: the password you sign in with. Pick something long. You can change it later (see [Change your password](#change-your-password)), but set it now.
 
 <!-- 📸 SCREENSHOT docs/screenshots/install-6-password.png: The APP_PASSWORD field on the setup page -->
 
@@ -186,7 +186,7 @@ Nitrogen can send notifications to your phone. They only work in the app install
 
 **Install it on Android:** open Nitrogen in Chrome, open the menu **⋮** and tap **Install app** (or **Add to Home screen**), then open it from the new icon.
 
-**Turn them on:** in the installed app, open **Settings → Notifications** and switch on **Notifications on this device**. Allow notifications when your phone asks. Each phone chooses its own, so everyone in the family can pick what they get. **Send a test** checks it's working.
+**Turn them on:** in the installed app, open **Settings → Notifications** and switch on **Notifications on this device**. Allow notifications when your phone asks. Each device has its own on/off switch and choices. **Send a test** checks it's working.
 
 ## Updates
 

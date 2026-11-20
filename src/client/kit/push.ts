@@ -2,7 +2,7 @@
 // badge. Synced from tyler-class/selfhost-kit (kit/client/push.ts). Edit it there, not here.
 //
 // Talks to pushRoutes() (src/worker/kit/push.ts) under /api/push. Choices are per device:
-// each family member's phone picks its own. iOS (16.4+) only has push and badges for an app
+// each device picks its own. iOS (16.4+) only has push and badges for an app
 // added to the Home Screen.
 //
 // Settings → Notifications (every app, in its own styling, words from PUSH_TEXT):
@@ -433,7 +433,7 @@ export const installSteps = (title: string) => [
 /** The ⓘ beside Notifications. `badge`: what the app-icon count counts, if the app has one. */
 export const pushInfo = (o: { badge?: string } = {}) => ({
   lines: [
-    'Each device chooses its own notifications, so every family member’s phone can pick what it gets.',
+    'Each device has its own on/off switch and choices.',
     'Daily ones arrive around 8 a.m. in the device’s time zone.',
     ...(o.badge ? [`The app icon shows ${o.badge}.`] : []),
     'They need the app installed on the phone (on iPhone and iPad, added to the Home Screen; iOS 16.4 or later).',

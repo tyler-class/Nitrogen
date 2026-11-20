@@ -5,8 +5,7 @@
 //   selfhost_kit table). Nothing to configure, nothing committed.
 // - Payloads are encrypted with aes128gcm (RFC 8291), all in WebCrypto.
 // - One row per device in selfhost_push_devices: its endpoint and keys, its IANA time zone,
-//   and its own choices ({ enabled, <kind>: boolean }). Each family member's phone picks for
-//   itself.
+//   and its own choices ({ enabled, <kind>: boolean }). Each device picks for itself.
 // - A device the push service turns away (404/410) is marked stopped (gone_at), not deleted:
 //   it gets nothing more, its choices are kept, and the app makes it a fresh subscription that
 //   replaces it (client push.ts). Stopped devices nobody revives go after 30 days.
