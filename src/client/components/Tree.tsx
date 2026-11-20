@@ -306,6 +306,15 @@ export function Tree({
     <nav className="tree" aria-label="Pages">
       <div className="tree-head">
         <span>Pages</span>
+        <button
+          type="button"
+          className="tree-add"
+          onClick={() => addChild(null)}
+          aria-label="New top-level page"
+          title="New page"
+        >
+          <Icon name="plus" size={13} />
+        </button>
         {parents.length > 0 &&
           (parents.every((id) => open.has(id)) ? (
             <button type="button" className="tree-all" onClick={() => setOpen(new Set())}>
@@ -316,9 +325,6 @@ export function Tree({
               Expand all
             </button>
           ))}
-        <button onClick={() => addChild(null)} aria-label="New top-level page" title="New page">
-          <Icon name="plus" size={14} />
-        </button>
       </div>
       {roots.length ? (
         <ul role="tree" className="tree-root">

@@ -7498,3 +7498,33 @@ html {
     font-size: 13px;
   }
 }
+
+/* Pages heading: "+" in a small shaded circle right beside it (new page); Expand all / Collapse
+   all at the far right. */
+.tree-head {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.tree-head .tree-add {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tree-head .tree-add:hover {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent-ink);
+  }
+}
+.tree-head .tree-all {
+  margin: 0 0 0 auto;
+}
+@media (max-width: 860px) {
+  .tree-head .tree-add {
+    width: 28px;
+    height: 28px;
+  }
+}
