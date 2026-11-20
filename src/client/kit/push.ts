@@ -12,6 +12,11 @@
 //      and installSteps() behind an ⓘ. Otherwise the "Notifications on this device" switch,
 //      with an ⓘ saying it works because the app is installed (PUSH_TEXT.installed).
 //   3. When on: one switch per kind, each with its one-line description, then "Send a test".
+//
+// A subscription the push service stops accepting is replaced by a fresh one, with the same
+// choices, without anyone having to toggle: when the app opens (syncBadge), in Settings
+// (getState), on "Send a test", and on turning notifications on. Each browser remembers its own
+// endpoint, so its old entry is replaced rather than left as a duplicate.
 
 export interface PushKindInfo {
   id: string;
@@ -24,6 +29,8 @@ export interface PushDeviceView {
   tz: string;
   prefs: { enabled: boolean } & Record<string, boolean>;
   label: string | null;
+  /** The push service stopped accepting it: a fresh subscription replaces it. */
+  gone?: boolean;
 }
 
 export interface PushState {
@@ -46,6 +53,15 @@ export function configurePush(o: { base?: string }) {
   if (o.base) base = o.base.replace(/\/$/, '');
 }
 
+class PushError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(`${base}${path}`, {
     method,
@@ -53,10 +69,29 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = (await r.json().catch(() => ({}))) as { message?: string };
-  if (!r.ok) throw new Error(data.message ?? `Couldn’t reach the server (${r.status}).`);
+  const data = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
+  if (!r.ok)
+    throw new PushError(data.message ?? `Couldn’t reach the server (${r.status}).`, data.error);
   return data as T;
 }
+
+/** This browser's last endpoint, so a new subscription replaces its old entry. */
+const MINE = 'kit-push-endpoint';
+const remembered = () => {
+  try {
+    return localStorage.getItem(MINE);
+  } catch {
+    return null;
+  }
+};
+const remember = (endpoint: string | null) => {
+  try {
+    if (endpoint) localStorage.setItem(MINE, endpoint);
+    else localStorage.removeItem(MINE);
+  } catch {
+    /* Private mode: the server still replaces by the old subscription's endpoint. */
+  }
+};
 
 export const isIOS = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) ||
@@ -66,13 +101,6 @@ export const isIOS = () =>
 export const isStandalone = () =>
   window.matchMedia?.('(display-mode: standalone)').matches ||
   (navigator as { standalone?: boolean }).standalone === true;
-
-/** The installed app on a phone or tablet: the only place notifications are offered. */
-export const isPhoneApp = () =>
-  isStandalone() &&
-  (isIOS() ||
-    /android/i.test(navigator.userAgent) ||
-    !!window.matchMedia?.('(pointer: coarse)').matches);
 
 /** This browser can subscribe to push here and now. */
 export const pushSupported = () =>
@@ -112,11 +140,17 @@ export async function getState(): Promise<PushState> {
     on: false,
     device: null,
   };
-  const sub = await currentSubscription();
+  let sub = await currentSubscription();
   if (!sub) return state;
   let { device } = await call<{ device: PushDeviceView | null }>('POST', '/device', {
     endpoint: sub.endpoint,
   });
+  // Stopped: replace it quietly where the browser allows (else the switch shows off, and
+  // turning it on does the same).
+  if (device?.gone && state.permission === 'granted') {
+    const fresh = await renew(sub, device.prefs).catch(() => null);
+    if (fresh) ({ sub, device } = fresh);
+  }
   if (device && device.tz !== zone())
     ({ device } = await call<{ device: PushDeviceView }>('PATCH', '/prefs', {
       endpoint: sub.endpoint,
@@ -154,24 +188,62 @@ export async function enablePush(kinds: string[]): Promise<PushState> {
   const { key } = await call<{ key: string }>('GET', '/key');
   const bytes = keyBytes(key);
   let sub = await reg.pushManager.getSubscription();
-  if (sub && !sameKey(sub, bytes)) {
+  // What the server has for this browser's subscription (its choices, and whether it stopped).
+  const known = sub
+    ? (await call<{ device: PushDeviceView | null }>('POST', '/device', { endpoint: sub.endpoint }))
+        .device
+    : null;
+  const old = sub?.endpoint ?? null;
+  // A subscription for another key, or one the push service stopped accepting (or the server
+  // no longer has): start afresh rather than signing the same dead one up again.
+  if (sub && (!sameKey(sub, bytes) || !known || known.gone)) {
     await sub.unsubscribe().catch(() => undefined);
     sub = null;
   }
   sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
-  const json = sub.toJSON();
-  const old = await call<{ device: PushDeviceView | null }>('POST', '/device', {
-    endpoint: sub.endpoint,
-  });
   const prefs: Record<string, boolean> = { enabled: true };
-  for (const k of kinds) prefs[k] = old.device?.prefs[k] ?? true;
-  await call('POST', '/subscribe', {
+  for (const k of kinds) prefs[k] = known?.prefs[k] ?? true;
+  await save(sub, prefs, [old, remembered()]);
+  await syncBadge();
+  return getState();
+}
+
+/** Signs a subscription up on the server, replacing this browser's earlier entries. */
+async function save(
+  sub: PushSubscription,
+  prefs: Record<string, boolean>,
+  replaces: (string | null)[],
+): Promise<PushDeviceView> {
+  const json = sub.toJSON();
+  const { device } = await call<{ device: PushDeviceView }>('POST', '/subscribe', {
     subscription: { endpoint: json.endpoint, keys: json.keys },
     tz: zone(),
     prefs,
+    replaces: [...new Set(replaces.filter((e): e is string => !!e && e !== sub.endpoint))],
   });
-  await syncBadge();
-  return getState();
+  remember(sub.endpoint);
+  return device;
+}
+
+/**
+ * A fresh subscription in place of one the push service stopped accepting, with the same
+ * choices. Some browsers (Safari) only allow it from a tap: then it throws.
+ */
+async function renew(
+  old: PushSubscription,
+  prefs: Record<string, boolean>,
+): Promise<{ sub: PushSubscription; device: PushDeviceView }> {
+  const reg = await registration();
+  if (!reg) throw new Error(PUSH_TEXT.noWorker);
+  const { key } = await call<{ key: string }>('GET', '/key');
+  const endpoint = old.endpoint;
+  await old.unsubscribe().catch(() => undefined);
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: keyBytes(key),
+  });
+  const device = await save(sub, { ...prefs, enabled: true }, [endpoint, remembered()]);
+  return { sub, device };
 }
 
 /** Turns this device's notifications off (its choices are kept for next time). */
@@ -191,6 +263,7 @@ export async function unsubscribePush(): Promise<void> {
   if (!sub) return;
   await call('POST', '/unsubscribe', { endpoint: sub.endpoint }).catch(() => undefined);
   await sub.unsubscribe().catch(() => undefined);
+  remember(null);
   await setBadge(0);
 }
 
@@ -206,11 +279,24 @@ export async function setPrefs(prefs: Record<string, boolean>): Promise<PushDevi
   return device;
 }
 
-/** Sends a test notification to this device. */
+/**
+ * Sends a test notification to this device. If the push service stopped accepting this
+ * device, it subscribes afresh (same choices) and sends again: nothing to toggle.
+ */
 export async function sendTest(): Promise<void> {
   const sub = await currentSubscription();
   if (!sub) throw new Error(PUSH_TEXT.notOn);
-  await call('POST', '/test', { endpoint: sub.endpoint });
+  try {
+    await call('POST', '/test', { endpoint: sub.endpoint });
+  } catch (e) {
+    if (!(e instanceof PushError) || e.code !== 'gone') throw e;
+    const { device } = await call<{ device: PushDeviceView | null }>('POST', '/device', {
+      endpoint: sub.endpoint,
+    });
+    const fresh = await renew(sub, device?.prefs ?? { enabled: true }).catch(() => null);
+    if (!fresh) throw e;
+    await call('POST', '/test', { endpoint: fresh.sub.endpoint });
+  }
 }
 
 /** Sets the app-icon badge (0 clears it). Does nothing where badges aren't supported. */
@@ -231,10 +317,12 @@ let syncing: Promise<void> | null = null;
 let again = false;
 /**
  * Puts the server's count on the app icon: call it when the app opens and whenever the data
- * behind the count changes. Clears it when notifications are off on this device.
+ * behind the count changes. Clears it when notifications are off on this device. Also replaces
+ * a subscription the push service stopped accepting.
  */
 export function syncBadge(): Promise<void> {
-  if (!('setAppBadge' in navigator)) return Promise.resolve();
+  // Runs where there's no badge too: it's also when a stopped subscription gets replaced.
+  if (!pushSupported()) return Promise.resolve();
   if (syncing) {
     again = true;
     return syncing;
@@ -243,9 +331,17 @@ export function syncBadge(): Promise<void> {
     try {
       const sub = await currentSubscription();
       if (!sub || Notification.permission !== 'granted') return setBadge(0);
-      const { count } = await call<{ count: number }>('POST', '/badge', {
+      const { count, gone } = await call<{ count: number; gone?: boolean }>('POST', '/badge', {
         endpoint: sub.endpoint,
       });
+      // Stopped since last time: replace it quietly, with the same choices.
+      if (gone) {
+        const { device } = await call<{ device: PushDeviceView | null }>('POST', '/device', {
+          endpoint: sub.endpoint,
+        });
+        if (device) await renew(sub, device.prefs).catch(() => undefined);
+        return;
+      }
       await setBadge(count);
     } catch {
       /* Offline: try next time. */

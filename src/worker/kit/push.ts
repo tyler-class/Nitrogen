@@ -7,6 +7,9 @@
 // - One row per device in selfhost_push_devices: its endpoint and keys, its IANA time zone,
 //   and its own choices ({ enabled, <kind>: boolean }). Each family member's phone picks for
 //   itself.
+// - A device the push service turns away (404/410) is marked stopped (gone_at), not deleted:
+//   it gets nothing more, its choices are kept, and the app makes it a fresh subscription that
+//   replaces it (client push.ts). Stopped devices nobody revives go after 30 days.
 // - selfhost_push_sent remembers what went out, keyed by (device, kind, key, local date), so a
 //   cron that runs every hour sends each notification at most once.
 // - Daily notifications go out on the first run at or after 8:00 in the device's own zone.
@@ -78,7 +81,8 @@ async function ensureTables(db: D1Database) {
         prefs TEXT NOT NULL DEFAULT '{}',
         label TEXT,
         created_at TEXT NOT NULL,
-        last_sent_at TEXT
+        last_sent_at TEXT,
+        gone_at TEXT
       )`,
     ),
     db.prepare(
@@ -92,6 +96,11 @@ async function ensureTables(db: D1Database) {
       )`,
     ),
   ]);
+  // Copies made before gone_at existed.
+  const has = await db
+    .prepare(`SELECT 1 AS x FROM pragma_table_info('${DEVICES}') WHERE name = 'gone_at'`)
+    .first('x');
+  if (!has) await db.prepare(`ALTER TABLE ${DEVICES} ADD COLUMN gone_at TEXT`).run();
   ready.add(db);
 }
 
@@ -275,6 +284,8 @@ export interface PushDevice {
   label: string | null;
   created_at: string;
   last_sent_at: string | null;
+  /** When the push service turned it away; it gets nothing until it subscribes afresh. */
+  gone_at: string | null;
 }
 
 type DeviceRow = Omit<PushDevice, 'prefs'> & { prefs: string };
@@ -328,10 +339,11 @@ export function deviceLabel(ua: string | null | undefined): string | null {
   return [os, browser].filter(Boolean).join(' ') || null;
 }
 
+/** Devices that can get notifications (not the stopped ones). */
 export async function listDevices(db: D1Database): Promise<PushDevice[]> {
   await ensureTables(db);
   const { results } = await db
-    .prepare(`SELECT * FROM ${DEVICES} ORDER BY created_at`)
+    .prepare(`SELECT * FROM ${DEVICES} WHERE gone_at IS NULL ORDER BY created_at`)
     .all<DeviceRow>();
   return results.map(toDevice);
 }
@@ -364,7 +376,8 @@ export async function saveDevice(db: D1Database, input: SubscribeInput): Promise
       `INSERT INTO ${DEVICES} (id, endpoint, p256dh, auth, tz, prefs, label, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth,
-         tz = excluded.tz, prefs = excluded.prefs, label = COALESCE(excluded.label, label)`,
+         tz = excluded.tz, prefs = excluded.prefs, label = COALESCE(excluded.label, label),
+         gone_at = NULL`,
     )
     .bind(
       crypto.randomUUID(),
@@ -395,6 +408,15 @@ export async function updateDevice(
     .bind(JSON.stringify(prefs), tz, old.id)
     .run();
   return { ...old, prefs, tz };
+}
+
+/** Marks a device stopped: the push service turned it away. */
+export async function markGone(db: D1Database, endpoint: string, at = new Date()): Promise<void> {
+  await ensureTables(db);
+  await db
+    .prepare(`UPDATE ${DEVICES} SET gone_at = COALESCE(gone_at, ?) WHERE endpoint = ?`)
+    .bind(at.toISOString(), endpoint)
+    .run();
 }
 
 export async function removeDevice(db: D1Database, endpoint: string): Promise<void> {
@@ -459,7 +481,7 @@ async function subject(db: D1Database): Promise<string> {
 
 /**
  * Encrypts and sends one notification. A device the push service says is gone (404/410) is
- * removed. Never throws.
+ * marked stopped (markGone). Never throws.
  */
 export async function sendPush(
   db: D1Database,
@@ -492,7 +514,7 @@ export async function sendPush(
       body,
     });
     if (res.status === 404 || res.status === 410) {
-      await removeDevice(db, device.endpoint);
+      await markGone(db, device.endpoint, new Date(o.now ?? Date.now()));
       return 'gone';
     }
     if (!res.ok) {
@@ -641,6 +663,16 @@ export async function runPushJob(db: D1Database, o: PushJobOptions): Promise<Pus
     // The log only needs recent days.
     const cutoff = new Date(now.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
     await db.prepare(`DELETE FROM ${SENT} WHERE date < ?`).bind(cutoff).run();
+    // Stopped devices nobody revived in 30 days (an uninstalled app, a reset browser).
+    const stale = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+    await db.batch([
+      db
+        .prepare(
+          `DELETE FROM ${SENT} WHERE device_id IN (SELECT id FROM ${DEVICES} WHERE gone_at < ?)`,
+        )
+        .bind(stale),
+      db.prepare(`DELETE FROM ${DEVICES} WHERE gone_at < ?`).bind(stale),
+    ]);
   } catch (e) {
     console.warn('push: job failed', e);
   }
@@ -668,6 +700,9 @@ export interface PushRoutesOptions {
 
 type PushEnv = { Bindings: { DB: D1Database } };
 
+/** Shown only when the app couldn't make a fresh subscription by itself. */
+const GONE_MESSAGE = 'Notifications stopped working on this device. Turn them on again.';
+
 class Bad extends Error {}
 
 function str(v: unknown, what: string, max = 2048): string {
@@ -690,8 +725,11 @@ function endpointOf(v: unknown): string {
 /**
  * The push API, under /push (so /api/push/... when the app's router has basePath('/api')):
  *   GET    /push/key           → { key }                  the VAPID public key
- *   POST   /push/device        { endpoint } → { device }  this device's choices (null if new)
- *   POST   /push/subscribe     { subscription, tz, prefs } → { device }
+ *   POST   /push/device        { endpoint } → { device }  this device's choices (null if new;
+ *                                                         gone: true once it has stopped)
+ *   POST   /push/subscribe     { subscription, tz, prefs, replaces? } → { device }
+ *                              replaces: this browser's earlier endpoints, removed (one entry
+ *                              per device, never duplicates)
  *   PATCH  /push/prefs         { endpoint, prefs?, tz? } → { device }
  *   POST   /push/unsubscribe   { endpoint } → { ok }
  *   POST   /push/test          { endpoint } → { result }  a test notification to this device
@@ -702,7 +740,13 @@ export function pushRoutes(o: PushRoutesOptions) {
   const json = async (c: { req: { json(): Promise<unknown> } }) =>
     ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
   const view = (d: PushDevice | null) =>
-    d && { tz: d.tz, prefs: d.prefs, label: d.label, created_at: d.created_at };
+    d && {
+      tz: d.tz,
+      prefs: d.prefs,
+      label: d.label,
+      created_at: d.created_at,
+      gone: !!d.gone_at,
+    };
 
   r.onError((err, c) => {
     if (err instanceof Bad) return c.json({ error: 'invalid', message: err.message }, 400);
@@ -751,6 +795,12 @@ export function pushRoutes(o: PushRoutesOptions) {
       },
       label: deviceLabel(c.req.header('User-Agent')),
     });
+    // This browser's earlier subscriptions (a stopped one, or one its browser replaced): one
+    // entry per device.
+    const replaces = (Array.isArray(b.replaces) ? b.replaces : [b.replaces])
+      .filter((e): e is string => typeof e === 'string' && e !== device.endpoint)
+      .slice(0, 5);
+    for (const e of replaces) await removeDevice(db, e);
     return c.json({ device: view(device) });
   });
 
@@ -783,6 +833,8 @@ export function pushRoutes(o: PushRoutesOptions) {
         { error: 'not_found', message: 'This device isn’t signed up for notifications.' },
         404,
       );
+    // Stopped: the app subscribes afresh and tries again (client push.ts).
+    if (d.gone_at) return c.json({ error: 'gone', message: GONE_MESSAGE }, 410);
     const badge = o.badge && d.prefs.enabled ? await o.badge(d, new Date(), db) : undefined;
     const result = await sendPush(
       db,
@@ -797,15 +849,10 @@ export function pushRoutes(o: PushRoutesOptions) {
       },
       { fetcher: o.fetcher, urgency: 'high', ttl: 600 },
     );
+    if (result === 'gone') return c.json({ error: 'gone', message: GONE_MESSAGE }, 410);
     if (result !== 'sent')
       return c.json(
-        {
-          error: result,
-          message:
-            result === 'gone'
-              ? 'This device’s subscription has expired. Turn notifications off and on again.'
-              : 'The push service didn’t accept it. Try again in a minute.',
-        },
+        { error: result, message: 'The push service didn’t accept it. Try again in a minute.' },
         502,
       );
     return c.json({ result });
@@ -814,8 +861,10 @@ export function pushRoutes(o: PushRoutesOptions) {
   r.post('/push/badge', async (c) => {
     const b = await json(c);
     const d = await findDevice(c.env.DB, endpointOf(b.endpoint));
-    const count = d && d.prefs.enabled && o.badge ? await o.badge(d, new Date(), c.env.DB) : 0;
-    return c.json({ count });
+    const count =
+      d && !d.gone_at && d.prefs.enabled && o.badge ? await o.badge(d, new Date(), c.env.DB) : 0;
+    // gone: the app quietly subscribes afresh when it opens.
+    return c.json({ count, ...(d?.gone_at ? { gone: true } : {}) });
   });
 
   return r;
