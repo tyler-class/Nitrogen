@@ -63,14 +63,14 @@ export function TagEditor({
           #{t}
         </Link>
       ))}
-      {/* A dashed "+ Add tag" pill: tap in, type, then Enter (or tap away) makes the tag. */}
+      {/* "+ Tag": tap in, type, then Enter (or tap away) makes the tag. */}
       <label className="tag-add">
         <Icon name="plus" size={12} />
         <input
           className="tag-input"
-          size={Math.max(text.length + 1, 7)}
+          size={Math.max(text.length + 1, 4)}
           value={text}
-          placeholder="Add tag"
+          placeholder="Tag"
           aria-label="Add a tag"
           onChange={(e) => {
             const v = e.target.value;

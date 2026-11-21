@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { actorLabel } from '@shared/actor';
@@ -21,7 +22,8 @@ import {
   type ItemEdit,
   type ItemType,
 } from '@shared/items';
-import { extractTags, pageHref, slugify } from '@shared/markdown';
+import { extractTags, pageHref } from '@shared/markdown';
+import { glideTo, headingsOf, type Heading } from '../lib/outline';
 import type {
   Mention,
   Page,
@@ -39,6 +41,7 @@ import { EmojiButton } from '../components/EmojiPicker';
 import { ItemRow } from '../components/ItemRow';
 import { ItemFilters } from '../components/ItemFilters';
 import { DEFAULT_PAGE_ICON, Icon, PageGlyph } from '../components/Icon';
+import { Outline } from '../components/Outline';
 import { Markdown } from '../components/Markdown';
 import { DiffView } from '../components/Diff';
 import { downloadPage } from '../lib/exportMarkdown';
@@ -334,23 +337,77 @@ function PageScreen({
   useEffect(() => {
     const box = summaryBox.current;
     if (!box) return;
-    let last = box.offsetHeight;
-    const ro = new ResizeObserver(() => {
-      const h = box.offsetHeight;
-      const delta = h - last;
-      last = h;
-      if (!delta || !document.activeElement?.closest('.cm-editor')) return;
+    // The box's own height, from what's in it (not the height it's being held at while it eases).
+    const natural = () => (box.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
+    let last = natural();
+    // The box's own height last time (its margins and padding included).
+    let lastBox = box.offsetHeight;
+    // Ticking an item off in the page (its box takes no focus) counts as writing too.
+    let ticked = 0;
+    const onTick = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest?.('.cm-check')) ticked = performance.now();
+    };
+    document.addEventListener('mousedown', onTick, true);
+    const scroller = () => {
       const main = box.closest<HTMLElement>('.main');
-      if (
-        main &&
+      return main &&
         main.scrollHeight > main.clientHeight &&
         getComputedStyle(main).overflowY !== 'visible'
-      )
-        main.scrollTop += delta;
+        ? main
+        : null;
+    };
+    let easing = 0;
+    const ro = new ResizeObserver(() => {
+      const h = natural();
+      const delta = h - last;
+      const from = lastBox;
+      last = h;
+      lastBox = Math.max(0, from + delta);
+      const writing =
+        document.activeElement?.closest('.cm-editor') || performance.now() - ticked < 1500;
+      if (!delta || !writing) return;
+      const main = scroller();
+      const top = main ? main.scrollTop : window.scrollY;
+      // Shrinking near the top of the page, there's no scroll to give back: rather than the text
+      // under it jumping up, the box eases down to its new height.
+      if (delta < 0 && top + delta < 0) {
+        window.clearTimeout(easing);
+        // Where it ends up: its height with nothing holding it.
+        box.style.transition = '';
+        box.style.height = '';
+        const to = box.offsetHeight;
+        lastBox = to;
+        box.style.height = `${from}px`;
+        box.style.overflow = 'hidden';
+        void box.offsetHeight;
+        box.style.transition = 'height 0.26s cubic-bezier(0.25, 0.8, 0.25, 1)';
+        box.style.height = `${to}px`;
+        easing = window.setTimeout(() => {
+          box.style.height = '';
+          box.style.overflow = '';
+          box.style.transition = '';
+        }, 300);
+        return;
+      }
+      if (main) main.scrollTop += delta;
       else window.scrollBy(0, delta);
     });
-    ro.observe(box);
-    return () => ro.disconnect();
+    // Watch what's in the box (the list comes and goes as items open and close).
+    const watch = () => {
+      ro.disconnect();
+      if (box.firstElementChild) ro.observe(box.firstElementChild);
+      last = natural();
+      lastBox = box.offsetHeight;
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(box, { childList: true });
+    watch();
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.clearTimeout(easing);
+      document.removeEventListener('mousedown', onTick, true);
+    };
   }, [locked]);
 
   // "E" puts the cursor in the page.
@@ -392,6 +449,52 @@ function PageScreen({
     const line = anchorLine(page.body, hash);
     if (line) requestAnimationFrame(() => editor.current?.scrollToLine(line));
   }, [page.id, page.body, hash, locked, editorReady]);
+
+  // The outline: the page's headings (three levels), as written so far.
+  const body = locked ? page.body : draft.draft.body;
+  const headings = useMemo(() => headingsOf(body, 3), [body]);
+  const [outlinePinned, setOutlinePinned] = useState(false);
+  // The page slides over only while the outline is being pinned or hidden. (Left on all the time,
+  // that slide fought the sidebar's: the target moves every frame as the column widens.)
+  const [outlineMoving, setOutlineMoving] = useState(false);
+  const firstPin = useRef(true);
+  useEffect(() => {
+    if (firstPin.current) {
+      firstPin.current = false;
+      return;
+    }
+    setOutlineMoving(true);
+    const t = window.setTimeout(() => setOutlineMoving(false), 420);
+    return () => window.clearTimeout(t);
+  }, [outlinePinned]);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // The top bar gets its hairline only once the page has scrolled under it.
+  const topRef = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const main = topRef.current?.closest<HTMLElement>('.main');
+    const check = () => {
+      const scrolls =
+        main &&
+        main.scrollHeight > main.clientHeight &&
+        getComputedStyle(main).overflowY !== 'visible';
+      setStuck((scrolls ? main.scrollTop : window.scrollY) > 4);
+    };
+    check();
+    document.addEventListener('scroll', check, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', check, { capture: true });
+  }, []);
+  // Where a heading is on screen now: its rendered element, or its line in the editor.
+  const headingTop = (h: Heading) =>
+    locked
+      ? document.getElementById(`h-${h.id}`)?.getBoundingClientRect().top
+      : editor.current?.lineTop(h.line);
+  const goToHeading = (h: Heading) => {
+    const from = bodyRef.current;
+    const y = headingTop(h);
+    if (from && y != null) glideTo(from, y);
+    else editor.current?.scrollToLine(h.line);
+  };
 
   async function addChild() {
     try {
@@ -435,8 +538,10 @@ function PageScreen({
   }
 
   return (
-    <article className="page">
-      <div className="page-top">
+    <article
+      className={`page${outlinePinned ? ' outline-pinned' : ''}${outlineMoving ? ' outline-moving' : ''}`}
+    >
+      <div className={`page-top${stuck ? ' stuck' : ''}`} ref={topRef}>
         {header ?? (
           <Breadcrumbs
             ancestors={ancestors}
@@ -524,6 +629,8 @@ function PageScreen({
               {page.title}
               {titleAddon && <span className="title-addon">{titleAddon}</span>}
             </h1>
+            {/* Phones: the outline's button, at the right end of the title row. */}
+            <Outline place="title" headings={headings} onGo={goToHeading} topOf={headingTop} />
           </div>
         ) : (
           <div className="page-title-row live-title">
@@ -536,24 +643,21 @@ function PageScreen({
               focus={fresh}
             />
             {titleAddon && <span className="title-addon">{titleAddon}</span>}
+            <Outline place="title" headings={headings} onGo={goToHeading} topOf={headingTop} />
           </div>
         )}
-        <p className="page-meta">
-          Updated {formatWhen(page.updated_at)}
-          {page.updated_by && ` by ${actorLabel(page.updated_by)}`}
-          {page.created_by && page.created_by !== page.updated_by
-            ? ` · created by ${actorLabel(page.created_by)}`
-            : ''}
-        </p>
-        {locked ? (
-          <TagList tags={detail.all_tags} />
-        ) : (
-          <TagEditor
-            tags={draft.draft.tags}
-            bodyTags={extractTags(draft.draft.body)}
-            onChange={(tags) => draft.change({ tags })}
-          />
-        )}
+        {/* One quiet line under the title: its tags. (Who changed what, and when, is in History.) */}
+        <div className="page-meta-row">
+          {locked ? (
+            <TagList tags={detail.all_tags} />
+          ) : (
+            <TagEditor
+              tags={draft.draft.tags}
+              bodyTags={extractTags(draft.draft.body)}
+              onChange={(tags) => draft.change({ tags })}
+            />
+          )}
+        </div>
       </header>
       {draft.banners}
       {page.archived_at && (
@@ -574,39 +678,48 @@ function PageScreen({
             : 'Recorded automatically from what the assistant did. Read-only.'}
         </p>
       )}
-      {!locked && (
-        <div ref={summaryBox} className="item-summary-box">
-          <ItemSummary
-            key={page.id}
-            page={page}
-            body={draft.draft.body}
-            onDone={toggleItem}
-            onAnswer={answerItem}
-            onEdit={editItemAt}
-            onDelete={deleteItemAt}
-          />
-        </div>
-      )}
-      <div className="prose">
-        {locked ? (
-          page.body.trim() && <Markdown source={page.body} titles={index} noItems />
-        ) : (
-          // Until the editor's code arrives, the page as it reads.
-          <Suspense fallback={<Markdown source={page.body} titles={index} />}>
-            <Editor
-              ref={editor}
-              value={draft.draft.body}
-              pageId={page.id}
-              links={links}
-              titles={index}
-              onChange={(body) => draft.change({ body })}
-              onSave={() => void draft.save()}
-              onError={toast}
-              onNavigate={(href) => navigate(href)}
-              onReady={() => setEditorReady(true)}
+      {/* The page's body. */}
+      <div className="doc-body" ref={bodyRef}>
+        <Outline
+          headings={headings}
+          onGo={goToHeading}
+          topOf={headingTop}
+          onPinned={setOutlinePinned}
+        />
+        {!locked && (
+          <div ref={summaryBox} className="item-summary-box">
+            <ItemSummary
+              key={page.id}
+              page={page}
+              body={draft.draft.body}
+              onDone={toggleItem}
+              onAnswer={answerItem}
+              onEdit={editItemAt}
+              onDelete={deleteItemAt}
             />
-          </Suspense>
+          </div>
         )}
+        <div className="prose">
+          {locked ? (
+            page.body.trim() && <Markdown source={page.body} titles={index} noItems />
+          ) : (
+            // Until the editor's code arrives, the page as it reads.
+            <Suspense fallback={<Markdown source={page.body} titles={index} />}>
+              <Editor
+                ref={editor}
+                value={draft.draft.body}
+                pageId={page.id}
+                links={links}
+                titles={index}
+                onChange={(body) => draft.change({ body })}
+                onSave={() => void draft.save()}
+                onError={toast}
+                onNavigate={(href) => navigate(href)}
+                onReady={() => setEditorReady(true)}
+              />
+            </Suspense>
+          )}
+        </div>
       </div>
 
       {/* Everything about the page rather than in it: set apart from the writing. */}
@@ -984,32 +1097,7 @@ function anchorLine(body: string, hash: string): number | null {
   const item = /^item-(\d+)$/.exec(id);
   if (item) return Number(item[1]);
   if (!id.startsWith('h-')) return null;
-  const want = id.slice(2);
-  const seen = new Map<string, number>();
-  let fence = false;
-  const lines = body.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i]!;
-    if (/^\s*(```|~~~)/.test(l)) {
-      fence = !fence;
-      continue;
-    }
-    const m = fence ? null : /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(l);
-    if (!m) continue;
-    // The heading's text as the reader sees it (the renderer slugs that).
-    const text = m[1]!
-      .replace(
-        /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g,
-        (_s, t: string, h?: string, label?: string) => label ?? (h ? `${t} › ${h}` : t),
-      )
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/[*_`~]/g, '');
-    const base = slugify(text);
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    if ((n ? `${base}-${n}` : base) === want) return i + 1;
-  }
-  return null;
+  return headingsOf(body).find((h) => h.id === id.slice(2))?.line ?? null;
 }
 
 type VersionKey = number | 'current';
@@ -1020,6 +1108,8 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
     queryFn: () => api.get<{ revisions: Revision[] }>(`/pages/${page.id}/revisions`),
   });
   const [sel, setSel] = useState<number | null>(null);
+  // Phones show one thing at a time: the list of versions, or (after a tap) the version itself.
+  const [showing, setShowing] = useState(false);
   const rev = useQuery({
     queryKey: ['revision', page.id, sel],
     queryFn: () => api.get<RevisionDetail>(`/pages/${page.id}/revisions/${sel}`),
@@ -1038,13 +1128,18 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
 
   // Newest first: the current page, then earlier versions as listed.
   const order: VersionKey[] = ['current', ...(list.data?.revisions.map((r) => r.id) ?? [])];
-  const pick = (k: VersionKey) =>
-    setCompare((cur) => {
-      if (!cur) return cur;
-      if (cur.includes(k)) return cur.filter((x) => x !== k);
-      // A third pick replaces the older of the two picked first.
-      return cur.length < 2 ? [...cur, k] : [cur[1]!, k];
-    });
+  const pick = (k: VersionKey) => {
+    if (!compare) return;
+    const next = compare.includes(k)
+      ? compare.filter((x) => x !== k)
+      : // A third pick replaces the older of the two picked first.
+        compare.length < 2
+        ? [...compare, k]
+        : [compare[1]!, k];
+    setCompare(next);
+    // Two picked: on phones, show the comparison.
+    if (next.length === 2) setShowing(true);
+  };
   const pair =
     compare?.length === 2
       ? [...compare].sort((a, b) => order.indexOf(b) - order.indexOf(a)) // older first
@@ -1070,7 +1165,8 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
     return r ? `${formatWhen(r.created_at)} (version ${r.version})` : 'Earlier version';
   };
 
-  return (
+  // Over everything, the outline included (it lives outside the page too).
+  return createPortal(
     <div className="scrim" onMouseDown={onClose}>
       <div
         className="drawer"
@@ -1079,6 +1175,15 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="drawer-head">
+          {showing && (
+            <button
+              className="btn icon-only mobile-only history-back"
+              onClick={() => setShowing(false)}
+              aria-label="Back to versions"
+            >
+              <Icon name="back" />
+            </button>
+          )}
           <h2>History</h2>
           <div className="drawer-actions">
             {!!list.data?.revisions.length && (
@@ -1095,7 +1200,7 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
             </button>
           </div>
         </div>
-        <div className="history">
+        <div className={`history${showing ? ' showing' : ''}`}>
           <ul className={`history-list${compare ? ' comparing' : ''}`}>
             {compare && (
               <li className="history-hint muted">
@@ -1110,9 +1215,11 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
                   <button
                     className={on ? 'current' : ''}
                     aria-pressed={compare ? on : undefined}
-                    onClick={() =>
-                      compare ? pick(k) : setSel(k === 'current' ? null : (k as number))
-                    }
+                    onClick={() => {
+                      if (compare) return pick(k);
+                      setSel(k === 'current' ? null : (k as number));
+                      setShowing(true);
+                    }}
                   >
                     {compare && <span className={`history-check${on ? ' on' : ''}`} aria-hidden />}
                     <span className="history-what">
@@ -1156,7 +1263,8 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1237,7 +1345,8 @@ function ItemSummary({
   const keyOf = (i: (typeof items)[number]) => `${i.line}:${i.text}`;
   // An item checked off or answered here stays listed (struck through, with its answer) until
   // you leave, so the box doesn't shrink under your finger, a mis-tap is one tap to undo, and you
-  // see what you wrote. Checked off in the page itself, it goes at once.
+  // see what you wrote. Checked off in the page itself, it goes at once (the page holds its place,
+  // see the summary box's resize handling above).
   const keepKey = (i: (typeof items)[number]) => `${i.type}:${i.text}`;
   const [kept, setKept] = useState<string[]>([]);
   const [sort, setSort] = useState<'page' | 'due'>(() => readLocal('n2.page-items.sort', 'page'));

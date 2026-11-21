@@ -2,6 +2,8 @@ const PATHS: Record<string, string> = {
   chevron: 'M8 6l4 4-4 4',
   // Editor blocks (the "/" menu).
   list: 'M8 5h9M8 10h9M8 15h9M3.5 5h.01M3.5 10h.01M3.5 15h.01',
+  // A page's outline: headings indented by level.
+  outline: 'M3.5 4.5h13M6.5 10h10M9.5 15.5h7',
   // Two lines numbered 1 and 2.
   numbered:
     'M9 6h8M9 14.5h8M3.4 4.4 4.9 3.5v5.2M3 12.4a1.5 1.5 0 0 1 2.9.5c0 1.3-2.9 2.1-2.9 3.6h3',

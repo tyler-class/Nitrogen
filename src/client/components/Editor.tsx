@@ -150,6 +150,8 @@ export interface EditorHandle {
   setDoc(text: string): void;
   /** Scrolls to a 1-based line. */
   scrollToLine(line: number): void;
+  /** Where a line's top is on screen now (px from the top of the window), for a smooth scroll. */
+  lineTop(line: number): number | null;
 }
 
 export interface LinkTarget {
@@ -475,6 +477,11 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
       if (!v || line < 1 || line > v.state.doc.lines) return;
       const pos = v.state.doc.line(line).from;
       v.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 80 }) });
+    },
+    lineTop: (line) => {
+      const v = view.current;
+      if (!v || line < 1 || line > v.state.doc.lines) return null;
+      return v.lineBlockAt(v.state.doc.line(line).from).top + v.documentTop;
     },
   }));
 

@@ -6331,66 +6331,148 @@ th .cm-cell {
   box-shadow: none;
 }
 
-/* --- 1.0.7: the sidebar sits behind the page. On wide screens the page casts a light shadow
-   onto it along the dividing line. On phones the page itself slides aside to show the sidebar
-   under it (square-edged, full height), which drifts in a little slower for a touch of depth. */
+/* --- The sidebar sits underneath the page. Opening it slides the page (the foreground) aside,
+   and the sidebar, starting half off screen, drifts in under it more slowly, both arriving at the
+   same moment (a little parallax). --nav-p is how open it is, 0 to 1: the menu's state, or the
+   finger while a swipe drags it (Layout's useDrawerSwipe sets it then, with .dragging so nothing
+   lags behind the finger). Wide screens do the same with the column: it widens while the sidebar
+   drifts in from halfway. */
 .sidebar {
   box-shadow: inset -10px 0 12px -10px rgb(0 0 0 / 0.1);
 }
 @media (max-width: 860px) {
   .shell {
     --drawer-w: min(88vw, 440px);
+    --nav-p: 0;
+    --nav-ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+    --nav-time: 0.34s;
   }
-  .sidebar {
+  .shell.nav-open {
+    --nav-p: 1;
+  }
+  /* .shell first, so this beats the older ".nav-open .sidebar" rules while a swipe drags it shut. */
+  .shell .sidebar {
     z-index: 1;
     border-radius: 0;
     border-right: 0;
     box-shadow: none;
-    transform: translateX(-28%);
+    transform: translateX(calc((var(--nav-p) - 1) * var(--drawer-w) * 0.5));
+    /* Cut off at the page's left edge, so none of it can show where the page is (Safari can paint
+       a fixed panel over the page whatever the layer order says). Closed, nothing is on screen. */
+    clip-path: inset(0 calc((1 - var(--nav-p)) * var(--drawer-w) * 0.5) 0 0);
     transition:
-      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
-      visibility 0s linear 0.32s;
+      transform var(--nav-time) var(--nav-ease),
+      clip-path var(--nav-time) var(--nav-ease),
+      visibility 0s linear var(--nav-time);
   }
+  /* Shown while open, while a swipe drags it, and while it slides shut. */
+  .shell.nav-on .sidebar,
   .nav-open .sidebar {
-    transform: none;
+    visibility: visible;
     box-shadow: none;
     transition:
-      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+      transform var(--nav-time) var(--nav-ease),
+      clip-path var(--nav-time) var(--nav-ease),
       visibility 0s;
+  }
+  .main,
+  .mobile-bar {
+    transition:
+      transform var(--nav-time) var(--nav-ease),
+      box-shadow var(--nav-time) ease;
   }
   .main {
     position: relative;
     z-index: 2;
     min-height: 100dvh;
     background: var(--paper);
-    transition:
-      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
-      box-shadow 0.32s ease;
   }
-  .nav-open .main {
-    transform: translateX(var(--drawer-w));
-    box-shadow: -10px 0 28px rgb(0 0 0 / 0.18);
+  /* Only moved while the menu is in play, so nothing fixed inside the page is thrown off. */
+  .shell.nav-on .main,
+  .shell.nav-on .mobile-bar {
+    transform: translateX(calc(var(--nav-p) * var(--drawer-w)));
   }
-  /* The page, slid aside: a tap on it closes the menu. Lightly dimmed, moving with it. */
+  .shell.nav-on .main {
+    box-shadow: -10px 0 28px rgb(0 0 0 / calc(var(--nav-p) * 0.18));
+  }
+  /* The page, slid aside: a tap on it closes the menu (a swipe on it drags it shut). Dimmed a
+     touch, more the further it's open, and moving with it. */
   .nav-scrim {
-    z-index: 3;
-    background: rgb(0 0 0 / 0.08);
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border: 0;
+    opacity: 1;
+    background: rgb(0 0 0 / calc(var(--nav-p) * 0.1));
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    transform: none;
+    pointer-events: none;
+    visibility: hidden;
+    transform: translateX(calc(var(--nav-p) * var(--drawer-w)));
     transition:
-      opacity 0.32s ease,
-      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transform var(--nav-time) var(--nav-ease),
+      background-color var(--nav-time) ease;
+  }
+  .shell.nav-on .nav-scrim {
+    visibility: visible;
   }
   .nav-open .nav-scrim {
-    transform: translateX(var(--drawer-w));
-    background: rgb(0 0 0 / 0.08);
+    pointer-events: auto;
+  }
+  .shell.dragging .sidebar,
+  .shell.dragging .main,
+  .shell.dragging .mobile-bar,
+  .shell.dragging .nav-scrim {
+    transition: none;
   }
   @media (prefers-reduced-motion: reduce) {
-    .sidebar,
-    .nav-open .sidebar,
+    .shell .sidebar,
+    .shell.nav-on .sidebar,
     .main,
+    .mobile-bar,
     .nav-scrim {
+      transition: none;
+    }
+  }
+}
+@media (min-width: 861px) {
+  .shell {
+    --nav-ease: cubic-bezier(0.25, 0.8, 0.25, 1);
+    --nav-time: 0.42s;
+    transition: grid-template-columns var(--nav-time) var(--nav-ease);
+  }
+  /* While the sidebar slides, the page takes the width it will end at straight away, so any
+     rewrapping happens once as the slide starts, never partway or at the end: opening, the width
+     beside the sidebar; closing, the full width (until the column catches up, its far edge is
+     simply out of view). */
+  .shell.side-sliding .main > * {
+    width: var(--slide-w, calc(100vw - var(--sidebar-w, 272px)));
+  }
+
+  /* A hard 1px line where the page meets the sidebar (drawn by the page, which sits on top). */
+  .main {
+    position: relative;
+    z-index: 2;
+    background: var(--paper);
+    box-shadow: -1px 0 0 color-mix(in srgb, var(--ink) 20%, var(--paper));
+  }
+  .sidebar {
+    z-index: 1;
+    transition:
+      transform var(--nav-time) var(--nav-ease),
+      visibility 0s;
+  }
+  .shell.collapsed .sidebar {
+    transform: translateX(-50%);
+    transition:
+      transform var(--nav-time) var(--nav-ease),
+      visibility 0s linear var(--nav-time);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shell,
+    .sidebar,
+    .shell.collapsed .sidebar {
       transition: none;
     }
   }
@@ -6418,6 +6500,9 @@ th .cm-cell {
    the browser's own scroll anchoring stays out of it (it would move the page twice). */
 .item-summary-box {
   overflow-anchor: none;
+  /* Holds its contents' margins, so its height is the same whether it's easing (held at a
+     height) or not (PageView eases it down when an item leaves near the top of the page). */
+  display: flow-root;
 }
 .page:has(.item-summary-box) .prose {
   overflow-anchor: none;
@@ -6892,6 +6977,13 @@ th .cm-cell {
   }
   .shell.collapsed .main {
     padding-left: 20px;
+  }
+  /* That room grows and shrinks with the sidebar's slide (it was a 20px jolt at the start). */
+  .main {
+    transition: padding-left var(--nav-time, 0.42s) var(--nav-ease, ease);
+  }
+  body.resizing .main {
+    transition: none;
   }
 }
 
@@ -7544,4 +7636,367 @@ html {
     border-radius: 0 0 18px 0;
     background: var(--paper);
   }
+}
+
+/* ---------------------------------------------------------------- outline */
+/* On the right edge of the page: a column of dashes, one per heading (longer for bigger ones, the
+   same three lines on every page). Hovering opens the headings in a card beside it; pinned, they
+   sit in an "On this page" column on the right, and the page moves left if it needs the room. */
+.doc-body {
+  position: relative;
+}
+.page.outline-moving {
+  transition: margin 0.36s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.page.outline-pinned {
+  margin-left: auto;
+  margin-right: max(256px, calc((100% - 880px) / 2));
+}
+.outline-dock {
+  position: fixed;
+  /* Its first dash level with the top of the title (the button has 10px above it). */
+  top: calc(var(--ol-top, 112px) - 4px);
+  right: 10px;
+  z-index: 25;
+}
+.outline-dashes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  max-height: 50vh;
+  overflow: hidden;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+}
+.outline-dashes i {
+  display: block;
+  flex: none;
+  height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  transition: background 0.15s;
+}
+.outline-dashes .d-1 {
+  width: 16px;
+}
+.outline-dashes .d-2 {
+  width: 11px;
+}
+.outline-dashes .d-3 {
+  width: 7px;
+}
+/* The headings, in a card to the left of the dashes. */
+.outline-card {
+  position: absolute;
+  top: -6px;
+  right: calc(100% + 4px);
+  width: 264px;
+  max-height: min(64vh, 560px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateX(6px);
+  pointer-events: none;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.outline-card.open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+/* Pinned: a quiet column on the right, the page's own furniture rather than a pop-up. The
+   blue tick marks the section you're reading (it moves as you scroll). */
+.outline-col {
+  position: fixed;
+  top: var(--ol-top, 72px);
+  right: 20px;
+  z-index: 5;
+  width: 216px;
+  max-height: calc(100dvh - var(--ol-top, 72px) - 24px);
+  overflow-y: auto;
+  padding-left: 12px;
+  border-left: 1px solid var(--hairline);
+  animation: outline-col-in 0.34s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+/* Pinning slides the column in from the right edge; × slides it back out. */
+.outline-col.leaving {
+  pointer-events: none;
+  animation: outline-col-out 0.28s cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+@keyframes outline-col-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes outline-col-out {
+  to {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+.outline-col-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.outline-card .outline-col-h {
+  margin: 4px 8px 6px;
+}
+.outline-x {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 50%;
+  color: var(--faint);
+}
+.outline-col ul,
+.outline-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.outline-col li button,
+.outline-card li button {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+:is(.outline-col, .outline-card) .ol-2 button {
+  padding-left: 18px;
+}
+:is(.outline-col, .outline-card) .ol-3 button {
+  padding-left: 28px;
+  font-size: 13px;
+}
+:is(.outline-col, .outline-card) li button[aria-current] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.outline-col li button[aria-current] {
+  box-shadow: inset 2px 0 0 var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+:is(.outline-col, .outline-card) li button:focus-visible {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .outline-dock:hover .outline-dashes i {
+    background: color-mix(in srgb, var(--ink) 38%, transparent);
+  }
+  .outline-x:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+  :is(.outline-col, .outline-card) li button:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
+}
+/* Phones: an outline icon at the right end of the title row; tapping it opens the headings in a
+   pop-out under it, with × to close. */
+.outline-m {
+  position: relative;
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+}
+.outline-m-btn {
+  width: 36px;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.outline-m-btn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+.outline-m .outline-card {
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  transform: translateY(-4px);
+}
+.outline-m .outline-card .outline-col-h {
+  margin: 4px 4px 6px 8px;
+}
+.outline-m .outline-card.open {
+  transform: none;
+}
+/* A heading jumped to from the outline lands below the sticky bar at the top. */
+.prose :is(h1, h2, h3) {
+  scroll-margin-top: 64px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page.outline-moving,
+  .outline-card,
+  .outline-col,
+  .outline-col.leaving {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- page header */
+/* The top of a page, in three clear layers: a slim bar for getting around and the page's own
+   actions (breadcrumbs left; save status, History and More right, quiet until needed), the title
+   standing alone, and one quiet line under it (when it changed, then its tags). Then a clear gap
+   before the body. */
+.page-top {
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.page-top.stuck {
+  border-bottom-color: var(--hairline);
+}
+/* Save status: small and grey; only louder when something's wrong. */
+.save-state.saved,
+.save-state.dirty,
+.save-state.saving {
+  color: var(--faint);
+  font-weight: 400;
+  font-size: 12.5px;
+}
+/* History and More: plain icons, no rings, grey until hovered. */
+.page-actions .btn.icon-only {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 50%;
+}
+@media (hover: hover) and (pointer: fine) {
+  .page-actions .btn.icon-only:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
+}
+.page-actions .btn.icon-only[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+.page-head {
+  margin: 14px 0 30px;
+}
+.page-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+.page-meta-row .page-meta {
+  margin: 0;
+}
+.page-meta-row .tag-row {
+  margin: 0;
+  gap: 6px;
+}
+.page-meta-row .tag-chip {
+  font-size: 12.5px;
+  padding: 1px 8px;
+}
+/* "+ Tag": a small text button on the line, not a big dashed pill (a pill shape on hover). */
+.page-meta-row .tag-add {
+  border-color: transparent;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .page-meta-row .tag-add:hover {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    color: var(--ink);
+  }
+}
+.page-meta-row .tag-add:focus-within {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--paper);
+}
+.page-meta-row .tag-add .tag-input::placeholder {
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- phones: menu, header, history */
+@media (max-width: 860px) {
+  /* The page slid aside: darkened, never blurred, a little more the further it's open. */
+  .shell .nav-scrim,
+  .shell.nav-open .nav-scrim {
+    background: rgb(0 0 0 / calc(var(--nav-p) * 0.4));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  /* Once the slide is over, the sidebar is gone at once (no lingering half-open frame). */
+  .shell:not(.nav-on):not(.nav-open) .sidebar {
+    visibility: hidden;
+    transition: none;
+  }
+  /* The breadcrumb row stays put under the top bar, solid white, and the page scrolls under it. */
+  .page-top {
+    position: sticky;
+    top: var(--mobile-bar-h, 50px);
+    z-index: 15;
+    margin: 0 -16px;
+    padding: 6px 16px;
+    background: var(--paper);
+  }
+  /* History: the list of versions, or (after a tap) that version, never both stacked. */
+  .history:not(.showing) .history-preview,
+  .history.showing .history-list {
+    display: none;
+  }
+  .history-back {
+    margin-right: 4px;
+  }
+  .drawer-head {
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .drawer-head .drawer-actions {
+    margin-left: auto;
+  }
+  .drawer {
+    width: 100%;
+  }
+}
+
+/* A done to-do: struck through as well as greyed (questions just grey). The type label and date
+   chip stay unstruck: they're drawn as blocks, which a line's strike-through doesn't reach. */
+.cm-item.item-todo.cm-done {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+.cm-item.item-todo.cm-done .cm-prefix,
+.cm-item.item-todo.cm-done .item-label,
+.cm-item.item-todo.cm-done .cm-due {
+  display: inline-block;
+  text-decoration: none;
 }
