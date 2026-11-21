@@ -6,7 +6,7 @@ import { ftsQuery, plainText } from '@shared/markdown';
 import { ancestorsOf } from '@shared/tree';
 import type { PageSummary, SearchHit, SearchResponse } from '@shared/types';
 import { all, chunks, first, nowIso } from './db';
-import { listArchived, listSummaries } from './pages';
+import { listArchived, listSummaries, sessionsRoot } from './pages';
 
 const ITEM_PREFIX = 'pages/';
 const itemKey = (id: string) => `${ITEM_PREFIX}${id}.md`;
@@ -205,6 +205,24 @@ function fuse<T extends { id: string }>(lists: T[][], k = 60): Map<string, numbe
   return scores;
 }
 
+/**
+ * Pages search leaves out: the Sessions log (its page and every entry under it) and the AI
+ * Instructions page. Search finds the owner's documents; those are the app's own.
+ */
+export async function notSearched(db: D1Database, pages: PageSummary[]): Promise<Set<string>> {
+  const [root, rules] = await Promise.all([
+    sessionsRoot(db),
+    all<{ id: string }>(db, "SELECT id FROM pages WHERE role = 'ai_instructions'"),
+  ]);
+  const out = new Set(rules.map((r) => r.id));
+  if (root) {
+    const byId = new Map(pages.map((p) => [p.id, p]));
+    out.add(root);
+    for (const p of pages) if (ancestorsOf(p.id, byId).some((a) => a.id === root)) out.add(p.id);
+  }
+  return out;
+}
+
 export async function search(
   env: Cloudflare.Env,
   q: string,
@@ -238,7 +256,10 @@ export async function search(
   const archived = opts.archived ? await listArchived(env.DB) : [];
   // Paths run through both (an archived page may sit under a live one).
   const byId = new Map([...live, ...archived].map((p) => [p.id, p]));
-  const wanted = new Set((opts.archived ? archived : live).map((p) => p.id));
+  const skip = await notSearched(env.DB, [...live, ...archived]);
+  const wanted = new Set(
+    (opts.archived ? archived : live).map((p) => p.id).filter((id) => !skip.has(id)),
+  );
   const fused = fuse<{ id: string }>([semantic, keyword]);
   const kwSnippet = new Map(keyword.map((h) => [h.id, h.snippet]));
   const semSnippet = new Map(semantic.map((h) => [h.id, h.snippet]));

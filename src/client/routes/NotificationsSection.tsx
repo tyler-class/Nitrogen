@@ -47,7 +47,7 @@ export function NotificationsSection() {
     }
   }
 
-  const info = pushInfo({ badge: BADGE_MEANS });
+  const info = pushInfo({ badge: BADGE_MEANS, title: 'Nitrogen' });
   const blocker = state && pushBlocker(state, 'Nitrogen');
   const on = !!state?.on;
 

@@ -97,15 +97,21 @@ export function OpenItems() {
       sections.push({
         key: id,
         items,
+        // The name opens and closes the card like the rest of the row; the small icon after it
+        // opens the page.
         head: (
-          <Link
-            to={pageHref(id, p.page_title)}
-            className="items-group-page"
-            title={[...p.path, p.page_title].join(' › ')}
-          >
+          <span className="items-group-page" title={[...p.path, p.page_title].join(' › ')}>
             {p.page_icon && <span>{p.page_icon}</span>}
             <span className="items-group-title">{p.page_title}</span>
-          </Link>
+            <Link
+              to={pageHref(id, p.page_title)}
+              className="items-group-open"
+              aria-label={`Open ${p.page_title}`}
+              title="Open page"
+            >
+              <Icon name="external" size={14} />
+            </Link>
+          </span>
         ),
       });
     }
@@ -221,7 +227,7 @@ export function OpenItems() {
 
 /**
  * One group: the same collapsible card as a page's own Open Items box. A tap anywhere on its
- * heading row (except the page's link) opens or closes it; which are closed is remembered here.
+ * heading row (except the page's open icon) opens or closes it; which are closed is remembered here.
  */
 function GroupCard({
   id,

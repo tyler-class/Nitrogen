@@ -5329,12 +5329,35 @@ textarea.item-editor-text {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   color: var(--ink);
-  text-decoration: none;
+}
+/* Grouped by page: the page's title as typed (not capitals), a size down from the card's own
+   heading; the open-page icon in a round shade after it. */
+.items-group .items-group-head .items-group-title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.items-group-open {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -4px 0;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.items-group-open:active {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
 }
 @media (hover: hover) and (pointer: fine) {
-  .items-group-page:hover .items-group-title {
-    text-decoration: underline;
+  .items-group-open:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
   }
 }
 

@@ -145,12 +145,15 @@ export async function getDetail(db: D1Database, id: string): Promise<PageDetail>
       )
       .bind(id),
     // Pages inside, with who created them and their tags (their own and #tags in the body).
+    // Archived ones are left out, unless this page is archived too (then they all are).
     db
       .prepare(
         `SELECT ${summaryCols('p')}, p.created_by,
            (SELECT group_concat(tag, char(31)) FROM
              (SELECT tag FROM page_tags t WHERE t.page_id = p.id ORDER BY tag)) AS tag_list
-         FROM pages p WHERE p.parent_id = ? ORDER BY p.position, p.title`,
+         FROM pages p WHERE p.parent_id = ?1
+           AND (p.archived_at IS NULL OR (SELECT archived_at FROM pages WHERE id = ?1) IS NOT NULL)
+         ORDER BY p.position, p.title`,
       )
       .bind(id),
     db

@@ -8,7 +8,7 @@ import type { Backup, PanelLayout, SearchHit, SearchResponse } from '@shared/typ
 import { actorOf, isInternal } from '../auth';
 import { all, chunks, getSetting, nowIso, setSettingStmt } from '../db';
 import { hydrate, itemStatements, listSummaries } from '../pages';
-import { indexSoon, resetIndex, search } from '../search';
+import { indexSoon, notSearched, resetIndex, search } from '../search';
 import { ApiError, body, type AppEnv } from './util';
 import { kitState, setKitState } from '../kit/telemetry';
 
@@ -77,11 +77,12 @@ admin.get('/search', async (c) => {
       // No words: every page with the tag, most recently changed first.
       const list = await listSummaries(c.env.DB);
       const byId = new Map(list.map((p) => [p.id, p]));
+      const skip = await notSearched(c.env.DB, list);
       res = {
         query: '',
         mode,
         hits: list
-          .filter((p) => tagged.has(p.id))
+          .filter((p) => tagged.has(p.id) && !skip.has(p.id))
           .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
           .slice(0, limit)
           .map((p): SearchHit => ({

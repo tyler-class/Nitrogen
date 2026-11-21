@@ -430,12 +430,16 @@ export const installSteps = (title: string) => [
   },
 ];
 
-/** The ⓘ beside Notifications. `badge`: what the app-icon count counts, if the app has one. */
-export const pushInfo = (o: { badge?: string } = {}) => ({
+/**
+ * The ⓘ beside Notifications, said plainly. `badge`: what the number on the app icon counts, if
+ * the app has one. `title`: the app's name, for the iPhone line. Apps with their own timing drop
+ * the "Daily ones" line and say theirs instead.
+ */
+export const pushInfo = (o: { badge?: string; title?: string } = {}) => ({
   lines: [
-    'Each device has its own on/off switch and choices.',
-    'Daily ones arrive around 8 a.m. in the device’s time zone.',
-    ...(o.badge ? [`The app icon shows ${o.badge}.`] : []),
-    'They need the app installed on the phone (on iPhone and iPad, added to the Home Screen; iOS 16.4 or later).',
+    'Turn them on separately on each phone or computer; each one keeps its own choices.',
+    'Daily ones arrive around 8 a.m. your time.',
+    ...(o.badge ? [`The number on the app icon shows ${o.badge}.`] : []),
+    `On iPhone or iPad, add ${o.title ?? 'the app'} to your Home Screen first (iOS 16.4 or later).`,
   ],
 });

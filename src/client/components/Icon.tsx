@@ -38,6 +38,7 @@ const PATHS: Record<string, string> = {
   close: 'M5 5l10 10M15 5L5 15',
   folder: 'M3 6.5V15a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H9.5L8 5H4a1 1 0 0 0-1 1.5z',
   page: 'M6 3h6l4 4v10H6zM12 3v4h4',
+  external: 'M12 3h5v5M17 3l-7.5 7.5M15 11.5V16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4.5',
   link: 'M8 12l4-4M6.5 8.5l-2 2a3.2 3.2 0 0 0 4.5 4.5l2-2M13.5 11.5l2-2a3.2 3.2 0 0 0-4.5-4.5l-2 2',
   copy: 'M7 7h9v9H7zM4 13V4h9',
   expand: 'M4 8V4h4M16 12v4h-4M4 4l5 5M16 16l-5-5',

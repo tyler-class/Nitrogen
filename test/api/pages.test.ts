@@ -126,6 +126,23 @@ describe('search', () => {
     const hy = (await api.get<SearchResponse>('/search?q=levain&mode=hybrid')).data;
     expect(hy.hits[0]?.title).toBe('Sourdough starter');
   });
+
+  it('leaves out AI Instructions and archived pages', async () => {
+    const api = await session();
+    const { id: rules } = (await api.get<{ id: string }>('/ai-instructions')).data;
+    expect((await api.patch(`/pages/${rules}`, { body: 'Zephyrine house rule.' })).status).toBe(
+      200,
+    );
+    await api.post('/pages', { title: 'Zephyrine notes', body: 'Zephyrine in a document.' });
+    const old = (await api.post<Page>('/pages', { title: 'Old zephyrine', body: 'Zephyrine.' }))
+      .data;
+    await api.post(`/pages/${old.id}/archive`, { archived: true });
+    const res = (await api.get<SearchResponse>('/search?q=zephyrine&mode=keyword')).data;
+    expect(res.hits.map((h) => h.title)).toEqual(['Zephyrine notes']);
+    const arch = (await api.get<SearchResponse>('/search?q=zephyrine&mode=keyword&archived=1'))
+      .data;
+    expect(arch.hits.map((h) => h.title)).toEqual(['Old zephyrine']);
+  });
 });
 
 describe('images', () => {
@@ -169,7 +186,8 @@ describe('backup', () => {
     // Opening the app makes the AI Instructions page (from the template) if there isn't one yet.
     await api.get('/tree');
     const backup = (await api.get<{ pages: Page[] }>('/backup')).data;
-    const n = backup.pages.length;
+    // The tree lists pages in the wiki, not archived ones (the backup holds both).
+    const n = backup.pages.filter((p) => !p.archived_at).length;
     expect((await api.post('/restore', backup)).status).toBe(200);
     const tree = (await api.get<TreeResponse>('/tree')).data;
     expect(tree.pages.length).toBe(n);
