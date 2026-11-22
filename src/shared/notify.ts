@@ -1,7 +1,8 @@
 // What Nitrogen's notifications say and when, as pure functions (the Worker only loads data and
 // hands it here; see src/worker/notifications.ts). Five kinds, each with its own switch:
 //
-//   digest     8 a.m.: the to-dos due and reminders scheduled today.
+//   digest     8 a.m.: the to-dos due and reminders scheduled today without a time (a timed
+//              one notifies at its time instead, so nothing notifies twice).
 //   overdue    8 a.m. on the first day an open to-do is overdue (once per item). Reminders are
 //              nudges, never overdue.
 //   timed      At an item's own time ("due:2026-11-12 14:00"), to the nearest cron run (5 min).
@@ -23,7 +24,7 @@ export const NOTIFY_KINDS = [
     label: 'Morning digest',
     description: 'At 8 a.m., what’s on for that day.',
     detail:
-      'To-dos due and reminders scheduled today, in one notification. Skipped when there’s nothing.',
+      'To-dos due and reminders scheduled today without a time, in one notification (those with a time notify at it instead). Skipped when there’s nothing.',
   },
   {
     id: 'overdue',
@@ -238,12 +239,13 @@ export function dueToday(items: readonly DatedItem[], today: string): DatedItem[
 }
 
 /**
- * "Due today": "3 to-dos: Send the draft, Call the dentist (2:00 PM), …". Opens the item when
- * there's one, its page when they're all on one page, else the Open Items page on Due today.
- * Null when nothing is due today.
+ * "Due today": "3 to-dos: Send the draft, Water the plants, …". Opens the item when there's one,
+ * its page when they're all on one page, else the Open Items page on Due today. Items with a time
+ * aren't in it: each gets its own notification at that time, so one item never notifies twice.
+ * Null when nothing without a time is due today.
  */
 export function digestNotice(items: readonly DatedItem[], today: string): Notice | null {
-  const due = dueToday(items, today);
+  const due = dueToday(items, today).filter((i) => !i.due_time);
   if (!due.length) return null;
   const pages = new Set(due.map((i) => i.page_id));
   const first = due[0]!;

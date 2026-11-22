@@ -96,6 +96,16 @@ describe('the morning digest', () => {
     expect(dueToday(plans, '2031-06-02')).toEqual([]);
   });
 
+  it('leaves out items with a time: they notify at it instead, never twice', () => {
+    const timed = page(
+      'p4',
+      'Day',
+      '- reminder: Call the dentist due:2031-06-03 14:00\n- [ ] todo: Pay rent due:2031-06-03',
+    );
+    expect(digestNotice(timed, '2031-06-03')).toMatchObject({ body: '1 to-do: Pay rent' });
+    expect(digestNotice(timed.slice(0, 1), '2031-06-03')).toBeNull();
+  });
+
   it('is skipped when nothing is due today', () => {
     expect(digestNotice(plans, '2031-06-02')).toBeNull();
     expect(digestNotice([], '2031-06-03')).toBeNull();
@@ -300,11 +310,9 @@ describe('timed items', () => {
     expect(fingerprint('a')).not.toBe(fingerprint('b'));
   });
 
-  it('still count by date for the badge and the digest', () => {
+  it('count by date for the badge, but leave the digest to the untimed ones', () => {
     expect(badgeCount(items, '2026-11-12')).toBe(5);
-    expect(digestNotice(items, '2026-11-12')!.body).toBe(
-      '2 to-dos and 3 reminders: Call the dentist (2:00 PM), Stand-up (9:15 AM), All day, Late night (11:55 PM), Bad',
-    );
+    expect(digestNotice(items, '2026-11-12')!.body).toBe('1 to-do and 1 reminder: All day, Bad');
   });
 });
 
