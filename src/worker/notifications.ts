@@ -5,9 +5,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { InboxNotice } from '@shared/types';
 import {
+  assistantReady,
   assistantWindow,
   DATED_TYPES,
   localClock,
+  MORNING_HOUR,
   noticesNow,
   NOTIFY_KINDS,
   type AssistantEvent,
@@ -50,13 +52,16 @@ async function loadOpen(db: D1Database): Promise<DatedItem[]> {
  * (MCP writes; the app's own edits are "you"). Sessions entries aren't in the log, but the
  * Sessions page itself is left out too.
  */
-async function loadAssistantEvents(db: D1Database, w: AssistantWindow): Promise<AssistantEvent[]> {
+async function loadAssistantEvents(
+  db: D1Database,
+  w: Pick<AssistantWindow, 'from' | 'to'>,
+): Promise<AssistantEvent[]> {
   const sessions =
     (await first<{ value: string }>(db, "SELECT value FROM settings WHERE key = 'sessions_id'"))
       ?.value ?? '';
   const rows = await all<Omit<AssistantEvent, 'live'> & { live: number }>(
     db,
-    `SELECT e.page_id, COALESCE(p.title, e.title) AS title, e.action, e.actor,
+    `SELECT e.page_id, COALESCE(p.title, e.title) AS title, e.action, e.actor, e.created_at AS at,
             (p.id IS NOT NULL AND e.action != 'delete') AS live
      FROM page_events e LEFT JOIN pages p ON p.id = e.page_id
      WHERE e.actor LIKE 'agent:%' AND e.created_at >= ? AND e.created_at < ?
@@ -76,25 +81,46 @@ const candidate = (n: Notice): PushCandidate => ({
   message: { title: n.title, body: n.body, url: n.url, tag: n.tag },
 });
 
-/** The notifications a device could get now, and its badge count. Data loads once per run. */
-export function nitrogenPush(db: D1Database): Pick<PushJobOptions, 'build' | 'badge'> {
+/** Where the last assistant-changes report ended: the next one covers what came after. */
+const CURSOR = 'assistant_reported_to';
+/** With no report yet, a first one looks back this far. */
+const FIRST_LOOKBACK_MS = 3 * 3_600_000;
+
+/** One run's assistant edits: those since the last report, and whether they're ready to send. */
+interface AssistantPlan {
+  since: Date;
+  events: AssistantEvent[];
+  ready: boolean;
+}
+
+async function assistantPlan(db: D1Database, now: Date): Promise<AssistantPlan> {
+  const saved = await getSetting(db, CURSOR);
+  const t = saved ? Date.parse(saved) : NaN;
+  const since = Number.isFinite(t) ? new Date(t) : new Date(now.getTime() - FIRST_LOOKBACK_MS);
+  const events = since < now ? await loadAssistantEvents(db, { from: since, to: now }) : [];
+  return { since, events, ready: assistantReady(events, now) };
+}
+
+const windowFor = (plan: AssistantPlan, now: Date, tz: string) =>
+  assistantWindow(plan.events, plan.since, now, tz);
+
+/**
+ * The notifications a device could get now, and its badge count. Data loads once per run; the
+ * assistant plan is the run's own (runNotifications) or, used alone, worked out here.
+ */
+export function nitrogenPush(
+  db: D1Database,
+  plan?: Promise<AssistantPlan>,
+): Pick<PushJobOptions, 'build' | 'badge'> {
   let items: Promise<DatedItem[]> | null = null;
   const load = () => (items ??= loadOpen(db));
-  const events = new Map<string, Promise<AssistantEvent[]>>();
-  const loadEvents = (w: AssistantWindow) => {
-    const k = `${w.from.toISOString()}|${w.key}`;
-    if (!events.has(k)) events.set(k, loadAssistantEvents(db, w));
-    return events.get(k)!;
-  };
+  let own: Promise<AssistantPlan> | null = plan ?? null;
   return {
     async build(device: PushDevice, now: Date) {
-      const w = device.prefs.assistant === false ? null : assistantWindow(now, device.tz);
-      const notices = noticesNow(
-        await load(),
-        localClock(now, device.tz),
-        w ? await loadEvents(w) : [],
-        w,
-      );
+      own ??= assistantPlan(db, now);
+      const p = await own;
+      const w = device.prefs.assistant === false ? null : windowFor(p, now, device.tz);
+      const notices = noticesNow(await load(), localClock(now, device.tz), w ? p.events : [], w);
       return notices.map(candidate);
     },
     async badge() {
@@ -104,19 +130,45 @@ export function nitrogenPush(db: D1Database): Pick<PushJobOptions, 'build' | 'ba
 }
 
 /**
- * The cron's notification run (every 15 minutes). The kit's own 8 a.m. gate is opened all day
+ * The cron's notification run (every 5 minutes). The kit's own 8 a.m. gate is opened all day
  * (hour 0): noticesNow decides the time for each kind (8 a.m. for the morning ones, an item's
- * own time for timed ones, hourly for assistant changes). Morning ones only go out from 8 to
- * 10 a.m.: something that turns up later in the day waits for the next morning.
+ * own time for timed ones, a few minutes after an assistant finishes for assistant changes).
+ * Morning ones only go out from 8 to 10 a.m.: something that turns up later waits for the next
+ * morning.
  */
 export async function runNotifications(db: D1Database, o: Partial<PushJobOptions> = {}) {
+  const now = o.now ?? new Date();
+  const plan = assistantPlan(db, now);
   // The list first, so the badge sent with each push already counts what it's about.
+  let reported = false;
   try {
-    await recordInbox(db, o.now ?? new Date());
+    reported = (await recordInbox(db, now, await plan)).reported;
   } catch (e) {
     console.warn('notifications: inbox failed', e);
   }
-  return runPushJob(db, { ...nitrogenPush(db), icon: ICON, hour: 0, until: 24, ...o });
+  const res = await runPushJob(db, {
+    ...nitrogenPush(db, plan),
+    icon: ICON,
+    hour: 0,
+    until: 24,
+    ...o,
+    now,
+  });
+  // Move the cursor on once the changes were reported (or there were none to wait for), so the
+  // next notification only covers what comes after. Held through the night: 8 a.m. reports it.
+  try {
+    const p = await plan;
+    const none = !p.events.some((e) => e.actor?.startsWith('agent:'));
+    if (reported || (none && (await anyZoneAwake(db, now))))
+      await setSettingStmt(db, CURSOR, now.toISOString()).run();
+  } catch (e) {
+    console.warn('notifications: cursor failed', e);
+  }
+  return res;
+}
+
+async function anyZoneAwake(db: D1Database, now: Date): Promise<boolean> {
+  return (await inboxZones(db)).some((tz) => localClock(now, tz).minutes >= MORNING_HOUR * 60);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -142,18 +194,20 @@ async function inboxZones(db: D1Database): Promise<string[]> {
  * Adds every notification due now to the list, once each (all kinds, whatever a device has
  * switched off), whether or not any device is set up for push. Old ones are dropped.
  */
-export async function recordInbox(db: D1Database, now: Date): Promise<number> {
+export async function recordInbox(
+  db: D1Database,
+  now: Date,
+  plan?: AssistantPlan,
+): Promise<{ added: number; reported: boolean }> {
   const items = await loadOpen(db);
+  const p = plan ?? (await assistantPlan(db, now));
   const at = now.toISOString();
   const stmts: D1PreparedStatement[] = [];
+  let reported = false;
   for (const tz of await inboxZones(db)) {
-    const w = assistantWindow(now, tz);
-    const notices = noticesNow(
-      items,
-      localClock(now, tz),
-      w ? await loadAssistantEvents(db, w) : [],
-      w,
-    );
+    const w = windowFor(p, now, tz);
+    if (w) reported = true;
+    const notices = noticesNow(items, localClock(now, tz), w ? p.events : [], w);
     const date = localDate(now, tz);
     for (const n of notices)
       stmts.push(
@@ -172,7 +226,10 @@ export async function recordInbox(db: D1Database, now: Date): Promise<number> {
       .bind(new Date(now.getTime() - KEEP_DAYS * 86_400_000).toISOString()),
   );
   const res = await db.batch(stmts);
-  return res.slice(0, added).reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+  return {
+    added: res.slice(0, added).reduce((n, r) => n + (r.meta.changes ?? 0), 0),
+    reported,
+  };
 }
 
 /** The app-icon count: unread notifications. */

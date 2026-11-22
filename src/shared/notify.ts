@@ -4,8 +4,8 @@
 //   digest     8 a.m.: the to-dos due and reminders scheduled today.
 //   overdue    8 a.m. on the first day an open to-do is overdue (once per item). Reminders are
 //              nudges, never overdue.
-//   timed      At an item's own time ("due:2026-11-12 14:00"), to the nearest cron run.
-//   assistant  At most hourly: pages an assistant (MCP) created or edited.
+//   timed      At an item's own time ("due:2026-11-12 14:00"), to the nearest cron run (5 min).
+//   assistant  A few minutes after an assistant (MCP) stops editing: the pages it changed.
 //   questions  Monday 8 a.m.: questions still unanswered.
 //
 // Each one is also kept in the app's list (the bell); the app-icon count is how many of those are
@@ -37,14 +37,14 @@ export const NOTIFY_KINDS = [
     label: 'Timed reminders',
     description: 'At the time written on an item.',
     detail:
-      'For reminders and to-dos with a time, like “due:2026-11-12 14:00”, on this device’s clock. Sent once, within about 15 minutes of it; not at all if it was more than half an hour ago.',
+      'For reminders and to-dos with a time, like “due:2026-11-12 14:00”, on this device’s clock. Sent once, within a few minutes of it; not at all if it was more than half an hour ago.',
   },
   {
     id: 'assistant',
     label: 'Assistant changes',
     description: 'When an assistant edits pages.',
     detail:
-      'Pages an assistant like Claude created or edited over MCP, gathered into one notification an hour. Your own edits never notify. Nothing between midnight and 8 a.m.; those come at 8.',
+      'Pages an assistant like Claude created or edited over MCP, in one notification a few minutes after it finishes (within half an hour during a long session). Your own edits never notify. Nothing between midnight and 8 a.m.; those come at 8.',
   },
   {
     id: 'questions',
@@ -306,15 +306,17 @@ export function overdueNotice(items: readonly DatedItem[], today: string): Notic
 // ---------------------------------------------------------------------------------------------
 // Timed reminders
 
-/** How early a timed item may go: half the 15-minute cron, so it's the run nearest the time. */
-export const TIMED_EARLY_MIN = 7.5;
+/** How often the cron runs (wrangler.jsonc: every 5 minutes). */
+export const CRON_MIN = 5;
+/** How early a timed item may go: half a cron interval, so it's the run nearest the time. */
+export const TIMED_EARLY_MIN = CRON_MIN / 2;
 /**
  * How late it may still go (a missed run, a failed send): after that it's skipped, so an item
  * written for a time that's already gone doesn't notify long after it.
  */
 export const TIMED_LATE_MIN = 30;
-/** The last cron run of a day: a time after 23:52 goes then rather than not at all. */
-const LAST_RUN_MIN = 23 * 60 + 44;
+/** The last cron run of a day: a time after it goes then rather than not at all. */
+const LAST_RUN_MIN = 24 * 60 - CRON_MIN;
 
 /**
  * Whether a timed item is due to go out now: on its due date (the device's clock), from the
@@ -359,9 +361,11 @@ export interface AssistantEvent {
   actor: string | null;
   /** The page still exists (it can be opened). */
   live: boolean;
+  /** When it happened (ISO). */
+  at?: string;
 }
 
-/** The hour of activity one assistant notification covers: [from, to). */
+/** The stretch of activity one assistant notification covers: [from, to). */
 export interface AssistantWindow {
   from: Date;
   to: Date;
@@ -369,22 +373,42 @@ export interface AssistantWindow {
   key: string;
 }
 
-const HOUR = 3_600_000;
+/** An assistant counts as finished once it has made no change for this long. */
+export const ASSISTANT_QUIET_MIN = 5;
+/** A long session still reports at least this often. */
+export const ASSISTANT_MAX_WAIT_MIN = 30;
 
 /**
- * Which assistant edits to report now. Notifications go out once an hour, on the first run of
- * each hour, about the hour before it: [to − 1h, to). Between midnight and 8 a.m. (the device's
- * clock) nothing goes out; the first hour from 8 covers the night too. Null when this run sends
- * nothing (quiet hours, or the device's date changed partway through this hour, as it does in
- * half-hour zones, so the kit's once-a-day log can't send one hour twice).
+ * Whether assistant edits are ready to report: the ones made since the last report (`events`,
+ * newest first). Ready once the assistant has been quiet for ASSISTANT_QUIET_MIN, or the oldest
+ * unreported change is ASSISTANT_MAX_WAIT_MIN old, so a notification comes a few minutes after a
+ * session ends rather than at the next hour.
  */
-export function assistantWindow(now: Date, tz: string): AssistantWindow | null {
-  const to = new Date(Math.floor(now.getTime() / HOUR) * HOUR);
-  const sendable = (t: Date) => isAwake(localClock(t, tz));
-  if (!sendable(to) || localClock(to, tz).date !== localClock(now, tz).date) return null;
-  let from = new Date(to.getTime() - HOUR);
-  for (let n = 0; n < 24 && !sendable(from); n++) from = new Date(from.getTime() - HOUR);
-  return { from, to, key: to.toISOString().slice(0, 13) };
+export function assistantReady(events: readonly AssistantEvent[], now: Date): boolean {
+  const times = events
+    .filter((e) => decodeActor(e.actor)?.kind === 'agent' && e.at)
+    .map((e) => Date.parse(e.at!));
+  if (!times.length) return false;
+  const age = (t: number) => (now.getTime() - t) / 60_000;
+  return (
+    age(Math.max(...times)) >= ASSISTANT_QUIET_MIN ||
+    age(Math.min(...times)) >= ASSISTANT_MAX_WAIT_MIN
+  );
+}
+
+/**
+ * The window to report now for a device or the bell in zone `tz`, or null: edits since the last
+ * report, once they're ready (assistantReady) and it's not the quiet hours (midnight to 8 a.m.:
+ * the night's changes come together at 8).
+ */
+export function assistantWindow(
+  events: readonly AssistantEvent[],
+  since: Date,
+  now: Date,
+  tz: string,
+): AssistantWindow | null {
+  if (!isAwake(localClock(now, tz)) || !assistantReady(events, now)) return null;
+  return { from: since, to: now, key: now.toISOString().slice(0, 16) };
 }
 
 /** "Claude", "Claude and ChatGPT", "3 assistants". */

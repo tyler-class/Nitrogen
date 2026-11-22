@@ -433,9 +433,9 @@ describe('the notification run', () => {
       ['Open questions', '1 open question: Which hosting plan?', '/items?show=questions'],
     ]);
     expect(await run('2031-09-08T12:20Z')).toEqual([]);
-    // 1:50 p.m.: still 10 minutes early. 1:53: the run nearest 2:00 sends it, once.
-    expect(await run('2031-09-08T17:50Z')).toEqual([]);
-    const timed = await run('2031-09-08T17:53Z');
+    // 1:55 p.m.: still 5 minutes early. 1:58: the run nearest 2:00 sends it, once.
+    expect(await run('2031-09-08T17:55Z')).toEqual([]);
+    const timed = await run('2031-09-08T17:58Z');
     expect(timed).toMatchObject([
       {
         title: 'To-do',
@@ -450,11 +450,11 @@ describe('the notification run', () => {
     ]);
     expect(await run('2031-09-10T12:05Z')).toEqual([]);
 
-    // An assistant's edits at 3:10 p.m., and the owner's own: one notification at 4, the
-    // assistant's only.
+    // An assistant's edits at 3:10 p.m. on the 10th, and the owner's own: one notification a
+    // few minutes after the assistant stops (not at the next hour), the assistant's only.
     const { createPage, updatePage } = await import('../../src/worker/pages');
     const { agent, YOU } = await import('../../src/shared/actor');
-    vi.useFakeTimers({ now: new Date('2031-09-09T19:10Z'), toFake: ['Date'] });
+    vi.useFakeTimers({ now: new Date('2031-09-10T19:10Z'), toFake: ['Date'] });
     const garden = await createPage(
       env.DB,
       { title: 'Garden', parent_id: null, body: 'Tomatoes.' },
@@ -468,16 +468,20 @@ describe('the notification run', () => {
     );
     await updatePage(env.DB, garden.id, { title: 'Garden' }, { actor: YOU });
     vi.useRealTimers();
-    expect(await run('2031-09-09T19:50Z')).toEqual([]);
-    const hourly = await run('2031-09-09T20:02Z');
-    expect(hourly.map((m) => [m.title, m.body, m.url])).toEqual([
+    // Two minutes later it may still be working: wait.
+    expect(await run('2031-09-10T19:12Z')).toEqual([]);
+    // Quiet for five minutes: everything since the last report (the 12:05 run).
+    const soon = await run('2031-09-10T19:16Z');
+    expect(soon.map((m) => [m.title, m.body, m.url])).toEqual([
       [
         'Assistant changes',
         'Claude updated 2 pages: Kinds plans, Garden',
-        '/activity?who=agents&from=2031-09-09T19%3A00%3A00.000Z&to=2031-09-09T20%3A00%3A00.000Z',
+        '/activity?who=agents&from=2031-09-10T12%3A05%3A00.000Z&to=2031-09-10T19%3A16%3A00.000Z',
       ],
     ]);
-    expect(await run('2031-09-09T20:17Z')).toEqual([]);
+    // Reported once: the next runs have nothing new.
+    expect(await run('2031-09-10T19:21Z')).toEqual([]);
+    expect(await run('2031-09-10T20:02Z')).toEqual([]);
     await api.del(`/pages/${plans.id}`);
     await api.del(`/pages/${garden.id}`);
   });

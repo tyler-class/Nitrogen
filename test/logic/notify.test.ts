@@ -228,9 +228,9 @@ describe('timed items', () => {
   const ny = (iso: string) => at(iso, 'America/New_York');
 
   it('go out at the cron run nearest their time, on the device’s clock', () => {
-    // 1:50 p.m. EST is 10 minutes early; 1:53 is the nearest quarter-hour run's window.
-    expect(timedNotices(items, ny('2026-11-12T18:50Z'))).toEqual([]);
-    const [n] = timedNotices(items, ny('2026-11-12T18:53Z'));
+    // 1:55 p.m. EST is 5 minutes early; 1:58 is within the nearest 5-minute run's window.
+    expect(timedNotices(items, ny('2026-11-12T18:55Z'))).toEqual([]);
+    const [n] = timedNotices(items, ny('2026-11-12T18:58Z'));
     expect(n).toEqual({
       kind: 'timed',
       key: `p1:2026-11-12T14:00:${n!.key.split(':').pop()}`,
@@ -257,8 +257,8 @@ describe('timed items', () => {
   });
 
   it('skip items without a time, done items, bad times and other days', () => {
-    const all = Array.from({ length: 96 }, (_, q) =>
-      timedNotices(items, { date: '2026-11-12', minutes: q * 15, weekday: 4 }),
+    const all = Array.from({ length: 288 }, (_, q) =>
+      timedNotices(items, { date: '2026-11-12', minutes: q * 5, weekday: 4 }),
     ).flat();
     expect([...new Set(all.map((n) => n.body))]).toEqual([
       'Stand-up (9:15 AM)',
@@ -269,10 +269,10 @@ describe('timed items', () => {
   });
 
   it('sends a time after the last run of the day at that last run', () => {
-    expect(timedDue(items[4]!, { date: '2026-11-12', minutes: 23 * 60 + 45, weekday: 4 })).toBe(
+    expect(timedDue(items[4]!, { date: '2026-11-12', minutes: 23 * 60 + 53, weekday: 4 })).toBe(
       true,
     );
-    expect(timedDue(items[4]!, { date: '2026-11-12', minutes: 23 * 60 + 30, weekday: 4 })).toBe(
+    expect(timedDue(items[4]!, { date: '2026-11-12', minutes: 23 * 60 + 50, weekday: 4 })).toBe(
       false,
     );
   });
@@ -323,24 +323,59 @@ describe('assistant changes', () => {
     live,
   });
 
-  it('cover the hour before each hour, and the night at 8 a.m.', () => {
-    const w = assistantWindow(new Date('2026-11-12T19:07Z'), 'America/New_York')!;
+  it('go a few minutes after the assistant stops, or within half an hour of a long session', () => {
+    const at = (iso: string) => ({ ...ev('a', 'A', 'agent:Claude'), at: iso });
+    const since = new Date('2026-11-12T18:00Z');
+    // Still editing two minutes ago: wait.
+    expect(
+      assistantWindow([at('2026-11-12T19:05Z')], since, new Date('2026-11-12T19:07Z'), 'UTC'),
+    ).toBeNull();
+    // Quiet for five minutes: report everything since the last report.
+    const w = assistantWindow(
+      [at('2026-11-12T19:02Z')],
+      since,
+      new Date('2026-11-12T19:07Z'),
+      'UTC',
+    )!;
     expect([w.from.toISOString(), w.to.toISOString(), w.key]).toEqual([
       '2026-11-12T18:00:00.000Z',
-      '2026-11-12T19:00:00.000Z',
-      '2026-11-12T19',
+      '2026-11-12T19:07:00.000Z',
+      '2026-11-12T19:07',
     ]);
-    // 3 a.m. in New York: quiet.
-    expect(assistantWindow(new Date('2026-11-12T08:07Z'), 'America/New_York')).toBeNull();
-    // 8 a.m.: everything since 11 p.m. (the last hour that was sent).
-    const morning = assistantWindow(new Date('2026-11-12T13:07Z'), 'America/New_York')!;
-    expect(morning.from.toISOString()).toBe('2026-11-12T04:00:00.000Z');
-    // A half-hour zone whose date changes mid-hour: only the run before midnight sends.
-    expect(assistantWindow(new Date('2026-11-12T18:10Z'), 'Asia/Kolkata')).not.toBeNull();
-    expect(assistantWindow(new Date('2026-11-12T18:40Z'), 'Asia/Kolkata')).toBeNull();
+    // A long session: its first change half an hour ago, still going.
+    expect(
+      assistantWindow(
+        [at('2026-11-12T19:06Z'), at('2026-11-12T18:37Z')],
+        since,
+        new Date('2026-11-12T19:07Z'),
+        'UTC',
+      ),
+    ).not.toBeNull();
+    // The owner's own edits never count.
+    expect(
+      assistantWindow(
+        [{ ...ev('a', 'A', 'you'), at: '2026-11-12T18:30Z' }],
+        since,
+        new Date('2026-11-12T19:07Z'),
+        'UTC',
+      ),
+    ).toBeNull();
+    // 3 a.m. in New York: quiet hours; 8 a.m. reports the night.
+    const night = [at('2026-11-12T07:00Z')];
+    const eve = new Date('2026-11-12T03:30Z');
+    expect(
+      assistantWindow(night, eve, new Date('2026-11-12T08:07Z'), 'America/New_York'),
+    ).toBeNull();
+    expect(
+      assistantWindow(night, eve, new Date('2026-11-12T13:00Z'), 'America/New_York')!.from,
+    ).toEqual(eve);
   });
 
-  const w = assistantWindow(new Date('2026-11-12T19:07Z'), 'UTC')!;
+  const w = {
+    from: new Date('2026-11-12T18:00Z'),
+    to: new Date('2026-11-12T19:07Z'),
+    key: '2026-11-12T19:07',
+  };
 
   it('name the assistant and the pages, and ignore the owner’s own edits', () => {
     expect(
@@ -362,7 +397,7 @@ describe('assistant changes', () => {
       ),
     ).toEqual({
       kind: 'assistant',
-      key: '2026-11-12T19',
+      key: '2026-11-12T19:07',
       title: 'Assistant changes',
       body: 'Claude updated 8 pages: Trip ideas, Garden, Budget, Recipes, Reading list with a very long title indeed, Another page with a fairly long title, …',
       url: assistantUrl(w),
@@ -438,8 +473,8 @@ describe('everything due now', () => {
     );
     const kinds = (minutes: number) =>
       noticesNow(items, { date: '2026-11-09', minutes, weekday: 1 }).map((n) => n.kind);
-    expect(kinds(6 * 60 + 50)).toEqual([]);
-    expect(kinds(6 * 60 + 55)).toEqual(['timed']);
+    expect(kinds(6 * 60 + 55)).toEqual([]);
+    expect(kinds(6 * 60 + 58)).toEqual(['timed']);
     expect(kinds(7 * 60 + 30)).toEqual(['timed']);
     expect(kinds(7 * 60 + 31)).toEqual([]);
     expect(kinds(8 * 60)).toEqual(['digest', 'overdue', 'questions']);
@@ -447,7 +482,11 @@ describe('everything due now', () => {
     // Something that turns up later waits for the next morning.
     expect(kinds(10 * 60)).toEqual([]);
     expect(kinds(21 * 60)).toEqual([]);
-    const w = assistantWindow(new Date('2026-11-09T19:07Z'), 'UTC')!;
+    const w = {
+      from: new Date('2026-11-09T18:00Z'),
+      to: new Date('2026-11-09T19:07Z'),
+      key: '2026-11-09T19:07',
+    };
     expect(
       noticesNow(
         [],

@@ -52,5 +52,5 @@
   },
   // Retries semantic indexing for pages whose last attempt failed, and sends notifications (each at
   // most once a day per device; the kit's sent log dedupes the 15-minute runs).
-  "triggers": { "crons": ["*/15 * * * *"] },
+  "triggers": { "crons": ["*/5 * * * *"] },
 }

@@ -114,13 +114,14 @@ export default {
   /**
    * Catches up on semantic indexing that failed or was skipped during requests, sends the
    * anonymous daily check-in (at most once a day; off switch in Settings → Updates) and the
-   * morning digest (each device at 8 a.m. its time, once a day; Settings → Notifications).
+   * notifications (every 5 minutes; Settings → Notifications).
    */
   async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(checkIn(env.DB, usage(env)));
     ctx.waitUntil(runNotifications(env.DB));
-    // Images no page or saved version uses any more.
-    ctx.waitUntil(purgeUnusedFiles(env));
+    // Images no page or saved version uses any more: every 15 minutes is plenty (the cron runs
+    // every 5, for notifications).
+    if (new Date().getUTCMinutes() % 15 < 5) ctx.waitUntil(purgeUnusedFiles(env));
     try {
       let total = 0;
       for (let i = 0; i < 5; i++) {
