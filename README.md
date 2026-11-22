@@ -8,7 +8,7 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
-![Nitrogen on a laptop and a phone: a page with its tree, tags and to-dos, and Home’s open items](docs/screenshots/hero.png)
+![Nitrogen on a laptop and a phone: a page with its tree, tags and Action Items, and Home’s Action Items](docs/screenshots/hero.png)
 
 - **A page tree.** Every page can hold subpages. Drag pages in the sidebar to reorder or nest them.
 - **Markdown with wiki links.** `[[Page title]]` links pages and powers “Linked from” backlinks.
@@ -27,7 +27,7 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
   `- question: …` or `- reminder: … due:…` on any page. Add a 24-hour time to be notified then:
   `due:2026-11-20 14:00` (or `due:2026-11-20T14:00`), on your phone's own clock. To-dos are tasks
   you check off (and go overdue); reminders are nudges, scheduled for a day or time, that simply
-  pass. They show as cards, a summary at the top of the page, and on the Open items page, where you
+  pass. They show as cards, a summary at the top of the page, and on the Action Items page, where you
   can check them off, change dates and answer questions; assistants list them with `open_items`.
 - **Sessions.** Every assistant session that changes the wiki is recorded automatically under a
   protected, read-only Sessions section, with the pages it touched and the assistant's own summary.
@@ -49,9 +49,9 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 ![A page with headings, inline to-dos, a timed reminder, a question and a budget table](docs/screenshots/page.png)
 
-**Editing:** markdown with a toolbar for headings, callouts, diagrams, items and images. Type `[[` to link a page.
+**Editing:** every page is always ready to write in, drawn formatted as you type. Type `/` for to-dos, questions, reminders, headings, lists, callouts and more, `@` to link a page, or select text to format it.
 
-![The editor with its toolbar, and page suggestions open after typing two brackets](docs/screenshots/editor.png)
+![A page being edited with the / menu open: To Do, Question and Reminder, then headings and lists](docs/screenshots/editor.png)
 
 **History:** every earlier version with who wrote it. Compare any two, or restore one.
 
@@ -61,9 +61,9 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 ![The bottom of a page with Pages inside, Linked from and Mentioned in, with a Link button](docs/screenshots/connections.png)
 
-**The page menu (⋯):** pin a page to Home, copy its wiki link, or download it as Markdown.
+**The page menu (⋯):** add a subpage, pin a page to Home, copy a link to it, download it as Markdown, or archive it.
 
-![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy wiki link, Download as Markdown and Delete](docs/screenshots/page-menu.png)
+![A page's ⋯ menu open with Add subpage, Unpin from Home, Copy link to page, Download as Markdown, Archive and Delete](docs/screenshots/page-menu.png)
 
 **Search (⌘K):** jump to any page by title or keyword, or press Enter to search by meaning.
 
@@ -93,9 +93,9 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 ![The AI Instructions page with sections for where things go, before writing, tags and style](docs/screenshots/ai-instructions.png)
 
-**On your phone:** Home with open items (overdue and timed ones included), the page tree with its emoji, and a page.
+**On your phone:** Home's Action Items (overdue and timed ones included), the page tree with its emoji, and a page.
 
-![Three phones: Home's open items, the menu with the page tree, and a page with its action items](docs/screenshots/phone.png)
+![Three phones: Home's Action Items, the menu with the page tree, and a page with its Action Items](docs/screenshots/phone.png)
 
 **Dark mode:** follows your device, or pick it in Settings.
 
@@ -265,7 +265,9 @@ Tools: `get_tree`, `read_page`, `search`, `create_page`, `create_pages` (a whole
 (confirmed by title), `list_revisions`, `read_revision`, `restore_revision`, `list_tags`,
 `tag_page`, `log_session` (adds a title and summary to the assistant’s automatic Sessions entry),
 `open_items` (to-dos, questions and reminders across the wiki), `recent_changes` (what changed, grouped by who), `get_started` (the wiki’s state plus
-example requests; assistants call it when you ask what they can do), and for images:
+example requests; assistants call it when you ask what they can do), `archive_page`, `list_archived`,
+`search_archive` and `restore_page` (archived pages), `get_ai_instructions` and
+`update_ai_instructions`, and for images:
 
 - `add_image`: from a public URL or base64 bytes.
 - `request_image_upload`: for an image you have, such as one attached in chat (chat attachments
