@@ -10,6 +10,26 @@
 //      Claude Code too). Nothing is chosen at first; choosing one shows its steps, tapping it
 //      again clears it. Only one open at a time.
 //   4. "Example prompts": collapsed by default; opens the app's own examples (tap to copy).
+//   5. "Always-on agent prompts" (apps that have some): collapsed by default, after Example
+//      prompts. Each prompt is a row (its title and one line about it) that opens to the full
+//      prompt in a scrolling box with a "Copy prompt" button and what the agent needs connected.
+//      Only one open at a time.
+
+/**
+ * Standing instructions for an always-on agent (one that keeps running and watches your email
+ * and calendar), pasted in once to set what it does with the app on its own.
+ */
+export interface AlwaysOnPrompt {
+  id: string;
+  /** "Log coffee orders". */
+  title: string;
+  /** One line: what it does. */
+  summary: string;
+  /** What the agent needs connected besides the app ("your email"). */
+  needs: string;
+  /** The prompt itself, ready to paste. */
+  prompt: string;
+}
 
 export interface AssistantSetup {
   id: 'claude' | 'chatgpt' | 'other';
@@ -38,6 +58,10 @@ export const CONNECTED_TEXT = {
   setUp: 'Set up',
   examples: 'Example prompts',
   examplesHint: 'Tap one to copy it.',
+  alwaysOn: 'Always-on agent prompts',
+  alwaysOnHint: 'Standing instructions for an agent that keeps running and watches for you.',
+  copyPrompt: 'Copy prompt',
+  needs: (what: string) => `The agent needs ${what} connected.`,
   urlLabel: (title: string) => `Your ${title}’s connector URL`,
 };
 

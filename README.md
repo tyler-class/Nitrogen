@@ -164,12 +164,12 @@ Open it, sign in with your password, and you're done. Bookmark it, or add it to 
 
 ### 8. Set up automatic updates (recommended)
 
-Your copy updates itself every Monday once you allow it. That takes one click, once:
+Your copy checks for updates every 6 hours once you allow it. That takes one click, once:
 
 1. In Nitrogen, open **Settings → Updates** and choose **Set up automatic updates**.
 2. GitHub opens with the update file filled in. Click **Commit changes**.
 
-That brings in the latest Nitrogen straight away, then every week. See [Updates](#updates) for how it works.
+That brings in the latest Nitrogen straight away, then checks again every 6 hours. See [Updates](#updates) for how it works.
 
 ![Settings → Updates with the Set up automatic updates button](docs/screenshots/install-8-updates.png)
 <!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
@@ -192,7 +192,7 @@ Nitrogen can send notifications to your phone. They only work in the app install
 
 Updates take two steps, both in your own accounts. Nitrogen never deploys to your Cloudflare directly.
 
-1. **Nitrogen → your GitHub copy.** The update workflow you added in step 8 brings in the latest code every Monday. To update now, open **Settings → Updates → Update now** and click **Run workflow** on GitHub. Settings also tells you when a newer version is out.
+1. **Nitrogen → your GitHub copy.** The update workflow you added in step 8 brings in the latest code, checking every 6 hours. To update now, open **Settings → Updates → Update now** and click **Run workflow** on GitHub. Settings also tells you when a newer version is out.
 2. **Your GitHub copy → your Cloudflare.** Cloudflare builds and deploys every change to your copy, migrating the database first. This was switched on in step 7.
 
 Your data lives in your Cloudflare database and file storage, not in the code, so updates don't touch it. An update replaces the code in your copy, so changes you made to it are overwritten. Your copy's own name and storage settings are kept.

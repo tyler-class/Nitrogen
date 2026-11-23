@@ -45,7 +45,7 @@ export const isSourceRepo = (repo: string, upstream: string) =>
 export const UPDATE_TEXT = {
   heading: 'Updates',
   setUp: 'Set up automatic updates',
-  setUpHint: 'Opens GitHub: click Commit changes. It updates now, then every Monday.',
+  setUpHint: 'Opens GitHub: click Commit changes. It updates now, then every 6 hours.',
   updateNow: 'Update now',
   updateNowHint: 'Opens GitHub: click Run workflow.',
   /** Once set up, the only link: the update file itself, to see it or delete it (which turns updates off). */
@@ -77,7 +77,7 @@ export function updateStatus(
 export const howUpdatesWork = (title: string) => ({
   intro: 'Updates take two steps, both in your own accounts:',
   steps: [
-    `An update workflow in your GitHub copy brings in the latest ${title} every Monday. GitHub needs you to add it once: Set up opens it ready to commit.`,
+    `An update workflow in your GitHub copy brings in the latest ${title} every 6 hours. GitHub needs you to add it once: Set up opens it ready to commit.`,
     'Cloudflare deploys your copy every time it changes. That part is already on.',
   ],
   outro:
@@ -106,7 +106,7 @@ export const workflowFileUrl = (repo: string, branch: string) =>
 export const autoUpdatesInfo = (title: string) => ({
   what: `Your copy of ${title} keeps itself up to date: you get new versions without doing anything.`,
   how: [
-    `Every Monday, an update workflow in your GitHub copy brings in the latest ${title} and commits it.`,
+    `Every 6 hours, an update workflow in your GitHub copy brings in the latest ${title} and commits it.`,
     'Cloudflare deploys your copy whenever it changes, so the new version is live a minute or two later.',
     'Your data stays in your database; updates only change the code.',
   ],
