@@ -1,5 +1,5 @@
 // Selfhost Kit: which GitHub repo and branch this copy is built from, for vite.config.ts.
-// Synced from tyler-class/selfhost-kit (kit/scripts/source.ts).
+// Synced from tyler-class/tally (kit/scripts/source.ts).
 //
 // Workers Builds checks out the installer's own repo, so its origin is their copy. Set
 // SOURCE_REPO=owner/repo to name it yourself (or to try Settings → Updates locally).

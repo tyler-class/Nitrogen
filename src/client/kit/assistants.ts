@@ -1,5 +1,5 @@
 // Selfhost Kit: the words for Settings → "Connect an AI assistant", the same in every app.
-// Synced from tyler-class/selfhost-kit (kit/client/assistants.ts). Edit it there, not here.
+// Synced from tyler-class/tally (kit/client/assistants.ts). Edit it there, not here.
 //
 // Layout (every app, in its own styling), kept short:
 //   1. Heading "Connect an AI assistant", one line of intro (ASSISTANT_INTRO), the MCP URL with

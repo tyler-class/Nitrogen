@@ -1,5 +1,5 @@
 // Selfhost Kit: anonymous usage check-ins and the kit's own small state table.
-// Synced from tyler-class/selfhost-kit (kit/worker/telemetry.ts). Edit it there, not here.
+// Synced from tyler-class/tally (kit/worker/telemetry.ts). Edit it there, not here.
 //
 // Once a day an install sends: the app's name, a random id it made for itself, its version,
 // how many rows each listed table has, how many files its R2 buckets hold (one total), and a

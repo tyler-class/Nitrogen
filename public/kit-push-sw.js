@@ -1,5 +1,5 @@
 // Selfhost Kit: push notifications and the app-icon badge, in the service worker.
-// Synced from tyler-class/selfhost-kit (kit/public/kit-push-sw.js). Edit it there, not here.
+// Synced from tyler-class/tally (kit/public/kit-push-sw.js). Edit it there, not here.
 //
 // Loaded by the service worker vite-plugin-pwa generates:
 //   VitePWA({ workbox: { importScripts: ['kit-push-sw.js'], ... } })

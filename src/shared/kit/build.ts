@@ -1,5 +1,5 @@
 // Selfhost Kit: facts about this build, worked out by scripts/kit/source.ts in vite.config.ts.
-// Synced from tyler-class/selfhost-kit (kit/shared/build.ts). Edit it there, not here.
+// Synced from tyler-class/tally (kit/shared/build.ts). Edit it there, not here.
 
 declare const __UPDATES_ON__: boolean | undefined;
 declare const __IS_SOURCE__: boolean | undefined;

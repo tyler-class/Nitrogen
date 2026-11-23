@@ -1,5 +1,5 @@
 // Selfhost Kit: tests for the anonymous check-in's guards and the on/off message.
-// Synced from tyler-class/selfhost-kit (kit/test/telemetry.test.ts). Edit it there, not here.
+// Synced from tyler-class/tally (kit/test/telemetry.test.ts). Edit it there, not here.
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {

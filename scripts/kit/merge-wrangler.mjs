@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Selfhost Kit: synced from tyler-class/selfhost-kit (kit/scripts/merge-wrangler.mjs).
+// Selfhost Kit: synced from tyler-class/tally (kit/scripts/merge-wrangler.mjs).
 //
 // An update brings in the app's latest wrangler.jsonc (new crons, bindings, settings) but
 // keeps what the Deploy button wrote into this copy's: the Worker's name, its own database,

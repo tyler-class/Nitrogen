@@ -1,5 +1,5 @@
 // Selfhost Kit: tests for push devices the push service stops accepting, and replacing a
-// browser's old entry. Synced from tyler-class/selfhost-kit (kit/test/push.test.ts). Edit it
+// browser's old entry. Synced from tyler-class/tally (kit/test/push.test.ts). Edit it
 // there, not here.
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';

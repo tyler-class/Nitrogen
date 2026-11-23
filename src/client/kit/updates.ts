@@ -1,5 +1,5 @@
 // Selfhost Kit: is a newer release out, and links into this copy's own GitHub repo to add or
-// run its update workflow. Synced from tyler-class/selfhost-kit (kit/client/updates.ts).
+// run its update workflow. Synced from tyler-class/tally (kit/client/updates.ts).
 //
 // Updates go: the app's source repo → the installer's GitHub copy (update workflow) → their
 // Cloudflare (Workers Builds deploys every push). Nothing here deploys anything.

@@ -1,5 +1,5 @@
 // Selfhost Kit: the About sheet's words and links, the same in every app.
-// Synced from tyler-class/selfhost-kit (kit/client/about.ts). Edit it there, not here.
+// Synced from tyler-class/tally (kit/client/about.ts). Edit it there, not here.
 //
 // Every app's About sheet: title "About <App>", "Version x.y.z" under it, the app's own
 // one-paragraph description, BUILT_BY, then these links in this order, each a full-width row

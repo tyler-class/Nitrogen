@@ -1,5 +1,5 @@
 // Selfhost Kit: turning on push notifications on this device, its choices, and the app-icon
-// badge. Synced from tyler-class/selfhost-kit (kit/client/push.ts). Edit it there, not here.
+// badge. Synced from tyler-class/tally (kit/client/push.ts). Edit it there, not here.
 //
 // Talks to pushRoutes() (src/worker/kit/push.ts) under /api/push. Choices are per device:
 // each device picks its own. iOS (16.4+) only has push and badges for an app

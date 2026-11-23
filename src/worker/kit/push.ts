@@ -1,5 +1,5 @@
 // Selfhost Kit: web push notifications and app-icon badges, with nothing to set up.
-// Synced from tyler-class/selfhost-kit (kit/worker/push.ts). Edit it there, not here.
+// Synced from tyler-class/tally (kit/worker/push.ts). Edit it there, not here.
 //
 // - VAPID keys (RFC 8292) are made on first use and kept in the app's D1 (the kit's
 //   selfhost_kit table). Nothing to configure, nothing committed.

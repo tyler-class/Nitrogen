@@ -1,4 +1,4 @@
-# Selfhost Kit: synced from tyler-class/selfhost-kit (kit/workflows/update.yml).
+# Selfhost Kit: synced from tyler-class/tally (kit/workflows/update.yml).
 # Keeps a copy made with the Deploy to Cloudflare button up to date with tyler-class/Nitrogen.
 # The button makes a plain copy (not a fork) and leaves this file out, so Nitrogen's Settings →
 # Updates offers to add it. Each run brings the latest Nitrogen into this repo and pushes; that
