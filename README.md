@@ -8,7 +8,7 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Nitrogen)
 
-![Nitrogen on a laptop and a phone: a page with its tree, tags and Action Items, and Home’s Action Items](docs/screenshots/hero.png)
+![Nitrogen on a laptop and a phone: a page with its tree, its tags and connections under the title, and its Action Items; Home’s Action Items on the phone](docs/screenshots/hero.png)
 
 - **A page tree.** Every page can hold subpages. Drag pages in the sidebar to reorder or nest them.
 - **Markdown with wiki links.** `[[Page title]]` links pages and powers “Linked from” backlinks.
@@ -57,9 +57,9 @@ It's for people who keep a lot in their heads, talk it through with AI, and want
 
 ![The History panel comparing an October version with the current one, changes marked in red and green](docs/screenshots/history.png)
 
-**Connections:** pages inside this one, pages that link here, and pages that mention it without a link yet.
+**Connections:** chips under the title count the pages inside this one, the pages it links to, the pages that link here, the pages that mention it without a link yet and similar pages. Each opens the Connections panel on its tab.
 
-![The bottom of a page with Pages inside, Linked from and Mentioned in, with a Link button](docs/screenshots/connections.png)
+![A page with its tags and connection chips under the title, and the Connections panel open on Inside: three subpages with their tags and an Add subpage button](docs/screenshots/connections.png)
 
 **The page menu (⋯):** add a subpage, pin a page to Home, copy a link to it, download it as Markdown, or archive it.
 
