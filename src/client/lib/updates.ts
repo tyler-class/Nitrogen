@@ -8,14 +8,19 @@ export { isNewer, isSourceRepo, runUrl } from '../kit/updates';
 /** Where Nitrogen's releases come from. */
 export const UPSTREAM = 'tyler-class/Nitrogen';
 
-/** The latest Nitrogen version on GitHub, checked every few hours. */
+/**
+ * The latest Nitrogen version on GitHub. Asked again each time Settings opens (and when the app comes
+ * back to the front) once the last answer is 5 minutes old, so a release merged while the app
+ * stayed open shows up, and Update now isn't hidden by an old "up to date".
+ */
 export function useLatestVersion() {
   return useQuery({
     queryKey: ['latest-version'],
     queryFn: () => latestVersion(UPSTREAM),
-    staleTime: 6 * 3_600_000,
+    staleTime: 5 * 60_000,
     retry: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
