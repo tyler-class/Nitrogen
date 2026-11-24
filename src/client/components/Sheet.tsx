@@ -3,6 +3,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
 
+/** How many sheets are open (the page behind is held still while any is). */
+let openSheets = 0;
+
 export function Sheet({
   title,
   sub,
@@ -32,11 +35,20 @@ export function Sheet({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // The page behind stays still: a swipe only scrolls the sheet's own list, and only when it's
+    // longer than the sheet (phones otherwise scroll the page behind).
+    openSheets++;
+    document.documentElement.classList.add('sheet-open');
+    const still = (e: TouchEvent) => {
+      const list = (e.target as Element | null)?.closest?.('.sh-body');
+      if (list && list.scrollHeight > list.clientHeight) return;
+      if (e.cancelable) e.preventDefault();
+    };
+    document.addEventListener('touchmove', still, { passive: false });
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
+      document.removeEventListener('touchmove', still);
+      if (--openSheets === 0) document.documentElement.classList.remove('sheet-open');
     };
   }, []);
 

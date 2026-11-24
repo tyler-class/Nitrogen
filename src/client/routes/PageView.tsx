@@ -22,7 +22,7 @@ import {
   type ItemEdit,
   type ItemType,
 } from '@shared/items';
-import { extractTags, pageHref } from '@shared/markdown';
+import { extractLinks, extractTags, pageHref } from '@shared/markdown';
 import { glideTo, headingsOf, type Heading } from '../lib/outline';
 import type {
   Mention,
@@ -48,6 +48,7 @@ import { downloadPage } from '../lib/exportMarkdown';
 import { TagEditor, TagList } from '../components/Tags';
 import { FitTags } from '../components/FitTags';
 import { Menu } from '../components/Tree';
+import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { useTitleIndex } from '../lib/titles';
 export { useTitleIndex };
@@ -197,6 +198,16 @@ function PageScreen({
   const editor = useRef<EditorHandle>(null);
   const [menu, setMenu] = useState(false);
   const [history, setHistory] = useState(false);
+  // The connections panel (pages inside, linked from, mentioned in, similar), open on one tab.
+  const [connTab, setConnTab] = useState<ConnTab | null>(null);
+  const mentions = useMentions(page);
+  const related = useRelated(page);
+  // Another page: the panel closes.
+  const [connFor, setConnFor] = useState(page.id);
+  if (connFor !== page.id) {
+    setConnFor(page.id);
+    setConnTab(null);
+  }
   const create = useCreatePage();
   const del = useDeletePage();
   const tree = useTree();
@@ -330,6 +341,39 @@ function PageScreen({
   const linkedFrom = backlinks.filter(
     (b) => b.id !== page.parent_id && !children.some((c) => c.id === b.id),
   );
+  // "Linked to": the pages this one links to ([[Title]] or a link to /p/…), in the order they
+  // come in the text, as it is now (each once, and not itself).
+  const out = extractLinks(locked ? page.body : draft.draft.body);
+  const known = [...(tree.data?.pages ?? []), ...(tree.data?.archived ?? [])];
+  const linkedTo: { id: string; title: string; icon: string | null }[] = [];
+  for (const id of [...out.titles.map((t) => index.get(t)?.id), ...out.ids]) {
+    if (!id || id === page.id || linkedTo.some((x) => x.id === id)) continue;
+    const p = known.find((x) => x.id === id);
+    if (p) linkedTo.push({ id: p.id, title: p.title, icon: ('icon' in p && p.icon) || null });
+  }
+  const connections: Connection[] = [
+    ...(locked === 'entry'
+      ? []
+      : [
+          {
+            tab: 'inside' as const,
+            n: children.length,
+            icon: 'folder',
+            chip: locked === 'root' ? 'sessions' : 'inside',
+            name: locked === 'root' ? 'Sessions' : 'Inside',
+          },
+        ]),
+    { tab: 'linkedTo', n: linkedTo.length, icon: 'external', chip: 'linked to', name: 'Linked to' },
+    { tab: 'linked', n: linkedFrom.length, icon: 'link', chip: 'linked from', name: 'Linked from' },
+    {
+      tab: 'mentions',
+      n: mentions.list.length,
+      icon: 'quote',
+      chip: mentions.list.length === 1 ? 'mention' : 'mentions',
+      name: 'Mentioned in',
+    },
+    { tab: 'similar', n: related.length, icon: 'sparkle', chip: 'similar', name: 'Similar' },
+  ];
 
   // Open Items above the text grows or shrinks as you write items: while you're writing, the
   // page scrolls by the same amount, so the line you're on stays where it is.
@@ -431,7 +475,7 @@ function PageScreen({
 
   // Scroll to a #h-… or #item-… anchor once the body is there, once per page and anchor:
   // checking off or editing an item changes the body, and that mustn't jump back to the item.
-  const { hash } = useLocation();
+  const { hash, pathname, search } = useLocation();
   const anchored = useRef<string | null>(null);
   const [editorReady, setEditorReady] = useState(false);
   useEffect(() => {
@@ -649,13 +693,38 @@ function PageScreen({
         {/* One quiet line under the title: its tags. (Who changed what, and when, is in History.) */}
         <div className="page-meta-row">
           {locked ? (
-            <TagList tags={detail.all_tags} />
+            <TagList tags={detail.all_tags} from={page.title} />
           ) : (
             <TagEditor
               tags={draft.draft.tags}
               bodyTags={extractTags(draft.draft.body)}
               onChange={(tags) => draft.change({ tags })}
+              from={draft.draft.title || page.title}
             />
+          )}
+          {/* What the page is connected to: a chip for each kind there is, opening its panel. */}
+          {connections.some((c) => c.n > 0) && (!locked || detail.all_tags.length > 0) && (
+            <span className="meta-sep" aria-hidden>
+              |
+            </span>
+          )}
+          {connections.some((c) => c.n > 0) && (
+            <div className="conn-chips">
+              {connections
+                .filter((c) => c.n > 0)
+                .map((c) => (
+                  <button
+                    key={c.tab}
+                    type="button"
+                    className="conn-chip"
+                    aria-haspopup="dialog"
+                    onClick={() => setConnTab(c.tab)}
+                  >
+                    <Icon name={c.icon} size={13} />
+                    {c.n} {c.chip}
+                  </button>
+                ))}
+            </div>
           )}
         </div>
       </header>
@@ -714,7 +783,15 @@ function PageScreen({
                 onChange={(body) => draft.change({ body })}
                 onSave={() => void draft.save()}
                 onError={toast}
-                onNavigate={(href) => navigate(href)}
+                onNavigate={(href) =>
+                  // A #tag in the text: its page's back link comes back here.
+                  navigate(
+                    href,
+                    href.startsWith('/tags/')
+                      ? { state: { from: { href: pathname + search, title: page.title } } }
+                      : undefined,
+                  )
+                }
                 onReady={() => setEditorReady(true)}
               />
             </Suspense>
@@ -722,20 +799,21 @@ function PageScreen({
         </div>
       </div>
 
-      {/* Everything about the page rather than in it: set apart from the writing. */}
-      <footer className="page-foot">
-        {locked !== 'entry' && (!header || children.length > 0) && (
-          <section className="related" aria-label="Pages inside">
-            <div className="related-head">
-              <h2>{locked === 'root' ? 'Sessions' : 'Pages inside'}</h2>
+      {connTab && (
+        <ConnectionsPanel
+          tabs={connections.filter((c) => c.n > 0 || c.tab === connTab)}
+          tab={connTab}
+          onTab={setConnTab}
+          onClose={() => setConnTab(null)}
+        >
+          {connTab === 'inside' && (
+            <>
               {!locked && (
-                <button className="btn small" onClick={addChild}>
+                <button className="btn small conn-add" onClick={addChild}>
                   <Icon name="plus" size={14} /> Add subpage
                 </button>
               )}
-            </div>
-            {children.length ? (
-              // One full-width row each: title, then when and by whom, with its tags on the right.
+              {/* One full-width row each: title, then when and by whom, with its tags on the right. */}
               <ul className="child-list">
                 {children.map((c) => (
                   <li key={c.id} className="child-row">
@@ -756,31 +834,48 @@ function PageScreen({
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="muted">None yet.</p>
-            )}
-          </section>
-        )}
-
-        {linkedFrom.length > 0 && (
-          <section className="related" aria-label="Linked from">
-            <div className="related-head">
-              <h2>Linked from</h2>
-            </div>
+            </>
+          )}
+          {connTab === 'linkedTo' && (
             <ul className="backlinks">
-              {linkedFrom.map((b) => (
+              {linkedTo.map((b) => (
                 <li key={b.id}>
                   <Link to={pageHref(b.id, b.title)}>
-                    <PageGlyph icon={b.icon} folder={false} /> {b.title}
+                    <PageGlyph icon={b.icon} folder={false} />{' '}
+                    <span className="conn-title">{b.title}</span>
                   </Link>
                 </li>
               ))}
             </ul>
-          </section>
-        )}
-        <Mentions page={page} />
-        <Related page={page} />
-      </footer>
+          )}
+          {connTab === 'linked' && (
+            <ul className="backlinks">
+              {linkedFrom.map((b) => (
+                <li key={b.id}>
+                  <Link to={pageHref(b.id, b.title)}>
+                    <PageGlyph icon={b.icon} folder={false} />{' '}
+                    <span className="conn-title">{b.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {connTab === 'mentions' && <MentionList m={mentions} />}
+          {connTab === 'similar' && (
+            <ul className="backlinks related-list">
+              {related.map((x) => (
+                <li key={x.id}>
+                  <Link to={pageHref(x.id, x.title)}>
+                    <PageGlyph icon={x.icon} folder={false} />{' '}
+                    <span className="conn-title">{x.title}</span>
+                  </Link>
+                  {x.path.length > 0 && <span className="muted"> · {x.path.join(' › ')}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ConnectionsPanel>
+      )}
       {history && <HistoryPanel page={page} onClose={() => setHistory(false)} />}
     </article>
   );
@@ -1102,7 +1197,24 @@ function anchorLine(body: string, hash: string): number | null {
 
 type VersionKey = number | 'current';
 
-function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
+/**
+ * A panel that slides out from the right closes by sliding back first: `close` starts that, and
+ * `done` runs once it's out of sight.
+ */
+function useSlideClose(done: () => void): [boolean, () => void] {
+  const [closing, setClosing] = useState(false);
+  const close = () => {
+    if (closing) return;
+    // Phones don't slide it: it just closes.
+    if (window.matchMedia('(max-width: 860px)').matches) return done();
+    setClosing(true);
+    setTimeout(done, 220);
+  };
+  return [closing, close];
+}
+
+function HistoryPanel({ page, onClose: done }: { page: Page; onClose(): void }) {
+  const [closing, onClose] = useSlideClose(done);
   const list = useQuery({
     queryKey: keys.revisions(page.id),
     queryFn: () => api.get<{ revisions: Revision[] }>(`/pages/${page.id}/revisions`),
@@ -1167,7 +1279,7 @@ function HistoryPanel({ page, onClose }: { page: Page; onClose(): void }) {
 
   // Over everything, the outline included (it lives outside the page too).
   return createPortal(
-    <div className="scrim" onMouseDown={onClose}>
+    <div className={`scrim drawer-scrim${closing ? ' closing' : ''}`} onMouseDown={onClose}>
       <div
         className="drawer"
         role="dialog"
@@ -1487,7 +1599,94 @@ function ItemSummary({
 }
 
 /** Pages that name this one without linking to it, with a one-click "link it". */
-function Mentions({ page }: { page: Page }) {
+type ConnTab = 'inside' | 'linkedTo' | 'linked' | 'mentions' | 'similar';
+interface Connection {
+  tab: ConnTab;
+  n: number;
+  icon: string;
+  /** After the count on its chip ("4 inside"). */
+  chip: string;
+  /** Its tab's name in the panel. */
+  name: string;
+}
+
+/**
+ * Everything a page is connected to, in one panel with a tab each: a panel on the right on
+ * computers, a sheet from the bottom on phones.
+ */
+function ConnectionsPanel({
+  tabs,
+  tab,
+  onTab,
+  onClose: done,
+  children,
+}: {
+  tabs: Connection[];
+  tab: ConnTab;
+  onTab(t: ConnTab): void;
+  onClose(): void;
+  children: React.ReactNode;
+}) {
+  const [phone] = useState(() => window.matchMedia('(max-width: 860px)').matches);
+  const [closing, onClose] = useSlideClose(done);
+  useEffect(() => {
+    if (phone) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [phone, onClose]);
+  const body = (
+    <>
+      <div className="conn-tabs" role="tablist" aria-label="Connections">
+        {tabs.map((t) => (
+          <button
+            key={t.tab}
+            type="button"
+            role="tab"
+            aria-selected={t.tab === tab}
+            className={t.tab === tab ? 'on' : undefined}
+            onClick={() => onTab(t.tab)}
+          >
+            <Icon name={t.icon} size={14} />
+            {t.name}
+            <span className="count">{t.n}</span>
+          </button>
+        ))}
+      </div>
+      <div className="conn-body" role="tabpanel">
+        {children}
+      </div>
+    </>
+  );
+  if (phone)
+    return (
+      <Sheet title="Connections" onClose={done}>
+        {body}
+      </Sheet>
+    );
+  return createPortal(
+    <div className={`scrim drawer-scrim${closing ? ' closing' : ''}`} onMouseDown={onClose}>
+      <div
+        className="drawer conn-drawer"
+        role="dialog"
+        aria-label="Connections"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="drawer-head">
+          <h2>Connections</h2>
+          <button className="btn icon-only" onClick={onClose} aria-label="Close">
+            <Icon name="close" />
+          </button>
+        </div>
+        {body}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Pages that name this one without linking to it, and a way to link each. */
+function useMentions(page: Page) {
   const q = useQuery({
     queryKey: ['mentions', page.id, page.title],
     queryFn: () => api.get<{ mentions: Mention[] }>(`/pages/${page.id}/mentions`),
@@ -1496,9 +1695,6 @@ function Mentions({ page }: { page: Page }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  const list = q.data?.mentions ?? [];
-  if (!list.length) return null;
-
   async function link(src: string) {
     setBusy(src);
     try {
@@ -1514,60 +1710,43 @@ function Mentions({ page }: { page: Page }) {
       setBusy(null);
     }
   }
+  return { list: q.data?.mentions ?? [], busy, link };
+}
 
+function MentionList({ m }: { m: ReturnType<typeof useMentions> }) {
   return (
-    <section className="related" aria-label="Mentioned in">
-      <div className="related-head">
-        <h2>Mentioned in</h2>
-        <span className="muted">Not linked yet</span>
-      </div>
-      <ul className="mentions">
-        {list.map((m) => (
-          <li key={m.id}>
-            <div>
-              <Link to={pageHref(m.id, m.title)}>
-                <PageGlyph icon={m.icon} folder={false} /> {m.title}
-              </Link>
-              <p className="snippet">{m.snippet}</p>
-            </div>
-            <button className="btn small" disabled={busy === m.id} onClick={() => void link(m.id)}>
-              <Icon name="link" size={14} /> Link
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <ul className="mentions">
+      {m.list.map((x) => (
+        <li key={x.id}>
+          <div>
+            <Link to={pageHref(x.id, x.title)}>
+              <PageGlyph icon={x.icon} folder={false} />{' '}
+              <span className="conn-title">{x.title}</span>
+            </Link>
+            <p className="snippet">{x.snippet}</p>
+          </div>
+          <button
+            className="btn small"
+            disabled={m.busy === x.id}
+            onClick={() => void m.link(x.id)}
+          >
+            <Icon name="link" size={14} /> Link
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 /** Pages about similar things that aren't connected yet (semantic search). */
-function Related({ page }: { page: Page }) {
+function useRelated(page: Page): RelatedPage[] {
   const q = useQuery({
     queryKey: ['related', page.id, page.version],
     queryFn: () => api.get<{ related: RelatedPage[] }>(`/pages/${page.id}/related`),
     staleTime: 10 * 60_000,
     retry: false,
   });
-  const list = q.data?.related ?? [];
-  if (!list.length) return null;
-  return (
-    <section className="related" aria-label="Related pages">
-      <div className="related-head">
-        <h2>Similar pages</h2>
-        <span className="muted">Matched by meaning</span>
-      </div>
-      <ul className="backlinks related-list">
-        {list.map((r) => (
-          <li key={r.id}>
-            <Link to={pageHref(r.id, r.title)}>
-              <PageGlyph icon={r.icon} folder={false} /> {r.title}
-            </Link>
-            {r.path.length > 0 && <span className="muted"> · {r.path.join(' › ')}</span>}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+  return q.data?.related ?? [];
 }
 
 export function formatWhen(iso: string): string {

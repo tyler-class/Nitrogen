@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { pageHref } from '@shared/markdown';
 import type { SearchResponse, TagCount } from '@shared/types';
 import { api } from '../lib/api';
 import { PageGlyph, Icon } from '../components/Icon';
 import { SlideToggle } from '../components/charts';
+import type { TagFrom } from '../components/Tags';
 
 export function Tags() {
   const { tag } = useParams<{ tag?: string }>();
@@ -55,6 +56,8 @@ function AllTags() {
 
 function TagPages({ tag }: { tag: string }) {
   const [filter, setFilter] = useState('');
+  // Opened from a page (its tags, or a #tag in its text): back goes to that page.
+  const from = (useLocation().state as { from?: TagFrom } | null)?.from;
   const q = useQuery({
     queryKey: ['tag', tag],
     queryFn: () =>
@@ -65,8 +68,8 @@ function TagPages({ tag }: { tag: string }) {
   );
   return (
     <div className="page tags-page">
-      <Link to="/tags" className="back-link">
-        <Icon name="back" size={18} /> Tags
+      <Link to={from?.href ?? '/tags'} className="back-link">
+        <Icon name="back" size={18} /> {from ? from.title || 'Untitled' : 'Tags'}
       </Link>
       <h1 className="page-title">#{tag}</h1>
       {(q.data?.hits.length ?? 0) > 8 && (

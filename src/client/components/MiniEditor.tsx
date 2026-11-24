@@ -8,7 +8,7 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { EditorState, Prec } from '@codemirror/state';
 import { EditorView, keymap, placeholder as placeholderText } from '@codemirror/view';
 import { editorCommands, newLine } from './editorCommands';
-import { BlockHost, livePreview } from './livePreview';
+import { BlockHost, livePreview, NO_UNDERLINED_HEADINGS } from './livePreview';
 import { highlight } from './editorHighlight';
 
 export default function MiniEditor({
@@ -73,7 +73,11 @@ export default function MiniEditor({
             ]),
           ),
           Prec.high(editorCommands()),
-          markdown({ base: markdownLanguage, addKeymap: false }),
+          markdown({
+            base: markdownLanguage,
+            addKeymap: false,
+            extensions: NO_UNDERLINED_HEADINGS,
+          }),
           syntaxHighlighting(highlight),
           livePreview({
             blocks: new BlockHost(),

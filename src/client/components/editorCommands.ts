@@ -13,10 +13,14 @@ import {
 import { EditorView, keymap, type KeyBinding } from '@codemirror/view';
 import { indentLess, indentMore, insertNewlineAndIndent } from '@codemirror/commands';
 import {
+  calloutAround,
   HIGHLIGHT_RE,
   live,
+  openDueAt,
   parseListLine,
+  removeCallout,
   prefixEnd,
+  type LinkSpot,
   type ListLine,
   type MarkRole,
 } from './livePreview';
@@ -24,6 +28,20 @@ import {
 // ------------------------------------------------------------------ helpers
 
 const QUOTE_RE = /^(?:[ \t]*>[ \t]?)+/;
+/** Is this line (1-based) a dividing line ("---" on its own, not a heading's underline)? */
+function isRule(state: EditorState, n: number): boolean {
+  const line = state.doc.line(n);
+  if (!line.text.trim()) return false;
+  for (
+    let node: ReturnType<ReturnType<typeof syntaxTree>['resolveInner']> | null = syntaxTree(
+      state,
+    ).resolveInner(line.from + line.text.search(/\S/), 1);
+    node;
+    node = node.parent
+  )
+    if (node.name === 'HorizontalRule') return true;
+  return false;
+}
 const CALLOUT_RE = /^\s*>[ \t]?\[![A-Za-z]+\]/;
 
 function inCode(state: EditorState, pos: number): boolean {
@@ -336,7 +354,7 @@ function softBreak(view: EditorView): boolean {
 
 // --------------------------------------------------------------- Backspace
 
-function backspace(view: EditorView): boolean {
+export function backspace(view: EditorView): boolean {
   const { state } = view;
   const sel = state.selection.main;
   if (!sel.empty) return false;
@@ -344,6 +362,16 @@ function backspace(view: EditorView): boolean {
   if (inCode(state, pos)) return false;
   const info = lineInfo(state, pos);
   const line = state.doc.lineAt(pos);
+  // At the start of a line (its text) right under a dividing line: the dividing line goes.
+  if (
+    line.number > 1 &&
+    isRule(state, line.number - 1) &&
+    (pos === line.from || pos === prefixEnd(state, line.from))
+  ) {
+    const above = state.doc.line(line.number - 1);
+    view.dispatch({ changes: { from: above.from, to: line.from }, userEvent: 'delete.backward' });
+    return true;
+  }
   const L = info.list;
   if (L && pos === info.from + info.quote.length + L.content) {
     // At the start of an item's text: out a level first, then back to plain text.
@@ -353,6 +381,20 @@ function backspace(view: EditorView): boolean {
       changes: { from, to: pos },
       selection: { anchor: from },
       userEvent: 'delete',
+    });
+    return true;
+  }
+  // In a callout, at the start of a line's text.
+  const box = calloutAround(state.doc, line.number);
+  if (box && pos === (prefixEnd(state, line.from) ?? line.from + info.quote.length)) {
+    // Its first line (or its title): the callout goes (its writing stays, as plain text).
+    if (line.number <= box.head + 1) return removeCallout(view, line.number);
+    // Any other line joins the one above, inside the callout.
+    const prev = state.doc.line(line.number - 1);
+    view.dispatch({
+      changes: { from: prev.to, to: pos },
+      selection: { anchor: prev.to },
+      userEvent: 'delete.backward',
     });
     return true;
   }
@@ -384,7 +426,7 @@ function backspace(view: EditorView): boolean {
     });
     return true;
   }
-  // At the start of a line right under a table, rule or code block: don't merge into it.
+  // At the start of a line right under a table or code block: don't merge into it.
   if (pos === line.from && line.number > 1) {
     const { blocks } = state.field(live);
     if (blocks.some(([, b]) => b === line.from - 1)) {
@@ -405,6 +447,14 @@ function deleteForward(view: EditorView): boolean {
   // At the end of a line, before a list item, heading or quote: joining the lines takes the next
   // one's text, not its hidden bullet or "#".
   const here = state.doc.lineAt(pos);
+  // At the end of a line right over a dividing line: the line goes.
+  if (pos === here.to && here.number < state.doc.lines) {
+    const next = state.doc.line(here.number + 1);
+    if (isRule(state, next.number)) {
+      view.dispatch({ changes: { from: here.to, to: next.to }, userEvent: 'delete.forward' });
+      return true;
+    }
+  }
   if (pos === here.to && here.number < state.doc.lines) {
     const next = state.doc.line(here.number + 1);
     const end = prefixEnd(state, next.from);
@@ -505,6 +555,38 @@ function enclosing(
   return null;
 }
 
+/** Every span of a format (marks included) that overlaps from..to. */
+function spansOver(
+  state: EditorState,
+  from: number,
+  to: number,
+  f: Format,
+): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  if (f === 'highlight') {
+    for (let n = state.doc.lineAt(from).number; n <= state.doc.lineAt(to).number; n++) {
+      const line = state.doc.line(n);
+      for (const m of line.text.matchAll(HIGHLIGHT_RE)) {
+        const a = line.from + m.index;
+        const b = a + m[0].length;
+        if (a < to && b > from) out.push({ from: a, to: b });
+      }
+    }
+    return out;
+  }
+  syntaxTree(state).iterate({
+    from,
+    to,
+    enter: (n) => {
+      if (n.name === NODE[f] && n.from < to && n.to > from) {
+        out.push({ from: n.from, to: n.to });
+        return false;
+      }
+    },
+  });
+  return out;
+}
+
 /** Is this format on at the cursor (or across the selection)? */
 export function formatActive(state: EditorState, f: Format): boolean {
   const { from, to } = state.selection.main;
@@ -530,16 +612,21 @@ export function toggleFormat(view: EditorView, f: Format): boolean {
     });
     return true;
   }
-  if (n) {
-    // Already formatted: take the marks off.
-    const open = n.from;
-    const close = n.to - m.length;
+  // Already formatted, wholly or in part: the marks come off every formatted span it touches.
+  const spans = spansOver(state, sel.from, sel.to, f);
+  if (spans.length) {
+    const set = state.changes(
+      spans.flatMap((x) => [
+        { from: x.from, to: x.from + m.length },
+        { from: x.to - m.length, to: x.to },
+      ]),
+    );
+    const fwd = sel.anchor <= sel.head;
+    const from = set.mapPos(sel.from, 1);
+    const to = Math.max(from, set.mapPos(sel.to, -1));
     view.dispatch({
-      changes: [
-        { from: open, to: open + m.length },
-        { from: close, to: n.to },
-      ],
-      selection: { anchor: sel.from - m.length, head: sel.to - m.length },
+      changes: set,
+      selection: fwd ? EditorSelection.range(from, to) : EditorSelection.range(to, from),
       userEvent: 'format',
     });
     return true;
@@ -631,12 +718,32 @@ function lineKind(text: string): { kind: LineKind | null; indent: string; prefix
  * Makes the cursor's line a heading, list item, checkbox, item or quote (the phone's format bar);
  * the same kind again turns it back into plain text. The text and the cursor stay put.
  */
+/** To-dos, questions and reminders (and their dates): not inside a callout. */
+export const ITEM_KINDS: LineKind[] = ['todo', 'question', 'reminder'];
+
+/**
+ * The ">" that keeps a line in its quote or callout, kept whatever the line becomes: a callout's
+ * one ">" (another one inside it is a quote in the callout); all of a plain quote's, unless the
+ * line is being made a quote (then the same kind again takes it out).
+ */
+function outerQuote(state: EditorState, line: number, kind: LineKind | null): string {
+  const text = state.doc.line(line).text;
+  if (calloutAround(state.doc, line)) return /^[ \t]*>[ \t]?/.exec(text)![0];
+  if (kind === 'quote') return '';
+  return QUOTE_RE.exec(text)?.[0] ?? '';
+}
+
 export function setLineKind(view: EditorView, kind: LineKind): boolean {
   const { state } = view;
   const head = state.selection.main.head;
   if (inCode(state, head)) return false;
   const line = state.doc.lineAt(head);
-  const cur = lineKind(line.text);
+  const box = calloutAround(state.doc, line.number);
+  // A callout's own first line, and items in a callout: nothing to do.
+  if (box && (line.number === box.head || ITEM_KINDS.includes(kind))) return false;
+  const outer = outerQuote(state, line.number, kind);
+  const from = line.from + outer.length;
+  const cur = lineKind(line.text.slice(outer.length));
   const off = cur.kind === kind;
   const lists = ['bullet', 'number', 'check', 'todo', 'question', 'reminder'];
   // A list item keeps its indent when it becomes another kind of item.
@@ -648,11 +755,28 @@ export function setLineKind(view: EditorView, kind: LineKind): boolean {
     const d = new Date(Date.now() + 7 * 86_400_000);
     tail = ` due:${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-  const rel = Math.max(0, head - line.from - cur.prefix);
-  const body = line.text.slice(cur.prefix).replace(/\s+$/, '');
+  const body = line.text.slice(outer.length + cur.prefix).replace(/\s+$/, '');
+  const bodyFrom = from + cur.prefix;
+  const bodyTo = bodyFrom + body.length;
+  const set = state.changes([
+    { from, to: bodyFrom, insert: prefix },
+    { from: bodyTo, to: line.to, insert: tail },
+  ]);
+  // The selection stays on the same text (selected text stays selected).
+  const place = (p: number) =>
+    p < line.from
+      ? p
+      : p <= bodyFrom
+        ? from + prefix.length
+        : p <= line.to
+          ? set.mapPos(Math.min(p, bodyTo), -1)
+          : set.mapPos(p);
+  const sel = state.selection.main;
   view.dispatch({
-    changes: { from: line.from, to: line.to, insert: prefix + body + tail },
-    selection: { anchor: line.from + prefix.length + Math.min(rel, body.length) },
+    changes: set,
+    selection: sel.empty
+      ? EditorSelection.cursor(place(head), 1)
+      : EditorSelection.range(place(sel.anchor), place(sel.head)),
     userEvent: 'input.format',
   });
   return true;
@@ -660,7 +784,16 @@ export function setLineKind(view: EditorView, kind: LineKind): boolean {
 
 /** The cursor's line kind, for the format bar's highlighted buttons. */
 export function currentLineKind(state: EditorState): LineKind | null {
-  return lineKind(state.doc.lineAt(state.selection.main.head).text).kind;
+  const n = state.doc.lineAt(state.selection.main.head).number;
+  const text = state.doc.line(n).text;
+  // In a callout, what's inside its ">" (a quote there is a quote in the callout).
+  if (calloutAround(state.doc, n)) return lineKind(text.replace(/^[ \t]*>[ \t]?/, '')).kind;
+  return lineKind(text).kind;
+}
+
+/** Is the cursor in a callout? */
+export function inCallout(state: EditorState): boolean {
+  return !!calloutAround(state.doc, state.doc.lineAt(state.selection.main.head).number);
 }
 
 // ------------------------------------------------------------------- links
@@ -669,16 +802,73 @@ export function currentLineKind(state: EditorState): LineKind | null {
 export const editLink = StateEffect.define<number | null>();
 
 function linkCommand(view: EditorView): boolean {
-  const { state } = view;
-  const sel = state.selection.main;
-  const spot = state
-    .field(live)
-    .links.find((l) => l.kind === 'link' && sel.from >= l.from && sel.to <= l.to);
+  // On a link already (even with its hidden marks selected): change its address.
+  const spot = linkAt(view.state);
   if (spot) {
     view.dispatch({ effects: editLink.of(spot.from) });
     return true;
   }
-  let { from, to } = sel;
+  const at = newLink(view);
+  if (at !== null) view.dispatch({ effects: editLink.of(at) });
+  return true;
+}
+
+/** The markdown link the cursor is in, or the selection touches (its hidden marks count). */
+export function linkAt(state: EditorState): LinkSpot | null {
+  const sel = state.selection.main;
+  return (
+    state
+      .field(live)
+      .links.find(
+        (l) =>
+          l.kind === 'link' &&
+          (sel.empty
+            ? sel.head >= l.from && sel.head <= l.to
+            : sel.from < l.end! && sel.to > l.start!),
+      ) ?? null
+  );
+}
+
+/** Is the cursor (or selection) on a link (the format bar's Link and Remove link buttons)? */
+export function inLink(state: EditorState): boolean {
+  return !!linkAt(state);
+}
+
+/** Gives a link a new address ("example.com" becomes "https://example.com"). */
+export function setLinkAddress(view: EditorView, at: number, address: string): void {
+  let url = address.trim();
+  if (url && !/^[a-z][a-z0-9+.-]*:|^\/|^#/i.test(url)) url = `https://${url}`;
+  const spot = view.state.field(live).links.find((l) => l.kind === 'link' && l.from === at);
+  if (spot?.urlFrom === undefined) return;
+  view.dispatch({
+    changes: { from: spot.urlFrom, to: spot.urlTo!, insert: url },
+    userEvent: 'input.format',
+  });
+}
+
+/** Takes the link off, leaving its text (the link at `at`, or the one the cursor is on). */
+export function unlink(view: EditorView, at?: number): boolean {
+  const spot =
+    at === undefined
+      ? linkAt(view.state)
+      : view.state.field(live).links.find((l) => l.kind === 'link' && l.from === at);
+  if (!spot) return false;
+  const label = view.state.sliceDoc(spot.labelFrom!, spot.labelTo!);
+  view.dispatch({
+    changes: { from: spot.start!, to: spot.end!, insert: label },
+    selection: EditorSelection.range(spot.start!, spot.start! + label.length),
+    userEvent: 'format',
+  });
+  return true;
+}
+
+/**
+ * Makes the selected text (or the word at the cursor) a link with no address yet; returns where
+ * its text starts (to find it again), or null when there's nothing to link.
+ */
+export function newLink(view: EditorView): number | null {
+  const { state } = view;
+  let { from, to } = state.selection.main;
   if (from === to) {
     const word = state.wordAt(from);
     if (word) ({ from, to } = word);
@@ -689,7 +879,37 @@ function linkCommand(view: EditorView): boolean {
     selection: { anchor: from + 1, head: from + 1 + label.length },
     userEvent: 'format',
   });
-  view.dispatch({ effects: editLink.of(from + 1) });
+  return from + 1;
+}
+
+/** Is the cursor on a to-do, question or reminder (which can have a date)? */
+export function onItem(state: EditorState): boolean {
+  const line = state.doc.lineAt(state.selection.main.head);
+  return !!parseListLine(line.text)?.type && !calloutAround(state.doc, line.number);
+}
+
+/**
+ * The date of the cursor's to-do, question or reminder: its calendar opens (a date a week out
+ * goes in first when it has none).
+ */
+export function dueCommand(view: EditorView): boolean {
+  const { state } = view;
+  const line = state.doc.lineAt(state.selection.main.head);
+  if (!parseListLine(line.text)?.type) return false;
+  const has = /(^|\s)due:/i.exec(line.text);
+  if (has) {
+    openDueAt(view, line.from + has.index + has[1]!.length);
+    return true;
+  }
+  const d = new Date(Date.now() + 7 * 86_400_000);
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const end = line.from + line.text.replace(/\s+$/, '').length;
+  view.dispatch({
+    changes: { from: end, to: line.to, insert: ` due:${date}` },
+    selection: { anchor: end },
+    userEvent: 'input.format',
+  });
+  openDueAt(view, end + 1);
   return true;
 }
 

@@ -9,7 +9,7 @@ import {
 import { syntaxTree } from '@codemirror/language';
 import type { EditorView } from '@codemirror/view';
 import { blockContext } from './editorCommands';
-import { openDueAt, parseListLine } from './livePreview';
+import { calloutAround, openDueAt, parseListLine } from './livePreview';
 import { focusTableAt } from './tableWidget';
 
 interface Command {
@@ -21,6 +21,8 @@ interface Command {
   alone?: boolean;
   /** The cursor goes on past the block (a rule; a table puts it in its first cell). */
   past?: boolean;
+  /** What goes after a block that stands alone (a blank line, unless it says otherwise). */
+  after?: string;
   /** Inline: written where the slash was, not on a line of its own. */
   inline?: boolean;
   then?: (view: EditorView, start: number) => void;
@@ -83,7 +85,8 @@ function commands(pickImages: () => void): Command[] {
       text: '```mermaid\nflowchart LR\n  A[§Start§] --> B{Decision}\n  B -->|Yes| C[Do it]\n  B -->|No| D[Skip]\n```',
       alone: true,
     },
-    { label: 'Divider', icon: 'divider', text: '---§', alone: true, past: true },
+    // The cursor goes on the line right under it.
+    { label: 'Divider', icon: 'divider', text: '---§', alone: true, past: true, after: '\n' },
     {
       label: 'Link to page',
       icon: 'link',
@@ -121,16 +124,27 @@ function insert(view: EditorView, cmd: Command, from: number, to: number, typed 
     return;
   }
   const line = doc.lineAt(slash);
-  const before = doc.sliceString(line.from, slash);
+  // In a quote or callout, a new line keeps its ">" (and what's before the cursor is after it).
+  const qrun = /^(?:[ \t]*>[ \t]?)+/.exec(line.text)?.[0] ?? '';
+  const inQuote = !!qrun && slash >= line.from + qrun.length;
+  const before = doc.sliceString(line.from + (inQuote ? qrun.length : 0), slash);
   const raw = typeof cmd.text === 'function' ? cmd.text() : cmd.text!;
   let lead = '';
   if (!cmd.inline) {
     // Blocks start their own line; ones that stand alone get a blank line above too.
-    if (before.trim()) lead = cmd.alone ? '\n\n' : '\n';
+    if (before.trim()) lead = cmd.alone ? '\n\n' : `\n${inQuote ? qrun : ''}`;
     else if (cmd.alone && line.number > 1 && doc.line(line.number - 1).text.trim()) lead = '\n';
   }
+  // A callout or quote right under (or over) another one would run into it and show as its
+  // text: a blank line keeps them apart.
+  const quoted = (n: number) => n >= 1 && n <= doc.lines && /^\s*>/.test(doc.line(n).text);
+  if (raw.startsWith('>') && !lead && quoted(line.number - 1)) lead = '\n';
   // ...and below (text right under a table would join it as a row).
-  const tail = cmd.alone ? '\n\n' : '';
+  const tail = cmd.alone
+    ? (cmd.after ?? '\n\n')
+    : raw.startsWith('>') && quoted(line.number + 1)
+      ? '\n'
+      : '';
   const a = raw.indexOf('§');
   const b = raw.indexOf('§', a + 1);
   const text = raw.replaceAll('§', '');
@@ -138,7 +152,7 @@ function insert(view: EditorView, cmd: Command, from: number, to: number, typed 
   view.dispatch({
     changes: { from: slash, to, insert: lead + text + tail },
     selection: cmd.past
-      ? { anchor: start + text.length + 2 }
+      ? { anchor: start + text.length + tail.length }
       : b > a
         ? { anchor: start + a, head: start + b - 1 }
         : { anchor: start + a },
@@ -148,24 +162,32 @@ function insert(view: EditorView, cmd: Command, from: number, to: number, typed 
   cmd.then?.(view, start);
 }
 
-/** Blocks that can't go inside a quote or callout (they hold text, lists and items only). */
+/** Blocks that can't go inside a quote or callout (they hold text, lists and quotes only). */
 export const NOT_IN_QUOTE = [
   'Note',
   'Tip',
   'Warning',
-  'Quote',
   'Table',
   'Code',
   'Diagram',
   'Divider',
+  'Image',
 ];
+/** Not inside a callout either: to-dos, questions, reminders and their dates. */
+export const NOT_IN_CALLOUT = ['To Do', 'Question', 'Reminder', 'Due date'];
 
 /** Inserts a block from the "/" menu's list at the cursor (the phone's format bar). */
 export function insertBlock(view: EditorView, label: string, pickImages: () => void) {
   const cmd = commands(pickImages).find((c) => c.label === label);
   if (!cmd) return;
-  const where = blockContext(view.state, view.state.selection.main.head);
+  const head = view.state.selection.main.head;
+  const where = blockContext(view.state, head);
   if (where === 'code' || (where === 'quote' && NOT_IN_QUOTE.includes(label))) return;
+  if (
+    NOT_IN_CALLOUT.includes(label) &&
+    calloutAround(view.state.doc, view.state.doc.lineAt(head).number)
+  )
+    return;
   const { from, to } = view.state.selection.main;
   insert(view, cmd, from, to, false);
 }
@@ -199,8 +221,11 @@ export function slashSource(pickImages: () => void) {
     const onItem = !!parseListLine(line.text)?.type && !/\sdue:/.test(line.text);
     // In a quote or callout, only what it can hold.
     const inQuote = blockContext(ctx.state, slash) === 'quote';
+    const inCallout = !!calloutAround(ctx.state.doc, line.number);
     const options = (onItem ? all : blocks).filter(
-      (o) => !inQuote || !NOT_IN_QUOTE.includes(o.label),
+      (o) =>
+        (!inQuote || !NOT_IN_QUOTE.includes(o.label)) &&
+        (!inCallout || !NOT_IN_CALLOUT.includes(o.label)),
     );
     return { from: slash + 1, options, validFor: /^[\w]*( [\w]*)?$/ };
   };

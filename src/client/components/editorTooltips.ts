@@ -1,20 +1,10 @@
-// The editor's two small pop-ups: a format bar over selected text (bold, italic, strikethrough,
-// code, link), and a card for the link the cursor is in (open it, change the address, unlink).
-import { StateField, type EditorState, type Extension } from '@codemirror/state';
-import { EditorView, showTooltip, type Tooltip } from '@codemirror/view';
-import {
-  editLink,
-  formatActive,
-  linkCommand,
-  pending,
-  toggleFormat,
-  type Format,
-} from './editorCommands';
+// The card for the link the cursor is in (open it, change the address, unlink). (The format bar
+// over selected text is drawn by the Editor, the same as the phone's.)
+import { StateField, type Extension } from '@codemirror/state';
+import { EditorView, showTooltip } from '@codemirror/view';
+import { editLink } from './editorCommands';
 import { iconElement } from './Icon';
 import { live, liveConfig, type LinkSpot } from './livePreview';
-
-const coarse = () =>
-  typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
 function button(label: string, title: string, run: () => void, icon?: string) {
   const b = document.createElement('button');
@@ -29,46 +19,6 @@ function button(label: string, title: string, run: () => void, icon?: string) {
     run();
   });
   return b;
-}
-
-// -------------------------------------------------------------- format bar
-
-const FORMATS: { f: Format; label: string; title: string }[] = [
-  { f: 'bold', label: '<b>B</b>', title: 'Bold (⌘B)' },
-  { f: 'italic', label: '<i>I</i>', title: 'Italic (⌘I)' },
-  { f: 'strike', label: '<s>S</s>', title: 'Strikethrough (⌘⇧X)' },
-  { f: 'code', label: '<code>&lt;/&gt;</code>', title: 'Code (⌘E)' },
-  { f: 'highlight', label: '<span class="fb-mark">A</span>', title: 'Highlight (⌘⇧H)' },
-];
-
-function formatBar(state: EditorState): Tooltip | null {
-  const sel = state.selection.main;
-  const { focused, blocks } = state.field(live);
-  // Phones have the format bar at the bottom instead.
-  if (!focused || sel.empty || coarse()) return null;
-  if (blocks.some(([a, b]) => sel.from >= a && sel.to <= b)) return null;
-  return {
-    pos: sel.from,
-    end: sel.to,
-    above: true,
-    arrow: false,
-    create(view) {
-      const dom = document.createElement('div');
-      dom.className = 'cm-format-bar';
-      dom.setAttribute('role', 'toolbar');
-      dom.setAttribute('aria-label', 'Format');
-      const items = FORMATS.map(({ f, label, title }) => {
-        const b = button(label, title, () => toggleFormat(view, f));
-        dom.appendChild(b);
-        return { f, b };
-      });
-      dom.appendChild(button('', 'Link (⌘K)', () => linkCommand(view), 'link'));
-      const sync = (s: EditorState) =>
-        items.forEach(({ f, b }) => b.classList.toggle('on', formatActive(s, f)));
-      sync(view.state);
-      return { dom, update: (u) => sync(u.state) };
-    },
-  };
 }
 
 // --------------------------------------------------------------- link card
@@ -145,8 +95,8 @@ function linkCard(view: EditorView, c: Card) {
     });
     input.addEventListener('blur', () => setTimeout(() => dom.isConnected && done(true)));
     dom.appendChild(input);
-    requestAnimationFrame(() => input.focus());
-    return { dom };
+    // Focused as soon as it's on screen, in the same tap (phones only bring up the keyboard then).
+    return { dom, mount: () => input.focus() };
   }
   const where = document.createElement('span');
   where.className = 'cm-link-where';
@@ -198,5 +148,5 @@ function linkCard(view: EditorView, c: Card) {
 }
 
 export function editorTooltips(): Extension {
-  return [card, showTooltip.compute(['selection', live, pending], formatBar)];
+  return [card];
 }

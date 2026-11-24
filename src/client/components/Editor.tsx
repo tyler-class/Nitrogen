@@ -7,11 +7,12 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, redo, undo } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -27,16 +28,32 @@ import { highlight } from './editorHighlight';
 import {
   blockContext,
   currentLineKind,
+  dueCommand,
   editorCommands,
   formatActive,
+  inCallout,
+  inLink,
+  ITEM_KINDS,
+  linkAt,
   linkCommand,
+  newLink,
+  onItem,
+  setLinkAddress,
+  unlink,
   setLineKind,
   toggleFormat,
   type Format,
   type LineKind,
 } from './editorCommands';
 import { editorTooltips } from './editorTooltips';
-import { BlockHost, live, livePreview, refreshLive, type DueSpot } from './livePreview';
+import {
+  BlockHost,
+  live,
+  livePreview,
+  NO_UNDERLINED_HEADINGS,
+  refreshLive,
+  type DueSpot,
+} from './livePreview';
 import { Markdown, type TitleIndex } from './Markdown';
 import { AnswerBox } from './ItemParts';
 import { setItemAnswer } from '@shared/items';
@@ -188,6 +205,38 @@ function isImage(f: File) {
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   const hostEl = useRef<HTMLDivElement>(null);
   const [due, setDue] = useState<DueSpot | null>(null);
+  // Phones: the address box for a link, over the keyboard (`at`: where the link's text starts).
+  const [linkEdit, setLinkEdit] = useState<{
+    view: EditorView;
+    at: number;
+    href: string;
+    fresh: boolean;
+  } | null>(null);
+  const linkInput = useRef<HTMLInputElement>(null);
+  // The room held at the bottom while the date picker is open (see holdPageWhileKeyboardCloses)
+  // goes once it closes.
+  useEffect(() => {
+    if (!due) document.body.style.paddingBottom = '';
+  }, [due]);
+  /** The phone bar's Link button: the address box, with the link's address in it to change. */
+  const editLinkOnPhone = (v: EditorView) => {
+    const spot = linkAt(v.state);
+    const at = spot ? spot.from : newLink(v);
+    if (at === null) return;
+    flushSync(() => setLinkEdit({ view: v, at, href: spot?.href ?? '', fresh: !spot }));
+    // Focused in the same tap, so the keyboard comes up; the page stays where it is.
+    keepScroll(() => linkInput.current?.focus({ preventScroll: true }));
+  };
+  const closeLinkEdit = (address: string | null) => {
+    const edit = linkEdit;
+    setLinkEdit(null);
+    if (!edit) return;
+    const v = edit.view;
+    // No address (or cancelled when it had none yet): the text is left plain.
+    if (address === null ? edit.fresh : !address.trim()) unlink(v, edit.at);
+    else if (address !== null) setLinkAddress(v, edit.at, address);
+    keepScroll(() => v.focus());
+  };
   // For the phone's format bar: whether you're writing, and a tick to redraw its buttons.
   const [writing, setWriting] = useState<EditorView | null>(null);
   const [, setTick] = useState(0);
@@ -331,6 +380,15 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
           history(),
           drawSelection(),
           EditorView.lineWrapping,
+          // Phones: the line you're typing on is kept clear of the keyboard and the format bar
+          // over it, with some room to spare (the browser counts neither as covering the page).
+          EditorView.scrollMargins.of(() => {
+            if (!coarse()) return null;
+            const vv = window.visualViewport;
+            const keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+            const bar = document.querySelector('.phone-bar')?.getBoundingClientRect();
+            return { bottom: keyboard + (bar ? bar.height + 10 : 0) + 48 };
+          }),
           // CodeMirror turns these off by default; in prose they help (iOS autocorrect especially).
           EditorView.contentAttributes.of({
             autocorrect: 'on',
@@ -341,7 +399,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
           // Enter, Backspace and Tab come from editorCommands, ahead of the defaults.
           Prec.high(editorCommands()),
           editorTooltips(),
-          markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false }),
+          markdown({
+            base: markdownLanguage,
+            codeLanguages: languages,
+            addKeymap: false,
+            extensions: NO_UNDERLINED_HEADINGS,
+          }),
           syntaxHighlighting(highlight),
           theme,
           livePreview({
@@ -359,10 +422,11 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
             // The picker takes over: no cursor in the text while it's open.
             editDue: (v, spot) => {
               setDue(spot);
-              v.contentDOM.blur();
+              // The keyboard goes down; the page stays where it is.
+              holdPageWhileKeyboardCloses(() => v.contentDOM.blur());
             },
           }),
-          placeholder('Start writing. Type / for blocks, @ to link a page.'),
+          placeholder('Start writing. Type / for blocks, @ to link a page'),
           autocompletion({
             override: [mentions, wikilinks, slashSource(() => fileInput.current?.click())],
             icons: false,
@@ -405,6 +469,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
             if (u.docChanged && !u.transactions.some((t) => t.annotation(external)))
               latest.current.onChange(u.state.doc.toString());
             if (u.focusChanged) setWriting(u.view.hasFocus ? u.view : null);
+            if ((u.docChanged || u.selectionSet || u.focusChanged) && u.view.hasFocus && coarse())
+              keepCaretAboveBar(u.view);
             // Any change, including a format waiting for what you type next.
             if (u.transactions.length) setTick((t) => t + 1);
           }),
@@ -488,8 +554,21 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
   return (
     <>
       <div ref={hostEl} className={`editor live${writing ? ' writing' : ''}`} />
+      {writing &&
+        !coarse() &&
+        !writing.state.selection.main.empty &&
+        !writing.state
+          .field(live)
+          .blocks.some(
+            ([a, b]) =>
+              writing.state.selection.main.from >= a && writing.state.selection.main.to <= b,
+          ) && <SelectionBar view={writing} pickImages={() => fileInput.current?.click()} />}
       {writing && coarse() && (
-        <PhoneBar view={writing} pickImages={() => fileInput.current?.click()} />
+        <PhoneBar
+          view={writing}
+          pickImages={() => fileInput.current?.click()}
+          editLink={editLinkOnPhone}
+        />
       )}
       {/* Tables and diagrams, drawn by the same renderer as everywhere else. */}
       {shown.map((b) =>
@@ -502,6 +581,14 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(props, ref
           b.el,
           b.id,
         ),
+      )}
+      {linkEdit && (
+        <LinkPop
+          key={linkEdit.at}
+          initial={linkEdit.href}
+          input={linkInput}
+          onClose={closeLinkEdit}
+        />
       )}
       {due && (
         <DuePop
@@ -637,7 +724,19 @@ type BarItem =
   | { kind: 'format'; f: Format; label: string; text: string }
   | { kind: 'line'; k: LineKind; label: string; icon?: string; text?: string }
   | { kind: 'block'; block: string; label: string; icon: string }
-  | { kind: 'do'; run: (v: EditorView) => boolean; label: string; icon: string; always?: boolean }
+  | {
+      kind: 'do';
+      run: (v: EditorView) => boolean;
+      label: string;
+      icon: string;
+      always?: boolean;
+      /** Shown as on (pressed) when this is true. */
+      on?: (s: EditorState) => boolean;
+      /** Only usable when this is true. */
+      when?: (s: EditorState) => boolean;
+      /** Only there when this is true. */
+      show?: (s: EditorState) => boolean;
+    }
   | { kind: 'sep' };
 
 const BAR: BarItem[] = [
@@ -648,7 +747,8 @@ const BAR: BarItem[] = [
   { kind: 'format', f: 'strike', label: 'Strikethrough', text: 'S' },
   { kind: 'format', f: 'code', label: 'Code', text: '</>' },
   { kind: 'format', f: 'highlight', label: 'Highlight', text: 'A' },
-  { kind: 'do', run: linkCommand, label: 'Link', icon: 'link' },
+  { kind: 'do', run: linkCommand, label: 'Link', icon: 'link', on: inLink },
+  { kind: 'do', run: (v) => unlink(v), label: 'Remove link', icon: 'unlink', show: inLink },
   { kind: 'sep' },
   { kind: 'line', k: 'h1', label: 'Heading 1', text: 'H1' },
   { kind: 'line', k: 'h2', label: 'Heading 2', text: 'H2' },
@@ -657,6 +757,14 @@ const BAR: BarItem[] = [
   { kind: 'line', k: 'todo', label: 'To Do', icon: 'check' },
   { kind: 'line', k: 'question', label: 'Question', icon: 'question' },
   { kind: 'line', k: 'reminder', label: 'Reminder', icon: 'bell' },
+  {
+    kind: 'do',
+    run: dueCommand,
+    label: 'Due date',
+    icon: 'calendar',
+    when: onItem,
+    show: (s) => !inCallout(s),
+  },
   { kind: 'sep' },
   { kind: 'line', k: 'bullet', label: 'Bulleted list', icon: 'list' },
   { kind: 'line', k: 'number', label: 'Numbered list', icon: 'numbered' },
@@ -671,7 +779,6 @@ const BAR: BarItem[] = [
   { kind: 'block', block: 'Code', label: 'Code block', icon: 'code' },
   { kind: 'block', block: 'Diagram', label: 'Diagram', icon: 'graph' },
   { kind: 'block', block: 'Divider', label: 'Divider', icon: 'divider' },
-  { kind: 'block', block: 'Link to page', label: 'Link to a page', icon: 'page' },
   { kind: 'block', block: 'Image', label: 'Image', icon: 'image' },
 ];
 
@@ -680,41 +787,337 @@ const BAR: BarItem[] = [
  * (it scrolls sideways). The end button folds it down to a small round button, and back; the
  * choice is remembered on the device. Buttons keep the keyboard up (they never take the focus).
  */
-function PhoneBar({ view, pickImages }: { view: EditorView; pickImages(): void }) {
-  const [folded, setFolded] = useState(() => readLocal('n2.formatbar.folded', false));
+/**
+ * Runs `fn` (a focus change) with the page held where it is: phones otherwise scroll the page
+ * when the focus moves, and keep at it while the keyboard settles.
+ */
+function keepScroll(fn: () => void) {
+  const y = window.scrollY;
+  fn();
+  const hold = () => {
+    if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+  };
+  hold();
+  window.addEventListener('scroll', hold, { passive: true });
+  setTimeout(() => window.removeEventListener('scroll', hold), 700);
+}
+
+/**
+ * Runs `fn` (taking the focus out of the text) with the page held where it is on screen while the
+ * phone's keyboard goes down. Phones otherwise jump the page as the keyboard closes; room is
+ * kept at the bottom (where the keyboard was) so the page has somewhere to stay, until the date
+ * picker closes.
+ */
+function holdPageWhileKeyboardCloses(fn: () => void) {
+  const vv = window.visualViewport;
+  if (!vv || !coarse()) {
+    fn();
+    return;
+  }
+  const top = window.scrollY + vv.offsetTop;
+  const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  if (keyboard) document.body.style.paddingBottom = `${keyboard}px`;
+  fn();
+  const hold = () => {
+    const want = top - vv.offsetTop;
+    if (Math.abs(window.scrollY - want) > 1) window.scrollTo(0, want);
+  };
+  hold();
+  window.addEventListener('scroll', hold, { passive: true });
+  vv.addEventListener('resize', hold);
+  vv.addEventListener('scroll', hold);
+  setTimeout(() => {
+    window.removeEventListener('scroll', hold);
+    vv.removeEventListener('resize', hold);
+    vv.removeEventListener('scroll', hold);
+  }, 900);
+}
+
+/** How far the keyboard reaches up from the bottom of the window (0 when it's down). */
+function useKeyboardTop() {
   const [bottom, setBottom] = useState(0);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    // Sit on top of the keyboard: the gap between the visible area and the bottom of the window.
-    const place = () => setBottom(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    // The gap between the visible area and the bottom of the window. A small one is the
+    // browser's own toolbar growing or shrinking as the page scrolls, not a keyboard: ignored,
+    // so the bar stays put.
+    const place = () => {
+      const gap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setBottom(gap < 150 ? 0 : gap);
+    };
     place();
     vv.addEventListener('resize', place);
     vv.addEventListener('scroll', place);
+    window.addEventListener('scroll', place, { passive: true });
     return () => {
       vv.removeEventListener('resize', place);
       vv.removeEventListener('scroll', place);
+      window.removeEventListener('scroll', place);
     };
   }, []);
-  const fold = (on: boolean) => {
-    setFolded(on);
-    writeLocal('n2.formatbar.folded', on);
+  return bottom;
+}
+
+/**
+ * Phones: keeps the line you're typing on above the format bar (with room to spare), once the
+ * page has settled: the keyboard and the bar cover the page without the browser knowing.
+ */
+function keepCaretAboveBar(view: EditorView) {
+  const check = () => {
+    const bar = document.querySelector('.phone-bar');
+    if (!bar || !view.hasFocus) return;
+    const head = view.state.selection.main.head;
+    const at = view.coordsAtPos(head, 1) ?? view.coordsAtPos(head, -1);
+    if (!at) return;
+    const limit = bar.getBoundingClientRect().top - 40;
+    // Only when it's under the bar (or just over it), not when it's off the top of the screen.
+    if (at.bottom > limit && at.top < window.innerHeight)
+      window.scrollBy({ top: at.bottom - limit });
   };
-  const keep = (e: React.PointerEvent | React.MouseEvent) => e.preventDefault();
+  requestAnimationFrame(check);
+  // Again once the phone's own scrolling (to the caret, for the keyboard) is done.
+  setTimeout(check, 250);
+}
+
+/**
+ * Phones: a link's address, in a box where the format bar was (over the keyboard). Enter or
+ * the tick saves it; a tap elsewhere saves it too; Escape leaves it as it was.
+ */
+function LinkPop({
+  initial,
+  input,
+  onClose,
+}: {
+  initial: string;
+  input: React.RefObject<HTMLInputElement | null>;
+  /** The address to save, or null to leave the link as it was. */
+  onClose(address: string | null): void;
+}) {
+  const bottom = useKeyboardTop();
+  const [value, setValue] = useState(initial);
+  const box = useRef<HTMLFormElement>(null);
+  const latestValue = useRef(value);
+  const close = useRef(onClose);
+  useEffect(() => {
+    latestValue.current = value;
+    close.current = onClose;
+  });
+  useEffect(() => {
+    const down = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) close.current(latestValue.current);
+    };
+    document.addEventListener('pointerdown', down, true);
+    return () => document.removeEventListener('pointerdown', down, true);
+  }, []);
+  return createPortal(
+    <form
+      ref={box}
+      className="link-pop"
+      style={{ bottom: bottom + 10 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onClose(value);
+      }}
+    >
+      <Icon name="link" size={17} />
+      <input
+        ref={input}
+        type="url"
+        inputMode="url"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        enterKeyHint="done"
+        placeholder="Paste or type a link"
+        aria-label="Link address"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            onClose(null);
+          }
+        }}
+      />
+      {/* Pressing it keeps the focus in the box: the keyboard stays up, so the button doesn't
+          slide away from under the finger before the tap lands. */}
+      <button
+        type="submit"
+        aria-label="Save link"
+        title="Save link"
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.preventDefault();
+          onClose(value);
+        }}
+      >
+        <Icon name="check" size={18} />
+      </button>
+    </form>,
+    document.body,
+  );
+}
+
+/**
+ * The format buttons (the same on phones and over a selection on computers): every format as an
+ * icon, without what can't go where the cursor is. Pressing one never takes the focus.
+ */
+function FormatButtons({
+  view,
+  pickImages,
+  editLink,
+  size,
+}: {
+  view: EditorView;
+  pickImages(): void;
+  /** The Link button. */
+  editLink(v: EditorView): void;
+  size: number;
+}) {
   const line = currentLineKind(view.state);
   const where = blockContext(view.state, view.state.selection.main.head);
-  // In code only undo and redo; in a quote or callout, no blocks it can't hold.
+  const callout = inCallout(view.state);
+  // In a quote or callout, what it can't hold isn't offered at all (in a callout: no callouts,
+  // tables, code, diagrams, dividers, images, to-dos, questions or reminders).
+  const hidden = (item: BarItem) =>
+    (item.kind === 'do' && !!item.show && !item.show(view.state)) ||
+    (callout && item.kind === 'line' && ITEM_KINDS.includes(item.k)) ||
+    (where === 'quote' && item.kind === 'block' && NOT_IN_QUOTE.includes(item.block));
+  // In code only undo and redo (code formatting can always come off again, though).
   const blocked = (item: BarItem) =>
     item.kind !== 'sep' &&
     !(item.kind === 'do' && item.always) &&
-    (where === 'code' ||
-      (where === 'quote' && item.kind === 'block' && NOT_IN_QUOTE.includes(item.block)));
+    !(item.kind === 'format' && item.f === 'code' && formatActive(view.state, 'code')) &&
+    (where === 'code' || (item.kind === 'do' && !!item.when && !item.when(view.state)));
   const run = (item: BarItem) => {
     if (item.kind === 'sep' || blocked(item)) return;
     if (item.kind === 'format') toggleFormat(view, item.f);
     else if (item.kind === 'line') setLineKind(view, item.k);
     else if (item.kind === 'block') insertBlock(view, item.block, pickImages);
+    else if (item.run === linkCommand) editLink(view);
     else item.run(view);
+  };
+  // What's shown, with no two dividers together (or one at the end).
+  const shownItems = BAR.filter((item) => !hidden(item)).filter(
+    (item, n, all) =>
+      item.kind !== 'sep' || (n > 0 && all[n - 1]!.kind !== 'sep' && n < all.length - 1),
+  );
+  return shownItems.map((item, n) => {
+    if (item.kind === 'sep') return <span key={`sep${n}`} className="pb-sep" aria-hidden />;
+    const off = blocked(item);
+    const on =
+      item.kind === 'format'
+        ? formatActive(view.state, item.f)
+        : item.kind === 'line'
+          ? line === item.k
+          : item.kind === 'do' && !!item.on?.(view.state);
+    return (
+      <button
+        key={item.label}
+        type="button"
+        className={on ? 'on' : undefined}
+        disabled={off}
+        aria-label={item.label}
+        aria-pressed={
+          item.kind === 'format' || item.kind === 'line' || (item.kind === 'do' && item.on)
+            ? on
+            : undefined
+        }
+        title={item.label}
+        onClick={() => run(item)}
+      >
+        {'icon' in item && item.icon ? (
+          <Icon name={item.icon} size={size} />
+        ) : (
+          <span className={`pb-text pb-${item.kind === 'format' ? item.f : 'h'}`}>
+            {'text' in item ? item.text : ''}
+          </span>
+        )}
+      </button>
+    );
+  });
+}
+
+const keep = (e: React.PointerEvent | React.MouseEvent) => e.preventDefault();
+
+/**
+ * Computers: the format bar, floating just over the selected text while there is some (under it
+ * when there's no room above). It's out of the way while the mouse is still selecting.
+ */
+function SelectionBar({ view, pickImages }: { view: EditorView; pickImages(): void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const down = () => setSelecting(true);
+    const up = () => setSelecting(false);
+    const move = () => redraw((n) => n + 1);
+    view.contentDOM.addEventListener('mousedown', down);
+    document.addEventListener('mouseup', up);
+    window.addEventListener('scroll', move, { capture: true, passive: true });
+    window.addEventListener('resize', move);
+    return () => {
+      view.contentDOM.removeEventListener('mousedown', down);
+      document.removeEventListener('mouseup', up);
+      window.removeEventListener('scroll', move, { capture: true });
+      window.removeEventListener('resize', move);
+    };
+  }, [view]);
+  // Placed once drawn (it needs its own size): centred over the selection's first line.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const sel = view.state.selection.main;
+    const a = view.coordsAtPos(sel.from, 1);
+    const b = view.coordsAtPos(sel.to, -1);
+    if (!a || !b) {
+      el.style.visibility = 'hidden';
+      return;
+    }
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const mid = b.top === a.top ? (a.left + b.right) / 2 : a.left + w / 2;
+    const left = Math.max(8, Math.min(mid - w / 2, window.innerWidth - w - 8));
+    const above = a.top - h - 8;
+    el.style.left = `${left}px`;
+    el.style.top = `${above >= 8 ? above : b.bottom + 8}px`;
+    el.style.visibility = 'visible';
+  });
+  if (selecting) return null;
+  return createPortal(
+    <div
+      ref={box}
+      className="phone-bar sel-bar"
+      role="toolbar"
+      aria-label="Format"
+      onPointerDown={keep}
+      onMouseDown={keep}
+    >
+      <div className="phone-bar-scroll">
+        <FormatButtons view={view} pickImages={pickImages} editLink={linkCommand} size={17} />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function PhoneBar({
+  view,
+  pickImages,
+  editLink,
+}: {
+  view: EditorView;
+  pickImages(): void;
+  /** The Link button: the address box (over the keyboard). */
+  editLink(v: EditorView): void;
+}) {
+  const [folded, setFolded] = useState(() => readLocal('n2.formatbar.folded', false));
+  const bottom = useKeyboardTop();
+  const fold = (on: boolean) => {
+    setFolded(on);
+    writeLocal('n2.formatbar.folded', on);
   };
   return createPortal(
     <div
@@ -726,38 +1129,9 @@ function PhoneBar({ view, pickImages }: { view: EditorView; pickImages(): void }
       onMouseDown={keep}
     >
       {/* Always there: folding slides the pill in over it (it fades out, and can't be used). */}
-      {
-        <div className="phone-bar-scroll" inert={folded} aria-hidden={folded || undefined}>
-          {BAR.map((item, n) => {
-            if (item.kind === 'sep') return <span key={`sep${n}`} className="pb-sep" aria-hidden />;
-            const off = blocked(item);
-            const on =
-              item.kind === 'format'
-                ? formatActive(view.state, item.f)
-                : item.kind === 'line' && line === item.k;
-            return (
-              <button
-                key={item.label}
-                type="button"
-                className={on ? 'on' : undefined}
-                disabled={off}
-                aria-label={item.label}
-                aria-pressed={item.kind === 'format' || item.kind === 'line' ? on : undefined}
-                title={item.label}
-                onClick={() => run(item)}
-              >
-                {'icon' in item && item.icon ? (
-                  <Icon name={item.icon} size={19} />
-                ) : (
-                  <span className={`pb-text pb-${item.kind === 'format' ? item.f : 'h'}`}>
-                    {'text' in item ? item.text : ''}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      }
+      <div className="phone-bar-scroll" inert={folded} aria-hidden={folded || undefined}>
+        <FormatButtons view={view} pickImages={pickImages} editLink={editLink} size={19} />
+      </div>
       <button
         type="button"
         className="phone-bar-fold"

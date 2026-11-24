@@ -6,6 +6,7 @@
 // source, with the diagram drawn under it as you type.
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import {
+  EditorSelection,
   EditorState,
   Facet,
   RangeSet,
@@ -318,6 +319,98 @@ const CALLOUT_ICON: Record<string, string> = {
 /** Closes any open editor menu (callout kinds). */
 let closeMenu: (() => void) | null = null;
 
+/**
+ * After a link (to a web address, or to a page): a small "open" icon that hangs on the end of the
+ * link's text (it never wraps onto a line of its own). A tap opens it: a web address in a new tab,
+ * a page in the app.
+ */
+class LinkOut extends WidgetType {
+  constructor(readonly href: string) {
+    super();
+  }
+  eq(o: LinkOut) {
+    return o.href === this.href;
+  }
+  toDOM(view: EditorView) {
+    const s = document.createElement('span');
+    s.className = 'cm-link-out';
+    // A word joiner: no line break between the link's last letter and the icon.
+    s.textContent = '\u2060';
+    s.appendChild(iconElement('external', 13));
+    s.title = 'Open in a new tab';
+    s.setAttribute('role', 'link');
+    s.setAttribute('aria-label', 'Open in a new tab');
+    s.addEventListener('mousedown', (e) => e.preventDefault());
+    s.addEventListener('click', (e) => {
+      e.preventDefault();
+      const href = this.href;
+      if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/files/'))
+        view.state.facet(liveConfig).open(href);
+      else window.open(href, '_blank', 'noopener,noreferrer');
+    });
+    return s;
+  }
+  ignoreEvent() {
+    return true;
+  }
+}
+
+/** The callout a line belongs to: its "> [!NOTE]" line and its last line (1-based). */
+export function calloutAround(
+  doc: EditorState['doc'],
+  n: number,
+): { head: number; last: number } | null {
+  const quoted = (k: number) => /^\s*>/.test(doc.line(k).text);
+  const header = (k: number) => CALLOUT_RE.test(doc.line(k).text);
+  if (!quoted(n)) return null;
+  let head = n;
+  while (head > 1 && !header(head) && quoted(head - 1)) head--;
+  if (!header(head)) return null;
+  let last = head;
+  while (last < doc.lines && quoted(last + 1) && !header(last + 1)) last++;
+  return { head, last };
+}
+
+/**
+ * Takes a callout away: an empty one goes completely; one with writing in it leaves the writing
+ * as plain text. The cursor goes where its text starts.
+ */
+export function removeCallout(view: EditorView, line: number): boolean {
+  const { doc } = view.state;
+  const c = calloutAround(doc, line);
+  if (!c) return false;
+  const head = doc.line(c.head);
+  const last = doc.line(c.last);
+  const title = CALLOUT_RE.exec(head.text)![5]!.trim();
+  let body = '';
+  for (let n = c.head + 1; n <= c.last; n++) body += doc.line(n).text.replace(/^\s*>[ \t]?/, '');
+  if (!title && !body.trim()) {
+    view.dispatch({
+      changes: { from: head.from, to: last.to },
+      selection: { anchor: head.from },
+      userEvent: 'delete',
+    });
+    return true;
+  }
+  const lines: string[] = [];
+  if (title) lines.push(title);
+  for (let n = c.head + 1; n <= c.last; n++)
+    lines.push(doc.line(n).text.replace(/^\s*>[ \t]?/, ''));
+  view.dispatch({
+    changes: { from: head.from, to: last.to, insert: lines.join('\n') },
+    selection: EditorSelection.cursor(head.from, 1),
+    userEvent: 'delete',
+  });
+  return true;
+}
+
+/**
+ * The editors' markdown, without the old way to write a heading (text over a line of "-" or "="):
+ * typing "- " to start a list under a line would make that line a heading until you typed more
+ * (bold, and in a callout, its title and a stray ">").
+ */
+export const NO_UNDERLINED_HEADINGS = [{ remove: ['SetextHeading'] }];
+
 /** A link to another page ([[Title]]), drawn as one piece; a click opens the page. */
 class PageLink extends WidgetType {
   constructor(
@@ -437,6 +530,19 @@ class CalloutLabel extends WidgetType {
         });
         menu.appendChild(b);
       }
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.setAttribute('role', 'menuitem');
+      rm.className = 'cm-menu-remove';
+      rm.appendChild(iconElement('trash', 16));
+      rm.append('Remove callout');
+      rm.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        closeMenu?.();
+        removeCallout(view, view.state.doc.lineAt(view.posAtDOM(s)).number);
+        view.focus();
+      });
+      menu.appendChild(rm);
       const r = s.getBoundingClientRect();
       menu.style.left = `${Math.max(8, r.left)}px`;
       menu.style.top = `${r.bottom + 6}px`;
@@ -704,6 +810,8 @@ class DiagramWidget extends WidgetType {
 const CALLOUT_RE = /^(\s*>[ \t]?)(\[!([A-Za-z]+)\][+-]?)([ \t]*)(.*)$/;
 const QUOTE_START = /^\s*>/;
 /** "==highlighted==" text (not a markdown node: found by its marks, on one line). */
+/** A line with only its hidden start: ">" (one or more), then maybe "#" to "######". */
+const EMPTY_LINE_START = /^[ \t]*(?:>[ \t]?)*(?:#{1,6}(?:[ \t]+|$))?$/;
 export const HIGHLIGHT_RE = /==(?=[^\s=])(.*?[^\s=])==/g;
 const DUE_ALL = new RegExp(DUE_RE.source, 'gi');
 
@@ -718,6 +826,9 @@ export interface LinkSpot {
   labelTo?: number;
   urlFrom?: number;
   urlTo?: number;
+  /** For markdown links: where the whole "[label](address)" starts and ends. */
+  start?: number;
+  end?: number;
 }
 
 export interface Live {
@@ -919,6 +1030,12 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
         case 'Blockquote': {
           const first = doc.lineAt(node.from);
           const last = doc.lineAt(node.to);
+          // A quote inside a callout (or another quote): its own bar, inside the box.
+          if (node.node.parent?.name === 'Blockquote') {
+            for (let n = first.number; n <= last.number; n++)
+              if (/^\s*>[ \t]?>/.test(doc.line(n).text)) lineDeco(doc.line(n).from, 'cm-quote-in');
+            return;
+          }
           const c = CALLOUT_RE.exec(first.text);
           const t = c?.[3]!.toLowerCase();
           const type = t ? (CALLOUT_TYPES.includes(t) ? t : (CALLOUT_ALIAS[t] ?? 'note')) : null;
@@ -987,6 +1104,10 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
           hide(open.from, open.to, 'open');
           mark(open.to, close.from, 'cm-link', { title: href });
           hide(close.from, node.to, 'close');
+          if (href.trim())
+            out.push(
+              Decoration.widget({ widget: new LinkOut(href.trim()), side: -1 }).range(node.to),
+            );
           links.push({
             from: open.to,
             to: close.from,
@@ -996,6 +1117,8 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
             labelTo: close.from,
             urlFrom,
             urlTo,
+            start: node.from,
+            end: node.to,
           });
           return;
         }
@@ -1010,6 +1133,11 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
             hide(node.to, node.to + 1, 'close');
           }
           mark(node.from, node.to, 'cm-link');
+          out.push(
+            Decoration.widget({ widget: new LinkOut(href), side: -1 }).range(
+              parent === 'Autolink' ? node.to + 1 : node.to,
+            ),
+          );
           links.push({ from: node.from, to: node.to, kind: 'url', href });
           return;
         }
@@ -1034,7 +1162,7 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
         out.push(
           Decoration.line({
             class: 'cm-blank cm-blank-here',
-            attributes: { 'data-hint': 'Type / for blocks, @ to link a page.' },
+            attributes: { 'data-hint': 'Type / for blocks, @ to link a page' },
           }).range(line.from),
         );
       // (An empty page keeps a normal line, under its placeholder.)
@@ -1192,6 +1320,8 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
         // after it takes the whole link.
         const label = w[3]?.trim() || (heading ? `${target} › ${heading}` : target);
         swap(from, to, new PageLink(label, cls, href));
+        // The same "open" icon as a web link has, on its end (pages that exist only).
+        if (href) out.push(Decoration.widget({ widget: new LinkOut(href), side: -1 }).range(to));
         links.push({ from, to, kind: 'wiki', href });
       }
     }
@@ -1214,6 +1344,25 @@ function build(state: EditorState, focused: boolean): Omit<Live, 'focused'> {
         pos += len;
       }
     }
+  }
+
+  // The cursor's line with nothing after its hidden start (an empty heading, quote or callout
+  // line): something the size of a letter for the cursor to stand beside. Without it the cursor
+  // takes the size of the hidden "#" or ">", which is none, and can't be seen.
+  if (cursorLine > 0) {
+    const line = doc.line(cursorLine);
+    const c = CALLOUT_RE.exec(line.text);
+    if (
+      head.head === line.to &&
+      !codeLines.has(cursorLine) &&
+      ((c && !c[5]!.trim()) || (!c && EMPTY_LINE_START.test(line.text) && !!line.text.trim()))
+    )
+      out.push(
+        Decoration.widget({
+          widget: new TextWidget('\u200b', 'cm-hint cm-caret-anchor'),
+          side: 1,
+        }).range(line.to),
+      );
   }
 
   // Nothing else drawn inside a block drawn whole.
@@ -1306,10 +1455,36 @@ const offLinePrefix = EditorState.transactionFilter.of((tr) => {
   const sel = tr.newSelection.main;
   if (!sel.empty) return tr;
   const line = tr.state.doc.lineAt(sel.head);
-  if (sel.head !== line.from) return tr;
   const end = prefixEnd(tr.state, line.from);
   if (end === null) return tr;
-  return [tr, { selection: { anchor: end }, sequential: true }];
+  // Right after the hidden start, the cursor leans on the text after it: leaning back on the
+  // hidden marks (drawn at no size) would make it vanish.
+  if (sel.head === line.from || (sel.head === end && sel.assoc < 0))
+    return [tr, { selection: EditorSelection.cursor(end, 1), sequential: true }];
+  return tr;
+});
+
+/**
+ * The cursor never rests on a callout's top line (its icon and name): it goes on into the
+ * callout's text, or, moving up out of it, to the end of the line above the callout.
+ */
+const offCalloutHeads = EditorState.transactionFilter.of((tr) => {
+  if (!tr.selection && !tr.docChanged) return tr;
+  const sel = tr.newSelection.main;
+  if (!sel.empty) return tr;
+  const doc = tr.newDoc;
+  const line = doc.lineAt(sel.head);
+  if (!CALLOUT_RE.test(line.text)) return tr;
+  const up = !tr.docChanged && sel.head < tr.startState.selection.main.head;
+  const hasBody = line.number < doc.lines && QUOTE_START.test(doc.line(line.number + 1).text);
+  let to: number | null = null;
+  if ((up || !hasBody) && line.number > 1) to = doc.line(line.number - 1).to;
+  else if (hasBody) {
+    const next = doc.line(line.number + 1);
+    to = prefixEnd(tr.state, next.from) ?? next.from;
+  }
+  if (to === null || to === sel.head) return tr;
+  return [tr, { selection: EditorSelection.cursor(to, 1), sequential: true }];
 });
 
 export function livePreview(config: LiveConfig): Extension {
@@ -1318,6 +1493,7 @@ export function livePreview(config: LiveConfig): Extension {
     live,
     offBlockEdges,
     offLinePrefix,
+    offCalloutHeads,
     EditorView.focusChangeEffect.of((_state, focusing) => setFocus.of(focusing)),
     EditorView.domEventHandlers({
       mousedown(e, view) {

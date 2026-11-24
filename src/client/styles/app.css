@@ -2838,7 +2838,7 @@ body.resizing {
 
 /* Writing needs room: the editor is wider than the reading column. */
 .page.editing {
-  max-width: 1080px;
+  max-width: 1410px;
 }
 
 /* ------------------------------------------------------- editing surface */
@@ -3090,9 +3090,9 @@ body.resizing {
   color: var(--accent);
 }
 
-/* --- Pages read wider on desktop. */
+/* --- Pages read wider on desktop (wide enough to use a big screen, not the whole of it). */
 .page {
-  max-width: 880px;
+  max-width: 1150px;
 }
 
 /* --- Nothing scrolls sideways at page level (wide tables and code scroll in their own boxes). */
@@ -3411,7 +3411,9 @@ body.resizing {
   margin: 0 0 8px;
 }
 .ai-toggle {
-  display: inline-flex;
+  /* On a line of its own, under the assistant toggle (never beside it). */
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 6px;
   margin-top: 18px;
@@ -6845,20 +6847,20 @@ th .cm-cell {
   line-height: 1.3;
 }
 
-/* The resize handle: a plain blue square right on the picture's corner. */
+/* The resize handle: a plain blue square hanging just off the picture's corner. */
 .cm-img-handle {
-  right: 0;
-  bottom: 0;
-  width: 12px;
-  height: 12px;
+  right: -5px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
   border: 0;
   border-radius: 2px;
   box-shadow: none;
 }
 @media (pointer: coarse) {
   .cm-img-handle {
-    width: 18px;
-    height: 18px;
+    width: 13.5px;
+    height: 13.5px;
   }
 }
 
@@ -7286,9 +7288,8 @@ th .cm-cell {
    again to the left), its buttons fading as it goes. */
 .phone-bar {
   overflow: hidden;
-  transition:
-    left 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
-    bottom 0.12s ease;
+  /* Only the fold slides: moving with the keyboard is instant (no lag, no snapping). */
+  transition: left 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .phone-bar.folded {
   left: calc(100% - 12px - 48px);
@@ -7673,7 +7674,7 @@ html {
 }
 .page.outline-pinned {
   margin-left: auto;
-  margin-right: max(256px, calc((100% - 880px) / 2));
+  margin-right: max(256px, calc((100% - 1150px) / 2));
 }
 .outline-dock {
   position: fixed;
@@ -7944,9 +7945,9 @@ html {
   font-size: 12.5px;
   padding: 1px 8px;
 }
-/* "+ Tag": a small text button on the line, not a big dashed pill (a pill shape on hover). */
+/* "+ Tag": a small dashed pill on the line. */
 .page-meta-row .tag-add {
-  border-color: transparent;
+  border: 1px dashed color-mix(in srgb, var(--ink) 28%, transparent);
   padding: 1px 8px;
   border-radius: 999px;
   color: var(--faint);
@@ -7954,7 +7955,7 @@ html {
 }
 @media (hover: hover) and (pointer: fine) {
   .page-meta-row .tag-add:hover {
-    border-color: transparent;
+    border-color: color-mix(in srgb, var(--ink) 40%, transparent);
     background: color-mix(in srgb, var(--ink) 5%, transparent);
     color: var(--ink);
   }
@@ -8022,4 +8023,293 @@ html {
 .cm-item.item-todo.cm-done .cm-due {
   display: inline-block;
   text-decoration: none;
+}
+
+/* After a link to a web address: a small "open in a new tab" icon on the end of its text,
+   then a little room before what follows. */
+.cm-link-out {
+  display: inline;
+  margin: 0 0.25em 0 0.15em;
+  color: var(--accent-ink);
+  cursor: pointer;
+  user-select: none;
+}
+.cm-link-out svg {
+  display: inline-block;
+  vertical-align: -1px;
+}
+@media (pointer: coarse) {
+  /* A bigger tap target, without taking more room in the line. */
+  .cm-link-out {
+    padding: 8px 4px;
+    margin: -8px 0.15em -8px 0;
+  }
+}
+
+/* The callout menu's last choice: take the callout away. */
+.cm-menu .cm-menu-remove {
+  margin-top: 4px;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0 0 6px 6px;
+  color: var(--danger);
+}
+
+/* A quote inside a callout (or another quote): its own thin bar inside the box. */
+.cm-line.cm-quote-in {
+  color: var(--muted);
+  background-image: linear-gradient(var(--hairline), var(--hairline));
+  background-size: 3px 100%;
+  background-position: 14px 0;
+  background-repeat: no-repeat;
+  padding-left: 31px !important;
+}
+
+/* Phones: a link's address, where the format bar was (over the keyboard). */
+.link-pop {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+}
+.link-pop input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.link-pop input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.link-pop button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Computers: the same format bar, floating just over the selected text. */
+.phone-bar.sel-bar {
+  right: auto;
+  bottom: auto;
+  width: max-content;
+  max-width: min(720px, calc(100vw - 16px));
+  height: 40px;
+  padding: 0 2px;
+  visibility: hidden;
+  transition: none;
+}
+.phone-bar.sel-bar button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.phone-bar.sel-bar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.phone-bar.sel-bar button.on {
+  background: var(--accent-soft);
+}
+
+/* --- What a page is connected to: small chips under the title ("4 inside", "2 linked from"),
+   each opening the connections panel on its tab. */
+.conn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.conn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.conn-chip:hover {
+  border-color: color-mix(in srgb, var(--ink) 25%, transparent);
+  color: var(--ink);
+}
+.conn-drawer {
+  width: min(460px, 100%);
+}
+.conn-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid var(--hairline);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.conn-tabs::-webkit-scrollbar {
+  display: none;
+}
+.conn-tabs button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.conn-tabs button.on {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.conn-tabs .count {
+  font-size: 12px;
+  color: var(--faint);
+}
+.conn-body {
+  padding: 12px 16px 24px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+.conn-body .child-list,
+.conn-body .backlinks,
+.conn-body .mentions {
+  margin-top: 0;
+}
+.conn-add {
+  margin-bottom: 10px;
+}
+/* In the phone's sheet the tabs run edge to edge. */
+.sheet .conn-tabs {
+  margin: 0 -20px;
+  padding: 0 14px;
+}
+.sheet .conn-body {
+  padding: 12px 0 8px;
+}
+
+/* Under the title, tags, "+ Tag", a "|" and the connection chips run on as one line of pills,
+   wrapping together at the edge. */
+.page-meta-row {
+  gap: 6px;
+}
+.page-meta-row .tag-row,
+.page-meta-row .conn-chips {
+  display: contents;
+}
+.meta-sep {
+  color: var(--hairline);
+  font-size: 15px;
+  line-height: 1;
+  margin: 0 3px;
+  user-select: none;
+}
+
+/* Connections panel: a page's name (not its emoji) underlines on hover. */
+.conn-body a:hover {
+  text-decoration: none;
+}
+.conn-body a:hover .conn-title,
+.conn-body a:hover .child-title {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The connection chips: a light grey fill. */
+.conn-chip {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.conn-chip:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+/* Phones: the connections sheet is always the same height, whatever each tab holds (it still
+   grows to full height when dragged up). */
+@media (max-width: 860px) {
+  .sheet:has(.conn-tabs):not(.expanded) {
+    height: 65dvh;
+  }
+}
+
+/* While a sheet is open the page behind it doesn't scroll; the sheet's list scrolls on its own
+   and never hands the scroll on to the page. */
+html.sheet-open,
+html.sheet-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.sh-body {
+  overscroll-behavior: contain;
+}
+
+/* Computers: History and Connections slide out from the right (and back in when they close),
+   over a scrim that fades. (Phones are left as they are.) */
+@media (min-width: 861px) {
+  .drawer-scrim {
+    animation: scrim-in 0.22s ease both;
+  }
+  .drawer-scrim .drawer {
+    animation: drawer-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .drawer-scrim.closing {
+    animation: scrim-out 0.22s ease both;
+  }
+  .drawer-scrim.closing .drawer {
+    animation: drawer-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes drawer-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes scrim-in {
+  from {
+    background: transparent;
+  }
+}
+@keyframes scrim-out {
+  to {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-scrim,
+  .drawer-scrim .drawer {
+    animation: none !important;
+  }
 }
